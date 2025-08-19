@@ -21,40 +21,26 @@ I write about:
 
 Some of the things I’ve built or worked on:
 
-- **[Project Name](https://github.com/RickSayland/PROJECT-REPO)** – short description of the project and what it does.
-- **[Another Project](https://github.com/RickSayland/PROJECT-REPO)** – short description.
+- **[Simulations]([https://github.com/RickSayland/PROJECT-REPO](https://github.com/RickSayland/Simulations))** – little blazor site for me to play around with simulation code
+- **[Runner API]([https://github.com/RickSayland/PROJECT-REPO](https://github.com/RickSayland/RunnerApi))** – small API stub I made to get hired at my current job
+- **[Personal Projects](https://github.com/RickSayland/PersonalProjects))** - solution with a few personal projects ideas
 - **More projects coming soon!**
 
-👉 [View all projects](https://RickSayland.github.io/portfolio)
+👉 [View all projects](https://github.com/RickSayland?tab=repositories)
 
 ---
 
 ## 👤 About Me
 
-Hi, I’m **YOUR NAME**.  
-- 🌍 Based in [Your Location]  
-- 💻 Software developer / engineer / maker  
-- 🎯 Interested in [topics you care about]
+Hi, I’m Rick Sayland.  
+- 🌍 Based out of Florida 
+- 💻 Software developer / runner / dreamer
+- 🎯 Interested in software, running, space, science, etc!
 
 ---
 
 ## 📬 Contact
 
 Feel free to reach out:
-- ✉️ [Email](mailto:YOUR-EMAIL)
-- 🐦 [Twitter](https://twitter.com/YOUR-HANDLE)
-- 💼 [LinkedIn](https://linkedin.com/in/YOUR-HANDLE)
-
----
-
-## ⚙️ Setup / Development
-
-This site is hosted using **GitHub Pages**.  
-If you’d like to run it locally:
-
-```bash
-# Clone this repository
-git clone https://github.com/YOUR-USERNAME/YOUR-REPO.git
-
-# Open in your editor
-cd YOUR-REPO
+- ✉️ [Email](mailto:rickpsayland@gmail.com)
+- 💼 [LinkedIn](https://www.linkedin.com/in/rick-sayland-abb016bb/)
