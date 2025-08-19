@@ -21,10 +21,10 @@ I write about:
 
 Some of the things I’ve built or worked on:
 
-- **[Simulations]([https://github.com/RickSayland/PROJECT-REPO](https://github.com/RickSayland/Simulations))** – little blazor site for me to play around with simulation code
-- **[Runner API]([https://github.com/RickSayland/PROJECT-REPO](https://github.com/RickSayland/RunnerApi))** – small API stub I made to get hired at my current job
-- **[Personal Projects](https://github.com/RickSayland/PersonalProjects))** - solution with a few personal projects ideas
-- **More projects coming soon!**
+- **[Simulations](https://github.com/RickSayland/Simulations)** – A little Blazor site for experimenting with simulation code.
+- **[Runner API](https://github.com/RickSayland/RunnerApi)** – A small API stub I made while preparing for my current job.
+- **[Personal Projects](https://github.com/RickSayland/PersonalProjects)** – A solution with a few personal project ideas.
+- More projects coming soon!
 
 👉 [View all projects](https://github.com/RickSayland?tab=repositories)
 
@@ -32,15 +32,15 @@ Some of the things I’ve built or worked on:
 
 ## 👤 About Me
 
-Hi, I’m Rick Sayland.  
-- 🌍 Based out of Florida 
-- 💻 Software developer / runner / dreamer
-- 🎯 Interested in software, running, space, science, etc!
+Hi, I’m **Rick Sayland**.  
+- 🌍 Based in Florida  
+- 💻 Software developer / runner / dreamer  
+- 🎯 Interested in software, running, space, science, and more  
 
 ---
 
 ## 📬 Contact
 
-Feel free to reach out:
-- ✉️ [Email](mailto:rickpsayland@gmail.com)
-- 💼 [LinkedIn](https://www.linkedin.com/in/rick-sayland-abb016bb/)
+Feel free to reach out:  
+- ✉️ [Email me](mailto:rickpsayland@gmail.com)  
+- 💼 [Connect on LinkedIn](https://www.linkedin.com/in/rick-sayland-abb016bb/)
