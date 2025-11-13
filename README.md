@@ -1,46 +1,36 @@
-# 🚀 My Blog & Portfolio
+# 🚀 Senior Developer Portfolio
 
-Welcome! This is my personal site built with **GitHub Pages**.  
-Here you’ll find my projects, writing, and anything else I feel like sharing.
+Welcome to my professional portfolio site!
 
----
-
-## 📚 Blog
-
-I write about:
-- Software development
-- Side projects & experiments
-- Tech deep-dives
-- Personal growth
-
-👉 [Read my blog here](https://RickSayland.github.io/)
+## 👉 **[View the Full Portfolio →](./index.html)**
 
 ---
 
-## 💼 Portfolio
+## 📋 Quick Overview
 
-Some of the things I’ve built or worked on:
+I''m **Richard Sayland**, a Senior .NET Engineer with 8+ years of experience designing and developing enterprise applications.
 
-- **[Simulations](https://github.com/RickSayland/Simulations)** – A little Blazor site for experimenting with simulation code.
-- **[Runner API](https://github.com/RickSayland/RunnerApi)** – A small API stub I made while preparing for my current job.
-- **[Personal Projects](https://github.com/RickSayland/PersonalProjects)** – A solution with a few personal project ideas.
-- More projects coming soon!
+### Specialties:
+- **Backend:** C#, .NET Core, ASP.NET Web API, microservices architecture
+- **Frontend:** React, Angular, TypeScript
+- **Cloud & DevOps:** Azure, Azure OpenAI, Docker, CI/CD pipelines
+- **Architecture:** Clean architecture, enterprise design patterns, legacy system modernization
 
-👉 [View all projects](https://github.com/RickSayland?tab=repositories)
+Currently extending large-scale grant management systems at AmpliFund while mentoring developers and driving technical excellence.
 
----
-
-## 👤 About Me
-
-Hi, I’m **Rick Sayland**.  
-- 🌍 Based in Florida  
-- 💻 Software developer / runner / dreamer  
-- 🎯 Interested in software, running, space, science, and more  
+### Featured Projects:
+- **Monolith-to-Microservices Migration** – Comprehensive decomposition of .NET monolith into scalable microservices
+- **AI Microservice with Azure OpenAI** – Data-driven insights integration with secure API patterns
+- **Angular Legacy Modernization** – Upgraded Angular 5 to Angular 12 with 40% performance improvement
 
 ---
 
-## 📬 Contact
+## 📬 Connect
 
-Feel free to reach out:  
-- ✉️ [Email me](mailto:rickpsayland@gmail.com)  
-- 💼 [Connect on LinkedIn](https://www.linkedin.com/in/rick-sayland-abb016bb/)
+- ✉️ [Email](mailto:rickpsayland@gmail.com)
+- 💼 [LinkedIn](https://www.linkedin.com/in/rick-sayland-abb016bb/)
+- 🐙 [GitHub](https://github.com/RickSayland)
+
+---
+
+**Built with vanilla HTML, CSS, and JavaScript** | View [''index.html''](./index.html) for the full interactive experience
