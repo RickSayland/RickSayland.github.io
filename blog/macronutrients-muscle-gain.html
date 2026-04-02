@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Understanding Macronutrients for Muscle Gain</title>
+    <link rel="stylesheet" href="../styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar">
+        <div class="container">
+            <div class="logo">
+                <i class="fas fa-dumbbell"></i> Fitness & Nutrition
+            </div>
+            <ul class="nav-menu">
+                <li><a href="../index.html#home">Home</a></li>
+                <li><a href="../index.html#blog">Blog</a></li>
+                <li><a href="../index.html#about">About</a></li>
+            </ul>
+            <div class="hamburger">
+                <span></span>
+                <span></span>
+                <span></span>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Blog Post -->
+    <article class="blog-post">
+        <div class="post-header">
+            <div class="post-meta">
+                <div class="post-meta-item">
+                    <i class="fas fa-calendar"></i> April 2, 2024
+                </div>
+                <div class="post-meta-item">
+                    <i class="fas fa-clock"></i> 5 min read
+                </div>
+            </div>
+            <h1 class="post-title">Understanding Macronutrients for Muscle Gain</h1>
+        </div>
+
+        <div class="post-content">
+            <p>Building muscle is a combination of proper training stimulus, rest, and nutrition. While many focus on the gym work, the reality is that <strong>what you eat plays an equally important role in your muscle-building journey</strong>. Let's break down the macronutrients you need to maximize gains.</p>
+
+            <h2>The Three Macronutrients</h2>
+            <p>Macronutrients are the three main nutrients your body needs in large quantities: protein, carbohydrates, and fats. Each plays a crucial role in muscle development.</p>
+
+            <h3>1. Protein - The Building Block</h3>
+            <p>Protein is the most critical macronutrient for muscle building. It contains amino acids, which are literally the building blocks of muscle tissue.</p>
+            <ul>
+                <li><strong>Recommended intake:</strong> 0.7-1g per pound of body weight</li>
+                <li><strong>Why it matters:</strong> After resistance training, your muscles are in a state of micro-tears. Protein provides amino acids to repair and rebuild these fibers, making them stronger and larger</li>
+                <li><strong>Best sources:</strong> Chicken, fish, beef, eggs, Greek yogurt, cottage cheese, legumes</li>
+            </ul>
+
+            <h3>2. Carbohydrates - Your Energy Source</h3>
+            <p>Carbs often get a bad reputation, but they're essential for muscle growth. They provide the energy needed for intense training and support recovery.</p>
+            <ul>
+                <li><strong>Recommended intake:</strong> 4-7g per kilogram of body weight (depending on training volume)</li>
+                <li><strong>Why it matters:</strong> Carbs are stored as glycogen in muscles and liver. This glycogen fuels your workouts and aids in muscle protein synthesis</li>
+                <li><strong>Best sources:</strong> Oats, rice, sweet potatoes, whole grain bread, pasta, bananas</li>
+            </ul>
+
+            <h3>3. Fat - The Hormone Regulator</h3>
+            <p>Dietary fat is crucial for hormone production, including testosterone, which is essential for muscle growth.</p>
+            <ul>
+                <li><strong>Recommended intake:</strong> 0.3-0.5g per pound of body weight</li>
+                <li><strong>Why it matters:</strong> Fats regulate testosterone and other anabolic hormones. They also support nutrient absorption and overall health</li>
+                <li><strong>Best sources:</strong> Avocados, nuts, olive oil, fatty fish, seeds</li>
+            </ul>
+
+            <h2>Putting It Together: A Simple Example</h2>
+            <p>Let's say you weigh 180 lbs and want to build muscle:</p>
+            <ul>
+                <li><strong>Protein:</strong> 180 lbs × 0.85g = 153g per day</li>
+                <li><strong>Carbs:</strong> 180 lbs ÷ 2.2 = 82 kg × 5g = 410g per day</li>
+                <li><strong>Fat:</strong> 180 lbs × 0.4g = 72g per day</li>
+            </ul>
+
+            <p>This gives roughly: Protein (612 cal) + Carbs (1,640 cal) + Fat (648 cal) = <strong>2,900 calories</strong> per day.</p>
+
+            <h2>Key Takeaways</h2>
+            <ul>
+                <li>Prioritize protein intake - it's the most critical for muscle growth</li>
+                <li>Don't fear carbs; they fuel your workouts and recovery</li>
+                <li>Include healthy fats for hormone production and overall health</li>
+                <li>Eating in a slight caloric surplus (200-500 calories above maintenance) supports muscle growth</li>
+                <li>Consistency matters more than perfection - hit your macros roughly, not precisely</li>
+            </ul>
+
+            <p>Remember: <strong>Training provides the stimulus, but nutrition provides the raw materials for growth</strong>. Get both right, and you'll see results.</p>
+
+            <!-- Interactive Calculator Applet -->
+            <div class="applet-container">
+                <div class="applet-title">Quick Macro Calculator</div>
+                <div style="max-width: 400px; margin: 0 auto; text-align: left;">
+                    <label style="display: block; margin-bottom: 1rem;">
+                        Your Body Weight (lbs):
+                        <input type="number" id="bodyWeight" placeholder="180" style="width: 100%; padding: 0.5rem; margin-top: 0.3rem; background: var(--primary-color); border: 1px solid var(--border-color); color: var(--text-color); border-radius: 4px;">
+                    </label>
+                    <button onclick="calculateMacros()" style="width: 100%; padding: 0.8rem; background: var(--accent-color); color: var(--primary-color); border: none; border-radius: 4px; font-weight: bold; cursor: pointer; margin-bottom: 1rem;">Calculate Macros</button>
+                </div>
+                <div id="macro-results" style="display: none; background: var(--primary-color); padding: 1rem; border-radius: 4px; margin-top: 1rem; text-align: left;">
+                    <p><strong>Daily Protein:</strong> <span id="protein-result">0</span>g</p>
+                    <p><strong>Daily Carbs:</strong> <span id="carbs-result">0</span>g</p>
+                    <p><strong>Daily Fat:</strong> <span id="fat-result">0</span>g</p>
+                    <p><strong>Estimated Calories:</strong> <span id="calories-result">0</span></p>
+                </div>
+            </div>
+
+            <div class="back-to-blog">
+                <a href="../index.html#blog" class="back-link">
+                    <i class="fas fa-arrow-left"></i> Back to Blog
+                </a>
+            </div>
+        </div>
+    </article>
+
+    <!-- Navigation script -->
+    <script src="../script.js"></script>
+    <!-- Post-specific applet script -->
+    <script>
+        function calculateMacros() {
+            const weight = parseFloat(document.getElementById('bodyWeight').value);
+            
+            if (!weight || weight <= 0) {
+                alert('Please enter a valid weight');
+                return;
+            }
+
+            const protein = Math.round(weight * 0.85);
+            const carbs = Math.round((weight / 2.2) * 5);
+            const fat = Math.round(weight * 0.4);
+            const calories = Math.round((protein * 4) + (carbs * 4) + (fat * 9));
+
+            document.getElementById('protein-result').textContent = protein;
+            document.getElementById('carbs-result').textContent = carbs;
+            document.getElementById('fat-result').textContent = fat;
+            document.getElementById('calories-result').textContent = calories;
+            document.getElementById('macro-results').style.display = 'block';
+        }
+    </script>
+</body>
+</html>

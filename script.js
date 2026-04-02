@@ -1,4 +1,80 @@
-// Mobile Menu Toggle
+// Blog posts data structure
+const blogPosts = [
+    {
+        id: 1,
+        title: "Understanding Macronutrients for Muscle Gain",
+        excerpt: "Learn how to balance protein, carbs, and fats to maximize muscle growth and recovery.",
+        date: "2024-04-02",
+        icon: "🥗",
+        slug: "macronutrients-muscle-gain",
+        featured: true
+    },
+    {
+        id: 2,
+        title: "Progressive Overload: The Key to Consistent Gains",
+        excerpt: "Discover how to properly apply progressive overload to break through plateaus.",
+        date: "2024-03-28",
+        icon: "💪",
+        slug: "progressive-overload"
+    },
+    {
+        id: 3,
+        title: "Recovery Strategies Beyond Sleep",
+        excerpt: "Explore nutrition, active recovery, and lifestyle factors that accelerate muscle recovery.",
+        date: "2024-03-20",
+        icon: "😴",
+        slug: "recovery-strategies"
+    }
+];
+
+// Format date utility
+function formatDate(dateString) {
+    const options = { year: 'numeric', month: 'long', day: 'numeric' };
+    return new Date(dateString).toLocaleDateString('en-US', options);
+}
+
+// Get most recent post (for featured)
+function getMostRecentPost() {
+    return blogPosts.reduce((newest, post) => {
+        return new Date(post.date) > new Date(newest.date) ? post : newest;
+    });
+}
+
+// Render blog grid on homepage
+function renderBlogGrid() {
+    const blogGrid = document.getElementById('blog-grid');
+    if (!blogGrid) return;
+
+    const recentPost = getMostRecentPost();
+
+    const html = blogPosts.map(post => {
+        const isFeatured = post.id === recentPost.id;
+        return `
+            <div class="blog-card ${isFeatured ? 'featured' : ''}" onclick="viewPost('${post.slug}')">
+                <div class="blog-card-image">${post.icon}</div>
+                <div class="blog-card-content">
+                    <div class="blog-card-date">
+                        <i class="fas fa-calendar"></i> ${formatDate(post.date)}
+                    </div>
+                    <h3>${post.title}</h3>
+                    <p>${post.excerpt}</p>
+                    <a href="blog/${post.slug}.html" class="read-more">
+                        Read More <i class="fas fa-arrow-right"></i>
+                    </a>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    blogGrid.innerHTML = html;
+}
+
+// Navigate to post
+function viewPost(slug) {
+    window.location.href = `blog/${slug}.html`;
+}
+
+// Mobile menu toggle
 const hamburger = document.querySelector('.hamburger');
 const navMenu = document.querySelector('.nav-menu');
 
@@ -28,70 +104,5 @@ document.querySelectorAll('a[href^="#"]').forEach(anchor => {
     });
 });
 
-// Add scroll animation for elements
-const observerOptions = {
-    threshold: 0.1,
-    rootMargin: '0px 0px -100px 0px'
-};
-
-const observer = new IntersectionObserver(function(entries) {
-    entries.forEach(entry => {
-        if (entry.isIntersecting) {
-            entry.target.style.opacity = '1';
-            entry.target.style.transform = 'translateY(0)';
-            observer.unobserve(entry.target);
-        }
-    });
-}, observerOptions);
-
-// Observe project cards and skill categories
-document.querySelectorAll('.project-card, .skill-category, .timeline-item').forEach(element => {
-    element.style.opacity = '0';
-    element.style.transform = 'translateY(20px)';
-    element.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
-    observer.observe(element);
-});
-
-// Navbar background on scroll
-window.addEventListener('scroll', () => {
-    const navbar = document.querySelector('.navbar');
-    if (window.scrollY > 50) {
-        navbar?.style.backgroundColor = 'rgba(10, 20, 40, 0.98)';
-        navbar?.style.boxShadow = '0 2px 10px rgba(0, 0, 0, 0.3)';
-    } else {
-        navbar?.style.backgroundColor = 'rgba(10, 20, 40, 0.95)';
-        navbar?.style.boxShadow = 'none';
-    }
-});
-
-// Form handling (for future contact form integration)
-function handleFormSubmit(event) {
-    if (event) event.preventDefault();
-    // Add your form submission logic here
-    console.log('Form submitted');
-}
-
-// Page load animation
-window.addEventListener('load', () => {
-    document.body.style.opacity = '1';
-    document.body.style.transition = 'opacity 0.5s ease';
-});
-
-// Add parallax effect to hero section
-window.addEventListener('scroll', () => {
-    const hero = document.querySelector('.hero');
-    const stars = document.querySelector('.stars');
-    if (hero && stars) {
-        const scrollPosition = window.pageYOffset;
-        stars.style.transform = `translateY(${scrollPosition * 0.5}px)`;
-    }
-});
-
-// Performance monitoring (optional)
-if (window.performance && window.performance.timing) {
-    window.addEventListener('load', () => {
-        const perfData = window.performance.timing;
-        const pageLoadTime = perfData.loadEventEnd - perfData.navigationStart;
-        console.log('Page load time: ' + pageLoadTime + 'ms');
-    });
-}
+// Initialize blog grid when page loads
+document.addEventListener('DOMContentLoaded', renderBlogGrid);
