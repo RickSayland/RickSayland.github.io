@@ -1,5 +1,6 @@
 // ============ GAME STATE ============
 let gameState = 'menu'; // 'menu' or 'playing'
+const GAME_VERSION = 'v0.0.1';
 
 // ============ WORLD STATE ============
 const world = {
@@ -69,6 +70,11 @@ const menuUI = {
         title.className = 'menu-title';
         title.textContent = 'Silly Little Friends';
 
+        // Version badge
+        const versionBadge = document.createElement('div');
+        versionBadge.className = 'version-badge';
+        versionBadge.textContent = GAME_VERSION;
+
         // Subtitle
         const subtitle = document.createElement('p');
         subtitle.className = 'menu-subtitle';
@@ -97,6 +103,7 @@ const menuUI = {
         buttonContainer.appendChild(this.continueButton);
 
         menuContainer.appendChild(title);
+        menuContainer.appendChild(versionBadge);
         menuContainer.appendChild(subtitle);
         menuContainer.appendChild(buttonContainer);
 

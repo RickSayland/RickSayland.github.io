@@ -146,6 +146,15 @@ canvas {
     font-style: italic;
 }
 
+.version-badge {
+    font-family: 'Courier New', monospace;
+    font-size: 14px;
+    letter-spacing: 1px;
+    color: #5a8aa8;
+    margin-bottom: 20px;
+    text-align: center;
+}
+
 .menu-buttons {
     display: flex;
     flex-direction: column;
