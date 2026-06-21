@@ -254,8 +254,14 @@ function render() {
     // Render player
     player.render(ctx);
 
+    // Render shockwave ripples on top of everything in world space
+    shockwaveSystem.render(ctx);
+
     // Restore context state
     ctx.restore();
+
+    // HUD: HP/MP bars (screen space, top-left)
+    player.renderStatsBar(ctx);
 
     // Minimap (screen space, not affected by camera)
     mapSystem.renderMinimap(ctx, world.camera, [
@@ -266,7 +272,8 @@ function render() {
     // Draw placeholder text (UI layer, not affected by camera)
     ctx.fillStyle = '#4a9eff';
     ctx.font = '14px Arial';
-    ctx.fillText('Use Arrow Keys or WASD to move', 20, 30);
+    ctx.fillText('Use Arrow Keys or WASD to move', 20, 115);
+    ctx.fillText('Space: Shockwave', 20, 135);
 }
 
 // ============ UPDATE FUNCTION ============
@@ -284,6 +291,7 @@ function update(deltaTime) {
     // Update systems
     weatherSystem.update(scaledDeltaTime, world.time);
     player.update(deltaTime);
+    shockwaveSystem.update(deltaTime);
     enemySystem.update(deltaTime);
 
     // Update camera to keep player centered

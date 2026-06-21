@@ -1,6 +1,16 @@
 // ============ ENEMY SYSTEM ============
+
+// Centered-rectangle overlap test, used for player <-> enemy contact.
+// Matches how both are actually drawn (fillRect from the center out).
+function rectsOverlap(a, b) {
+    return Math.abs(a.x - b.x) < (a.width + b.width) / 2 &&
+           Math.abs(a.y - b.y) < (a.height + b.height) / 2;
+}
+
 const enemySystem = {
     enemies: [],
+    touchDamage: 8, // HP drained from the player per contact tick
+    touchCooldownDuration: 600, // ms between contact hits, per enemy
 
     init(count = 1) {
         this.enemies = [];
@@ -27,7 +37,10 @@ const enemySystem = {
             speed: 60, // px/s - slower than the player's 150
             direction: { x: 0, y: 0 },
             wanderTimer: 0,
-            wanderInterval: this.randomWanderInterval()
+            wanderInterval: this.randomWanderInterval(),
+            health: 60,
+            maxHealth: 60,
+            touchCooldown: 0 // ms remaining before this enemy can hit the player again
         };
     },
 
@@ -50,10 +63,25 @@ const enemySystem = {
     },
 
     update(deltaTime) {
+        // Drop anything a shockwave finished off this frame before we
+        // wander, collide, or render it
+        this.enemies = this.enemies.filter(enemy => enemy.health > 0);
+
         for (const enemy of this.enemies) {
             enemy.wanderTimer += deltaTime * simulationSpeed;
             if (enemy.wanderTimer >= enemy.wanderInterval) {
                 this.pickNewDirection(enemy);
+            }
+
+            if (enemy.touchCooldown > 0) {
+                enemy.touchCooldown -= deltaTime * simulationSpeed;
+            }
+
+            // Contact damage: drains player HP on a per-enemy cooldown so
+            // standing in an enemy doesn't melt your health in one frame
+            if (enemy.touchCooldown <= 0 && rectsOverlap(player, enemy)) {
+                player.health = Math.max(0, player.health - this.touchDamage);
+                enemy.touchCooldown = this.touchCooldownDuration;
             }
 
             if (enemy.direction.x === 0 && enemy.direction.y === 0) {
@@ -95,6 +123,21 @@ const enemySystem = {
 
     render(ctx) {
         for (const enemy of this.enemies) {
+            // Small health bar floating above the enemy's head
+            const barWidth = enemy.width;
+            const barHeight = 4;
+            const barX = enemy.x - barWidth / 2;
+            const barY = enemy.y - enemy.height / 2 - 10;
+            const pct = Math.max(0, enemy.health / enemy.maxHealth);
+
+            ctx.fillStyle = '#3a1414';
+            ctx.fillRect(barX, barY, barWidth, barHeight);
+            ctx.fillStyle = '#e02d2d';
+            ctx.fillRect(barX, barY, barWidth * pct, barHeight);
+            ctx.strokeStyle = '#000000';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(barX, barY, barWidth, barHeight);
+
             ctx.fillStyle = '#cc2222';
             ctx.fillRect(
                 enemy.x - enemy.width / 2,
