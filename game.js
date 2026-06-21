@@ -83,7 +83,8 @@ const menuUI = {
         this.startButton.className = 'menu-button';
         this.startButton.textContent = 'Start Game';
         this.startButton.addEventListener('click', () => {
-            menuUI.startGame();
+            menuContainer.style.display = 'none';
+            characterSelectUI.show();
         });
 
         // Continue button
@@ -129,6 +130,74 @@ const menuUI = {
     }
 };
 
+// ============ CHARACTER SELECT UI ============
+const characterSelectUI = {
+    colors: [
+        { name: 'Green', value: '#00ff00' },
+        { name: 'Blue', value: '#4a9eff' },
+        { name: 'Yellow', value: '#ffd700' },
+        { name: 'Purple', value: '#a64dff' },
+        { name: 'Orange', value: '#ff8c42' },
+        { name: 'Pink', value: '#ff66cc' }
+    ],
+    selectedColor: '#00ff00',
+    swatchButtons: [],
+
+    init() {
+        const container = document.createElement('div');
+        container.id = 'characterSelectContainer';
+        container.className = 'character-select-container';
+        container.style.display = 'none';
+
+        const title = document.createElement('h2');
+        title.className = 'character-select-title';
+        title.textContent = 'Choose Your Character';
+
+        const swatchRow = document.createElement('div');
+        swatchRow.className = 'character-swatches';
+
+        this.swatchButtons = [];
+        this.colors.forEach((c) => {
+            const swatch = document.createElement('button');
+            swatch.className = 'character-swatch';
+            swatch.style.backgroundColor = c.value;
+            swatch.title = c.name;
+            swatch.setAttribute('aria-label', c.name);
+            if (c.value === this.selectedColor) {
+                swatch.classList.add('selected');
+            }
+
+            swatch.addEventListener('click', () => {
+                this.selectedColor = c.value;
+                this.swatchButtons.forEach(b => b.classList.remove('selected'));
+                swatch.classList.add('selected');
+            });
+
+            this.swatchButtons.push(swatch);
+            swatchRow.appendChild(swatch);
+        });
+
+        const playButton = document.createElement('button');
+        playButton.className = 'menu-button';
+        playButton.textContent = 'Play';
+        playButton.addEventListener('click', () => {
+            player.color = this.selectedColor;
+            container.style.display = 'none';
+            menuUI.startGame();
+        });
+
+        container.appendChild(title);
+        container.appendChild(swatchRow);
+        container.appendChild(playButton);
+
+        document.body.appendChild(container);
+    },
+
+    show() {
+        document.getElementById('characterSelectContainer').style.display = 'flex';
+    }
+};
+
 // ============ CONTROL LISTENERS ============
 
 // ============ DEBUG UI UPDATE ============
@@ -142,6 +211,11 @@ function updateDebugUI() {
     
     document.getElementById('playerPos').textContent = 
         Math.floor(player.x) + ', ' + Math.floor(player.y);
+
+    const enemyPositions = enemySystem.enemies
+        .map(e => Math.floor(e.x) + ', ' + Math.floor(e.y))
+        .join('  |  ');
+    document.getElementById('enemyPos').textContent = enemyPositions || '—';
     
     const levelName = mapSystem.currentLevel.charAt(0).toUpperCase() + mapSystem.currentLevel.slice(1);
     document.getElementById('currentLevel').textContent = levelName;
@@ -167,11 +241,20 @@ function render() {
 
     ctx.globalAlpha = 1;
 
+    // Render enemies
+    enemySystem.render(ctx);
+
     // Render player
     player.render(ctx);
 
     // Restore context state
     ctx.restore();
+
+    // Minimap (screen space, not affected by camera)
+    mapSystem.renderMinimap(ctx, world.camera, [
+        { x: player.x, y: player.y, color: player.color, radius: 3 },
+        ...enemySystem.enemies.map(e => ({ x: e.x, y: e.y, color: '#ff4444', radius: 2.5 }))
+    ]);
 
     // Draw placeholder text (UI layer, not affected by camera)
     ctx.fillStyle = '#4a9eff';
@@ -194,6 +277,7 @@ function update(deltaTime) {
     // Update systems
     weatherSystem.update(scaledDeltaTime, world.time);
     player.update(deltaTime);
+    enemySystem.update(deltaTime);
 
     // Update camera to keep player centered
     world.camera.x = player.x - canvas.width / 2;
@@ -231,7 +315,9 @@ function gameLoop() {
 // Start the game loop after all scripts have loaded
 setTimeout(() => {
     mapSystem.init();
+    enemySystem.init();
     menuUI.init();
+    characterSelectUI.init();
     input.init();
     gameLoop();
 }, 0);

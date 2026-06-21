@@ -1,10 +1,23 @@
 // ============ PLAYER SYSTEM ============
+
+// Darkens (factor < 1) or lightens (factor > 1) a hex color. Used to derive
+// the direction-indicator shade from whatever body color was picked at
+// character select, so any chosen color still has a matching accent.
+function shadeColor(hex, factor) {
+    const num = parseInt(hex.slice(1), 16);
+    const r = Math.max(0, Math.min(255, Math.round(((num >> 16) & 0xff) * factor)));
+    const g = Math.max(0, Math.min(255, Math.round(((num >> 8) & 0xff) * factor)));
+    const b = Math.max(0, Math.min(255, Math.round((num & 0xff) * factor)));
+    return '#' + [r, g, b].map(c => c.toString(16).padStart(2, '0')).join('');
+}
+
 const player = {
     x: 400,
     y: 300,
     width: 30,
     height: 30,
     speed: 150, // pixels per second
+    color: '#00ff00',
     direction: { x: 0, y: 0 },
     isMoving: false,
 
@@ -51,7 +64,7 @@ const player = {
 
     render(ctx) {
         // Draw player as a rectangle with a direction indicator
-        ctx.fillStyle = '#00ff00';
+        ctx.fillStyle = this.color;
         ctx.fillRect(
             this.x - this.width / 2,
             this.y - this.height / 2,
@@ -60,7 +73,7 @@ const player = {
         );
 
         // Draw direction indicator (circle at top of sprite)
-        ctx.fillStyle = '#00cc00';
+        ctx.fillStyle = shadeColor(this.color, 0.7);
         const indicatorX = this.x + this.direction.x * 15;
         const indicatorY = this.y + this.direction.y * 15;
         ctx.beginPath();

@@ -17,6 +17,7 @@ const mapSystem = {
     // Woods level - mostly grass with trees and some water
     woodsMap: null,
     beachMap: null,
+    minimapCache: {},
 
     init() {
         this.generateWoodsMap();
@@ -91,6 +92,12 @@ const mapSystem = {
             const spawnPoint = this.findSpawnPoint(400, 300);
             player.x = spawnPoint.x;
             player.y = spawnPoint.y;
+
+            // Re-spawn enemies too, since their old position may not
+            // be walkable on the new map
+            if (typeof enemySystem !== 'undefined') {
+                enemySystem.init();
+            }
         }
     },
 
@@ -235,6 +242,85 @@ const mapSystem = {
                     this.tileSize
                 );
             }
+        }
+    },
+
+    // Bakes the current level's terrain into a tiny 1-pixel-per-tile
+    // offscreen canvas. Done once per level and cached, so the minimap
+    // only needs a single scaled drawImage() per frame instead of
+    // redrawing every tile.
+    buildMinimapTexture(levelName) {
+        const map = levelName === 'woods' ? this.woodsMap : this.beachMap;
+        const texture = document.createElement('canvas');
+        texture.width = this.mapWidth;
+        texture.height = this.mapHeight;
+        const texCtx = texture.getContext('2d');
+
+        for (let ty = 0; ty < this.mapHeight; ty++) {
+            for (let tx = 0; tx < this.mapWidth; tx++) {
+                const terrain = map[ty * this.mapWidth + tx];
+                texCtx.fillStyle = this.terrainTypes[terrain].color;
+                texCtx.fillRect(tx, ty, 1, 1);
+            }
+        }
+
+        this.minimapCache[levelName] = texture;
+        return texture;
+    },
+
+    getMinimapTexture() {
+        return this.minimapCache[this.currentLevel] || this.buildMinimapTexture(this.currentLevel);
+    },
+
+    // Draws the minimap panel in screen space (bottom-left corner).
+    // `entities` is a list of { x, y, color, radius } in world coordinates.
+    renderMinimap(ctx, camera, entities) {
+        const padding = 15;
+        const mmWidth = 160;
+        const mmHeight = mmWidth * (this.mapHeight / this.mapWidth);
+        const mmX = padding;
+        const mmY = canvas.height - mmHeight - padding;
+
+        const mapPixelWidth = this.mapWidth * this.tileSize;
+        const mapPixelHeight = this.mapHeight * this.tileSize;
+        const scaleX = mmWidth / mapPixelWidth;
+        const scaleY = mmHeight / mapPixelHeight;
+
+        // Panel backdrop
+        ctx.fillStyle = 'rgba(10, 10, 10, 0.75)';
+        ctx.fillRect(mmX - 4, mmY - 4, mmWidth + 8, mmHeight + 8);
+        ctx.strokeStyle = '#4a9eff';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(mmX - 4, mmY - 4, mmWidth + 8, mmHeight + 8);
+
+        // Terrain - crisp nearest-neighbor upscale of the cached texture
+        const wasSmoothing = ctx.imageSmoothingEnabled;
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(this.getMinimapTexture(), mmX, mmY, mmWidth, mmHeight);
+        ctx.imageSmoothingEnabled = wasSmoothing;
+
+        // Camera viewport box - what's currently on screen
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(
+            mmX + camera.x * scaleX,
+            mmY + camera.y * scaleY,
+            canvas.width * scaleX,
+            canvas.height * scaleY
+        );
+
+        // Entity dots
+        for (const entity of entities) {
+            ctx.fillStyle = entity.color;
+            ctx.beginPath();
+            ctx.arc(
+                mmX + entity.x * scaleX,
+                mmY + entity.y * scaleY,
+                entity.radius,
+                0,
+                Math.PI * 2
+            );
+            ctx.fill();
         }
     }
 };
