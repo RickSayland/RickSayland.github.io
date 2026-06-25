@@ -18,12 +18,14 @@ const mapSystem = {
     woodsMap: null,
     beachMap: null,
     erinMap: null,
+    forestMap: null,
     minimapCache: {},
 
     init() {
         this.generateWoodsMap();
         this.generateBeachMap();
         this.generateErinMap();
+        this.generateForestMap();
     },
 
     generateWoodsMap() {
@@ -121,6 +123,43 @@ const mapSystem = {
         this.erinMap = map;
     },
 
+    generateForestMap() {
+        const map = [
+        /* y= 0 */  'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree',
+        /* y= 1 */  'tree', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'tree',
+        /* y= 2 */  'tree', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'tree',
+        /* y= 3 */  'tree', 'grass', 'grass', 'sand', 'sand', 'sand', 'sand', 'sand', 'sand', 'sand', 'sand', 'sand', 'sand', 'sand', 'sand', 'sand', 'sand', 'sand', 'sand', 'sand', 'sand', 'sand', 'sand', 'sand', 'sand', 'sand', 'sand', 'sand', 'sand', 'sand', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'tree',
+        /* y= 4 */  'tree', 'grass', 'grass', 'sand', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'sand', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'tree',
+        /* y= 5 */  'tree', 'grass', 'grass', 'sand', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'sand', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'tree',
+        /* y= 6 */  'tree', 'grass', 'grass', 'sand', 'grass', 'tree', 'tree', 'tree', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'tree', 'tree', 'tree', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'sand', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'tree',
+        /* y= 7 */  'tree', 'grass', 'grass', 'sand', 'grass', 'tree', 'tree', 'tree', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'tree', 'tree', 'tree', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'sand', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'tree',
+        /* y= 8 */  'tree', 'grass', 'grass', 'sand', 'grass', 'tree', 'tree', 'tree', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'tree', 'tree', 'tree', 'grass', 'grass', 'grass', 'grass', 'grass', 'sand', 'sand', 'sand', 'sand', 'sand', 'sand', 'sand', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'tree',
+        /* y= 9 */  'tree', 'grass', 'grass', 'sand', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'sand', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'tree',
+        /* y=10 */  'tree', 'grass', 'grass', 'sand', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'sand', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'tree',
+        /* y=11 */  'tree', 'grass', 'grass', 'sand', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'sand', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'tree',
+        /* y=12 */  'tree', 'grass', 'grass', 'sand', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'water', 'water', 'water', 'water', 'water', 'grass', 'grass', 'grass', 'grass', 'grass', 'sand', 'grass', 'grass', 'grass', 'grass', 'grass', 'tree', 'tree', 'tree', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'tree',
+        /* y=13 */  'tree', 'grass', 'grass', 'sand', 'sand', 'sand', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'water', 'water', 'water', 'water', 'water', 'grass', 'grass', 'grass', 'grass', 'grass', 'sand', 'grass', 'grass', 'grass', 'grass', 'grass', 'tree', 'tree', 'tree', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'tree',
+        /* y=14 */  'tree', 'grass', 'grass', 'grass', 'grass', 'sand', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'water', 'water', 'water', 'water', 'water', 'grass', 'grass', 'grass', 'grass', 'grass', 'sand', 'grass', 'grass', 'grass', 'grass', 'grass', 'tree', 'tree', 'tree', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'tree',
+        /* y=15 */  'tree', 'grass', 'grass', 'grass', 'grass', 'sand', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'water', 'water', 'water', 'water', 'water', 'grass', 'grass', 'grass', 'grass', 'grass', 'sand', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'tree',
+        /* y=16 */  'tree', 'grass', 'grass', 'grass', 'grass', 'sand', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'water', 'water', 'water', 'water', 'water', 'grass', 'grass', 'grass', 'grass', 'grass', 'sand', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'tree',
+        /* y=17 */  'tree', 'grass', 'grass', 'grass', 'grass', 'sand', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'sand', 'sand', 'sand', 'sand', 'sand', 'sand', 'sand', 'sand', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'tree',
+        /* y=18 */  'tree', 'grass', 'grass', 'grass', 'grass', 'sand', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'sand', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'tree',
+        /* y=19 */  'tree', 'grass', 'grass', 'grass', 'grass', 'sand', 'grass', 'grass', 'grass', 'grass', 'tree', 'tree', 'tree', 'tree', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'sand', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'tree',
+        /* y=20 */  'tree', 'grass', 'grass', 'grass', 'grass', 'sand', 'grass', 'grass', 'grass', 'grass', 'tree', 'tree', 'tree', 'tree', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'tree', 'tree', 'tree', 'grass', 'grass', 'grass', 'grass', 'grass', 'sand', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'tree',
+        /* y=21 */  'tree', 'grass', 'grass', 'grass', 'grass', 'sand', 'grass', 'grass', 'grass', 'grass', 'tree', 'tree', 'tree', 'tree', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'tree', 'tree', 'tree', 'grass', 'grass', 'grass', 'grass', 'grass', 'sand', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'tree',
+        /* y=22 */  'tree', 'grass', 'grass', 'grass', 'grass', 'sand', 'grass', 'grass', 'grass', 'grass', 'tree', 'tree', 'tree', 'tree', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'tree', 'tree', 'tree', 'grass', 'grass', 'grass', 'grass', 'grass', 'sand', 'grass', 'grass', 'water', 'water', 'water', 'water', 'water', 'water', 'tree',
+        /* y=23 */  'tree', 'grass', 'grass', 'grass', 'grass', 'sand', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'sand', 'grass', 'grass', 'water', 'water', 'water', 'water', 'water', 'water', 'tree',
+        /* y=24 */  'tree', 'grass', 'grass', 'grass', 'grass', 'sand', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'sand', 'grass', 'grass', 'water', 'water', 'water', 'water', 'water', 'water', 'tree',
+        /* y=25 */  'tree', 'grass', 'grass', 'grass', 'grass', 'sand', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'sand', 'sand', 'sand', 'grass', 'grass', 'water', 'water', 'water', 'water', 'water', 'water', 'tree',
+        /* y=26 */  'tree', 'grass', 'grass', 'grass', 'grass', 'sand', 'sand', 'sand', 'sand', 'sand', 'sand', 'sand', 'sand', 'sand', 'sand', 'sand', 'sand', 'sand', 'sand', 'sand', 'sand', 'sand', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'sand', 'sand', 'sand', 'grass', 'grass', 'water', 'water', 'water', 'water', 'water', 'water', 'tree',
+        /* y=27 */  'tree', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'sand', 'sand', 'sand', 'sand', 'sand', 'sand', 'sand', 'sand', 'sand', 'sand', 'grass', 'grass', 'water', 'water', 'water', 'water', 'water', 'water', 'tree',
+        /* y=28 */  'tree', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'tree',
+        /* y=29 */  'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree'
+        ];
+
+        this.forestMap = map;
+    },
+
     getCurrentMap() {
         if (this.currentLevel === 'woods')
             return this.woodsMap;
@@ -128,12 +167,14 @@ const mapSystem = {
                 return this.beachMap;
                 else if (this.currentLevel === 'erin')
                     return this.erinMap;
-                    else
-                        return this.woodsMap;
+                    else if (this.currentLevel === 'forest')
+                        return this.forestMap;
+                        else
+                            return this.woodsMap;
     },
 
     setLevel(levelName) {
-        if (levelName === 'woods' || levelName === 'beach' || levelName === 'erin') {
+        if (levelName === 'woods' || levelName === 'beach' || levelName === 'erin' || levelName === 'forest') {
             this.currentLevel = levelName;
             // Find and set player to a safe spawn point
             const spawnPoint = this.findSpawnPoint(400, 300);

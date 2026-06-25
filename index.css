@@ -1,0 +1,33 @@
+.posts {
+    display: grid;
+    font-size: 0;
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-rows: auto;
+    grid-gap: 22px 22px;
+    justify-content: center;
+    max-width: 1430px;
+    padding: 0 25px;
+    width: 100%;
+}
+
+.container, .posts {
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.page-link-img, .page-link {
+    aspect-ratio: 285 / 107;
+    border-radius: 15px;
+    contain: strict;
+    width: 100%;
+}
+
+
+.main-logo {
+    align-items: center;
+    display: flex;
+    height: 64px;
+    justify-content: center;
+    grid-gap: 6px;
+    contain: layout style;
+}

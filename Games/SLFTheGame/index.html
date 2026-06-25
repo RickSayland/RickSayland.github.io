@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SLF The Game</title>
+    <link rel="stylesheet" href="game.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Left Panel: Controls -->
+        <div class="left-panel">
+            <div class="panel-title">Controls</div>
+            
+            <div class="control-group">
+                <label class="control-label">Level</label>
+                <select id="levelSelect" class="level-select">
+                    <option value="woods">Woods</option>
+                    <option value="beach">Beach</option>
+                    <option value="erin">Erin</option>
+                    <option value="forest">Forest</option>
+                </select>
+            </div>
+
+            <div class="control-group">
+                <label class="control-label">
+                    Sim Speed
+                    <span class="control-value" id="speedValue">1.0x</span>
+                </label>
+                <input 
+                    type="range" 
+                    class="slider" 
+                    id="speedSlider" 
+                    min="0.1" 
+                    max="3" 
+                    step="0.1" 
+                    value="1"
+                >
+            </div>
+        </div>
+
+        <!-- Center Panel: Canvas -->
+        <div class="center-panel">
+            <canvas id="gameCanvas"></canvas>
+        </div>
+
+        <!-- Right Panel: Debug Info -->
+        <div class="right-panel">
+            <div class="panel-title">Debug</div>
+            
+            <div class="debug-item">
+                <span class="debug-label">FPS:</span>
+                <span class="debug-value" id="fpsValue">0</span>
+            </div>
+
+            <div class="debug-item">
+                <span class="debug-label">Frame:</span>
+                <span class="debug-value" id="frameValue">0</span>
+            </div>
+
+            <div class="debug-item">
+                <span class="debug-label">Δt:</span>
+                <span class="debug-value" id="deltaTimeValue">0</span>
+                <span class="debug-label">ms</span>
+            </div>
+
+            <div class="debug-item">
+                <span class="debug-label">Player:</span>
+                <span class="debug-value" id="playerPos">0, 0</span>
+            </div>
+
+            <div class="debug-item">
+                <span class="debug-label">Enemy:</span>
+                <span class="debug-value" id="enemyPos">0, 0</span>
+            </div>
+
+            <div class="debug-item">
+                <span class="debug-label">Level:</span>
+                <span class="debug-value" id="currentLevel">Woods</span>
+            </div>
+
+            <div class="weather-info">
+                <div class="debug-label">Weather:</div>
+                <div class="debug-item">
+                    <span class="debug-label">Condition:</span>
+                    <span class="debug-value" id="weatherCondition">Clear</span>
+                </div>
+                <div class="debug-item">
+                    <span class="debug-label">Temp:</span>
+                    <span class="debug-value" id="weatherTemp">20°C</span>
+                </div>
+                <div class="debug-item">
+                    <span class="debug-label">Humidity:</span>
+                    <span class="debug-value" id="weatherHumidity">50%</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="player.js"></script>
+    <script src="map.js"></script>
+    <script src="enemy.js"></script>
+    <script src="shockwave.js"></script>
+    <script src="game.js"></script>
+    <script src="weather.js"></script>
+</body>
+</html>
