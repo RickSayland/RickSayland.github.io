@@ -1,0 +1,856 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>REACTOR CONTROL — UNIT 1</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Share+Tech+Mono&display=swap');
+
+:root{
+  --bg:#0b0d0b;
+  --steel-1:#4a5049;
+  --steel-2:#2f342f;
+  --steel-3:#1c1f1c;
+  --seam:#0e100e;
+  --rivet:#08090a;
+  --rivet-hi: rgba(255,255,255,.18);
+  --label:#d9d4c2;
+  --label-dim:#8a8672;
+  --amber:#ffab1a;
+  --amber-glow: rgba(255,171,26,.6);
+  --green:#39ff8c;
+  --green-glow: rgba(57,255,140,.55);
+  --red:#ff3b3b;
+  --red-glow: rgba(255,59,59,.65);
+  --yellow:#ffd21a;
+  --screen:#04170d;
+  --font-label: 'Oswald', 'Arial Narrow', sans-serif;
+  --font-digital: 'Share Tech Mono', 'Consolas', monospace;
+}
+
+*{box-sizing:border-box;}
+
+body{
+  margin:0;
+  min-height:100vh;
+  background:
+    radial-gradient(ellipse at 50% -10%, #1a1d19 0%, var(--bg) 55%);
+  font-family: var(--font-label);
+  color: var(--label);
+  display:flex;
+  justify-content:center;
+  padding: 28px 12px 60px;
+}
+
+/* ============ MAIN CHASSIS ============ */
+#panel{
+  width:100%;
+  max-width:1180px;
+  background:
+    repeating-linear-gradient(135deg, rgba(255,255,255,0.015) 0 2px, transparent 2px 5px),
+    linear-gradient(180deg, var(--steel-1) 0%, var(--steel-2) 12%, var(--steel-2) 88%, var(--steel-3) 100%);
+  border-radius: 10px;
+  padding: 22px;
+  box-shadow:
+    0 30px 60px rgba(0,0,0,.6),
+    inset 0 2px 0 rgba(255,255,255,.08),
+    inset 0 -6px 14px rgba(0,0,0,.5);
+  position:relative;
+}
+
+.rivet{
+  position:absolute;
+  width:10px;height:10px;
+  border-radius:50%;
+  background: radial-gradient(circle at 32% 30%, #7a7f77, var(--rivet) 70%);
+  box-shadow: 0 1px 2px rgba(0,0,0,.7), inset 0 0 1px var(--rivet-hi);
+}
+.rivet.tl{top:10px;left:10px;} .rivet.tr{top:10px;right:10px;}
+.rivet.bl{bottom:10px;left:10px;} .rivet.br{bottom:10px;right:10px;}
+
+/* ============ HEADER ============ */
+#header{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:18px;
+  padding: 10px 18px 18px;
+  border-bottom: 3px solid var(--seam);
+  margin-bottom: 18px;
+}
+.plaque{
+  background: linear-gradient(180deg,#3a3f39,#22261f);
+  border-radius:4px;
+  padding:10px 20px;
+  box-shadow: inset 0 0 0 1px #000, 0 2px 4px rgba(0,0,0,.5);
+}
+.plaque h1{
+  margin:0;
+  font-size: 22px;
+  letter-spacing: 3px;
+  font-weight:600;
+  color: var(--label);
+  text-shadow: 0 1px 0 #000;
+}
+.plaque .sub{
+  font-size:11px;
+  letter-spacing:2px;
+  color: var(--label-dim);
+}
+#clock{
+  font-family: var(--font-digital);
+  background: var(--screen);
+  color: var(--green);
+  font-size: 26px;
+  letter-spacing: 3px;
+  padding: 8px 16px;
+  border-radius:4px;
+  box-shadow: inset 0 0 12px rgba(0,0,0,.8), inset 0 0 3px #000, 0 0 10px var(--green-glow);
+  text-shadow: 0 0 6px var(--green-glow);
+}
+#status-lamps{ display:flex; gap:14px; }
+.lamp{
+  display:flex; flex-direction:column; align-items:center; gap:6px;
+  font-size:9px; letter-spacing:1.5px; color:var(--label-dim);
+}
+.lamp .bulb{
+  width:16px;height:16px;border-radius:50%;
+  background: radial-gradient(circle at 35% 30%, #333, #111 70%);
+  box-shadow: inset 0 0 2px #000, 0 1px 1px rgba(255,255,255,.1);
+}
+.lamp.on .bulb{ background: radial-gradient(circle at 35% 30%, #baffce, var(--green) 60%); box-shadow: 0 0 10px var(--green-glow), 0 0 3px #fff; }
+.lamp.on.red .bulb{ background: radial-gradient(circle at 35% 30%, #ffc2c2, var(--red) 60%); box-shadow: 0 0 10px var(--red-glow), 0 0 3px #fff; }
+
+/* ============ SECTIONS / MODULES ============ */
+#grid{
+  display:grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 16px;
+}
+.module{
+  grid-column: span 6;
+  background: linear-gradient(180deg, #363b35, #202420);
+  border-radius:8px;
+  padding: 16px 18px 20px;
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,.5), inset 0 2px 3px rgba(255,255,255,.05), 0 4px 8px rgba(0,0,0,.35);
+  position:relative;
+}
+.module.full{ grid-column: span 12; }
+.module h2{
+  margin:0 0 14px;
+  font-size:13px;
+  letter-spacing:3px;
+  font-weight:600;
+  color: var(--label);
+  border-bottom: 1px solid var(--seam);
+  padding-bottom:8px;
+  display:flex;
+  justify-content:space-between;
+  align-items:baseline;
+}
+.module h2 .tag{ font-size:9px; color:var(--label-dim); letter-spacing:1.5px; font-weight:400;}
+
+.row{ display:flex; flex-wrap:wrap; gap:26px; align-items:flex-end; }
+
+/* ============ CONTROL LABELS ============ */
+.ctrl{ display:flex; flex-direction:column; align-items:center; gap:8px; }
+.ctrl .cname{ font-size:10px; letter-spacing:1.5px; color: var(--label-dim); text-align:center; max-width:90px; }
+.ctrl .cval{ font-family: var(--font-digital); font-size:11px; color: var(--amber); }
+
+/* ============ KNOBS ============ */
+.knob-wrap{ position:relative; width:64px; height:64px; }
+.knob{
+  width:64px;height:64px;border-radius:50%;
+  background: radial-gradient(circle at 32% 28%, #6b716a, #24271f 72%);
+  box-shadow: 0 3px 6px rgba(0,0,0,.6), inset 0 0 0 3px #111, inset 0 -2px 4px rgba(0,0,0,.4);
+  position:relative; cursor: grab; touch-action:none; user-select:none;
+}
+.knob:active{ cursor:grabbing; }
+.knob .grip{ position:absolute; inset:8px; border-radius:50%; background: repeating-conic-gradient(from 0deg, #3a3e37 0deg 6deg, #2a2d27 6deg 12deg); opacity:.5;}
+.knob .pointer{
+  position:absolute; top:4px; left:50%; width:4px; height:24px;
+  background: var(--amber); border-radius:2px;
+  transform: translateX(-50%) rotate(0deg);
+  transform-origin: 50% 30px;
+  box-shadow: 0 0 5px var(--amber-glow);
+}
+.knob-ring{ position:absolute; inset:-9px; border-radius:50%; pointer-events:none; }
+.knob-ring svg{ width:100%; height:100%; }
+
+/* ============ TOGGLES ============ */
+.toggle-wrap{ display:flex; flex-direction:column; align-items:center; gap:8px; }
+.toggle{
+  width:46px; height:78px; border-radius:6px;
+  background: linear-gradient(180deg,#1d201c,#101210);
+  box-shadow: inset 0 0 0 2px #000, 0 2px 4px rgba(0,0,0,.5);
+  position:relative; cursor:pointer; user-select:none;
+}
+.toggle .lever{
+  position:absolute; left:5px; right:5px; height:34px; top:38px;
+  background: linear-gradient(180deg,#767c72,#33372f);
+  border-radius:4px; box-shadow: 0 2px 3px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.2);
+  transition: top .12s ease;
+}
+.toggle .lever::after{
+  content:''; position:absolute; left:6px; right:6px; top:6px; bottom:6px;
+  border-radius:2px; background: repeating-linear-gradient(180deg, rgba(0,0,0,.25) 0 2px, transparent 2px 5px);
+}
+.toggle.on .lever{ top:6px; }
+.toggle-led{ width:9px;height:9px;border-radius:50%; background:#241a1a; box-shadow:inset 0 0 2px #000; }
+.toggle.on ~ .toggle-led, .toggle-wrap.on .toggle-led{ background: radial-gradient(circle at 35% 30%,#baffce,var(--green) 60%); box-shadow: 0 0 8px var(--green-glow); }
+
+/* ============ ROD BARGRAPHS ============ */
+.bargraph{ display:flex; flex-direction:column-reverse; gap:3px; width:20px; height:90px; padding:4px; background:var(--screen); border-radius:3px; box-shadow: inset 0 0 6px rgba(0,0,0,.8); }
+.bargraph .seg{ flex:1; border-radius:1px; background:#0e1e14; }
+.bargraph .seg.lit{ background: var(--amber); box-shadow:0 0 4px var(--amber-glow); }
+.bargraph .seg.lit.top{ background: var(--red); box-shadow:0 0 4px var(--red-glow); }
+
+/* ============ GAUGES ============ */
+.gauge-wrap{ display:flex; flex-direction:column; align-items:center; gap:4px; }
+.gauge svg{ width:150px; height:150px; display:block; }
+.gauge .tick{ stroke:var(--label-dim); stroke-width:2; }
+.gauge .tick.red{ stroke:var(--red); }
+.gauge .ticklabel{ fill:var(--label-dim); font-family:var(--font-digital); font-size:9px; text-anchor:middle; }
+.gauge .needle{ stroke:var(--amber); stroke-width:3; stroke-linecap:round; filter: drop-shadow(0 0 3px var(--amber-glow)); }
+.gauge .hub{ fill:#111; stroke:#555; stroke-width:1; }
+.gauge .facelabel{ fill:var(--label); font-family:var(--font-label); font-size:11px; letter-spacing:1px; text-anchor:middle; }
+.gauge .unit{ fill:var(--label-dim); font-family:var(--font-digital); font-size:8px; text-anchor:middle; }
+.digital-readout{
+  font-family: var(--font-digital); font-size:20px; color:var(--green);
+  background:var(--screen); padding:4px 12px; border-radius:4px; letter-spacing:2px;
+  box-shadow: inset 0 0 8px rgba(0,0,0,.8); text-shadow:0 0 5px var(--green-glow); min-width:96px; text-align:center;
+}
+
+/* ============ SLIDER (linear pot) ============ */
+.slider-wrap{ display:flex; flex-direction:column; align-items:center; gap:8px; }
+.slider-track{
+  width:34px; height:110px; border-radius:4px; position:relative;
+  background: linear-gradient(90deg,#101210,#26291f,#101210);
+  box-shadow: inset 0 0 0 2px #000;
+}
+.slider-track input[type=range]{
+  -webkit-appearance:none; appearance:none;
+  width:110px; height:34px;
+  position:absolute; top:50%; left:50%;
+  transform: translate(-50%,-50%) rotate(-90deg);
+  background:transparent; margin:0; cursor:pointer;
+}
+.slider-track input[type=range]::-webkit-slider-runnable-track{ height:4px; background:transparent; }
+.slider-track input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none; width:44px; height:20px; border-radius:3px; margin-top:-8px;
+  background: linear-gradient(180deg,#767c72,#33372f);
+  box-shadow: 0 2px 3px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.2);
+  border:1px solid #000;
+}
+.slider-track input[type=range]::-moz-range-thumb{
+  width:44px; height:20px; border-radius:3px; border:1px solid #000;
+  background: linear-gradient(180deg,#767c72,#33372f);
+}
+.slider-track input[type=range]::-moz-range-track{ background:transparent; height:4px; }
+
+/* ============ ROTARY MODE SWITCH (click-to-cycle) ============ */
+.modeswitch{ display:flex; flex-direction:column; align-items:center; gap:10px; }
+.modeswitch .dial{
+  width:96px; height:96px; border-radius:50%; position:relative; cursor:pointer; user-select:none;
+  background: radial-gradient(circle at 35% 30%, #6b716a, #202318 75%);
+  box-shadow: 0 3px 8px rgba(0,0,0,.6), inset 0 0 0 3px #111;
+}
+.modeswitch .dial .needle{
+  position:absolute; top:8px; left:50%; width:4px; height:34px; background:var(--amber);
+  transform-origin:50% 40px; transform:translateX(-50%) rotate(0deg); box-shadow:0 0 5px var(--amber-glow); border-radius:2px;
+}
+.modeswitch .labels{ position:absolute; inset:-26px; pointer-events:none; }
+.modeswitch .labels span{
+  position:absolute; font-size:9px; letter-spacing:1px; color:var(--label-dim); width:60px; text-align:center;
+}
+.modeswitch .labels span.active{ color:var(--amber); text-shadow:0 0 4px var(--amber-glow); }
+
+/* ============ SCRAM ============ */
+#scram-module{ display:flex; align-items:center; justify-content:center; gap:60px; }
+.scram-assembly{ position:relative; width:150px; height:150px; perspective: 500px; }
+.scram-base{
+  position:absolute; inset:0; border-radius:50%;
+  background: repeating-conic-gradient(#151515 0deg 14deg, #1a1a1a 14deg 28deg);
+  box-shadow: inset 0 0 0 6px #0a0a0a, 0 4px 10px rgba(0,0,0,.6);
+}
+.scram-btn{
+  position:absolute; top:22px; left:22px; width:106px; height:106px; border-radius:50%;
+  background: radial-gradient(circle at 35% 28%, #ff7a6f, var(--red) 55%, #8c1414 100%);
+  box-shadow: 0 6px 10px rgba(0,0,0,.6), inset 0 3px 6px rgba(255,255,255,.3), inset 0 -8px 14px rgba(0,0,0,.4);
+  cursor:pointer;
+  display:flex; align-items:center; justify-content:center;
+  font-family: var(--font-label); font-weight:700; letter-spacing:2px; color:#3a0000; font-size:16px;
+  text-shadow:0 1px 0 rgba(255,255,255,.25);
+}
+.scram-btn:active{ transform: scale(.96); }
+.scram-cover{
+  position:absolute; top:-6px; left:-6px; width:162px; height:162px;
+  border-radius:50%;
+  background: repeating-linear-gradient(45deg, var(--yellow) 0 10px, #1a1a1a 10px 20px);
+  box-shadow: 0 2px 6px rgba(0,0,0,.6);
+  transform-origin: 50% 0%;
+  transform: rotateX(0deg);
+  transition: transform .35s ease;
+  cursor:pointer;
+  z-index:3;
+}
+.scram-cover::after{
+  content:'LIFT — RCS SCRAM'; position:absolute; inset:14px; border-radius:50%;
+  background: rgba(10,10,10,.82); color:var(--yellow); font-size:11px; letter-spacing:1.5px;
+  display:flex; align-items:center; justify-content:center; text-align:center; padding:10px;
+  font-family:var(--font-label); font-weight:600;
+}
+.scram-cover.open{ transform: rotateX(-115deg); pointer-events:none; }
+#scram-status{
+  display:flex; flex-direction:column; gap:10px; align-items:flex-start;
+}
+#scram-status .line{ display:flex; gap:10px; align-items:center; font-size:11px; letter-spacing:1.5px; color:var(--label-dim); }
+#scram-status .bulb{ width:14px;height:14px;border-radius:50%; background:#241a1a; box-shadow:inset 0 0 2px #000; flex:none; }
+#scram-status .bulb.lit{ background: radial-gradient(circle at 35% 30%,#ffc2c2,var(--red) 60%); box-shadow:0 0 10px var(--red-glow); animation: blink 1s steps(2,end) infinite; }
+@keyframes blink{ 50%{ opacity:.25; } }
+
+/* ============ KEY SWITCH ============ */
+.keyswitch{ display:flex; flex-direction:column; align-items:center; gap:8px; }
+.keyswitch .hole{
+  width:60px; height:60px; border-radius:50%; position:relative; cursor:pointer;
+  background: radial-gradient(circle at 35% 30%, #55605a, #16180f 75%);
+  box-shadow: inset 0 0 0 3px #000, 0 2px 4px rgba(0,0,0,.5);
+}
+.keyswitch svg{ position:absolute; inset:0; transition: transform .2s ease; }
+
+footer{
+  text-align:center; color:var(--label-dim); font-size:10px; letter-spacing:1.5px;
+  margin-top:20px; padding-top:14px; border-top:1px solid var(--seam);
+}
+
+@media (max-width: 820px){
+  .module{ grid-column: span 12; }
+  #header{ flex-wrap:wrap; gap:12px; }
+}
+</style>
+</head>
+<body>
+
+<div id="panel">
+  <div class="rivet tl"></div><div class="rivet tr"></div>
+  <div class="rivet bl"></div><div class="rivet br"></div>
+
+  <div id="header">
+    <div class="plaque">
+      <h1>REACTOR CONTROL — UNIT 1</h1>
+      <div class="sub">SIMULATED FACILITY &nbsp;·&nbsp; NOT CONNECTED TO ANY ACTUAL REACTOR</div>
+    </div>
+    <div id="clock">00:00:00</div>
+    <div id="status-lamps">
+      <div class="lamp on" data-lamp="power"><div class="bulb"></div>POWER</div>
+      <div class="lamp" data-lamp="aux"><div class="bulb"></div>AUX</div>
+      <div class="lamp" data-lamp="comms"><div class="bulb"></div>COMMS</div>
+      <div class="lamp red" data-lamp="alarm"><div class="bulb"></div>ALARM</div>
+    </div>
+  </div>
+
+  <div id="grid">
+
+    <!-- REACTOR CORE -->
+    <section class="module" id="mod-core">
+      <h2>REACTOR CORE <span class="tag">CONTROL ROD DRIVE</span></h2>
+      <div class="row">
+        <div class="ctrl">
+          <div class="bargraph" data-bar="rod1"></div>
+          <div class="knob-wrap"><div class="knob" data-knob="rod1" data-min="0" data-max="100" data-start="20"><div class="grip"></div><div class="pointer"></div></div></div>
+          <div class="cname">ROD 1</div>
+          <div class="cval" data-readout="rod1">20%</div>
+        </div>
+        <div class="ctrl">
+          <div class="bargraph" data-bar="rod2"></div>
+          <div class="knob-wrap"><div class="knob" data-knob="rod2" data-min="0" data-max="100" data-start="20"><div class="grip"></div><div class="pointer"></div></div></div>
+          <div class="cname">ROD 2</div>
+          <div class="cval" data-readout="rod2">20%</div>
+        </div>
+        <div class="ctrl">
+          <div class="bargraph" data-bar="rod3"></div>
+          <div class="knob-wrap"><div class="knob" data-knob="rod3" data-min="0" data-max="100" data-start="20"><div class="grip"></div><div class="pointer"></div></div></div>
+          <div class="cname">ROD 3</div>
+          <div class="cval" data-readout="rod3">20%</div>
+        </div>
+        <div class="ctrl">
+          <div class="bargraph" data-bar="rod4"></div>
+          <div class="knob-wrap"><div class="knob" data-knob="rod4" data-min="0" data-max="100" data-start="20"><div class="grip"></div><div class="pointer"></div></div></div>
+          <div class="cname">ROD 4</div>
+          <div class="cval" data-readout="rod4">20%</div>
+        </div>
+        <div class="ctrl">
+          <div class="knob-wrap"><div class="knob" data-knob="rodRate" data-min="0" data-max="100" data-start="35"><div class="grip"></div><div class="pointer"></div></div></div>
+          <div class="cname">INSERT / WITHDRAW RATE</div>
+          <div class="cval" data-readout="rodRate">35%</div>
+        </div>
+        <div class="ctrl">
+          <div class="toggle-wrap">
+            <div class="toggle" data-toggle="rodAuto"><div class="lever"></div></div>
+            <div class="toggle-led"></div>
+          </div>
+          <div class="cname">MANUAL&nbsp;/&nbsp;AUTO</div>
+        </div>
+        <div class="ctrl">
+          <div class="gauge-wrap">
+            <div class="gauge" data-gauge="neutronFlux" data-min="0" data-max="120" data-unit="% RTP" data-label="NEUTRON FLUX" data-redline="105" data-start="18"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- PRIMARY COOLANT -->
+    <section class="module" id="mod-coolant">
+      <h2>PRIMARY COOLANT LOOP <span class="tag">RCS</span></h2>
+      <div class="row">
+        <div class="gauge-wrap">
+          <div class="gauge" data-gauge="pressure" data-min="0" data-max="2500" data-unit="PSIA" data-label="RCS PRESSURE" data-redline="2250" data-start="2155" data-jitter="1"></div>
+        </div>
+        <div class="gauge-wrap">
+          <div class="gauge" data-gauge="temp" data-min="0" data-max="700" data-unit="°F" data-label="CORE TEMP" data-redline="620" data-start="585" data-jitter="1"></div>
+        </div>
+        <div class="ctrl">
+          <div class="slider-wrap">
+            <div class="slider-track"><input type="range" min="0" max="100" value="62" data-slider="flowRate"></div>
+          </div>
+          <div class="cname">COOLANT FLOW</div>
+          <div class="cval" data-readout="flowRate">62%</div>
+        </div>
+        <div class="ctrl">
+          <div class="toggle-wrap"><div class="toggle on" data-toggle="pump1"><div class="lever"></div></div><div class="toggle-led"></div></div>
+          <div class="cname">PUMP 1</div>
+        </div>
+        <div class="ctrl">
+          <div class="toggle-wrap"><div class="toggle on" data-toggle="pump2"><div class="lever"></div></div><div class="toggle-led"></div></div>
+          <div class="cname">PUMP 2</div>
+        </div>
+        <div class="ctrl">
+          <div class="toggle-wrap"><div class="toggle" data-toggle="pump3"><div class="lever"></div></div><div class="toggle-led"></div></div>
+          <div class="cname">PUMP 3 (STBY)</div>
+        </div>
+        <div class="ctrl">
+          <div class="knob-wrap"><div class="knob" data-knob="reliefValve" data-min="0" data-max="100" data-start="0" data-detents="5"><div class="grip"></div><div class="pointer"></div></div></div>
+          <div class="cname">RELIEF VALVE</div>
+          <div class="cval" data-readout="reliefValve">CLOSED</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TURBINE / GENERATOR -->
+    <section class="module" id="mod-turbine">
+      <h2>TURBINE / GENERATOR</h2>
+      <div class="row">
+        <div class="gauge-wrap">
+          <div class="gauge" data-gauge="rpm" data-min="0" data-max="4000" data-unit="RPM" data-label="TURBINE SPEED" data-redline="3700" data-start="3600" data-jitter="1"></div>
+        </div>
+        <div class="gauge-wrap">
+          <div class="gauge" data-gauge="load" data-min="0" data-max="1200" data-unit="MWe" data-label="GRID LOAD" data-redline="1100" data-start="880" data-jitter="1"></div>
+        </div>
+        <div class="ctrl">
+          <div class="digital-readout" data-readout="loadDigital">0880 MWe</div>
+          <div class="cname">NET OUTPUT</div>
+        </div>
+        <div class="ctrl">
+          <div class="toggle-wrap"><div class="toggle on" data-toggle="mainBreaker"><div class="lever"></div></div><div class="toggle-led"></div></div>
+          <div class="cname">MAIN BREAKER</div>
+        </div>
+        <div class="ctrl">
+          <div class="toggle-wrap"><div class="toggle on" data-toggle="genSync"><div class="lever"></div></div><div class="toggle-led"></div></div>
+          <div class="cname">GEN SYNC</div>
+        </div>
+        <div class="ctrl">
+          <div class="toggle-wrap"><div class="toggle" data-toggle="exciter"><div class="lever"></div></div><div class="toggle-led"></div></div>
+          <div class="cname">EXCITER FIELD</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- REACTOR MODE + ALARMS -->
+    <section class="module" id="mod-alarms">
+      <h2>MODE &amp; SAFETY ANNUNCIATORS</h2>
+      <div class="row">
+        <div class="modeswitch" data-mode="reactorMode" data-positions="OFF,STARTUP,RUN">
+          <div class="dial"><div class="needle"></div></div>
+          <div class="labels"></div>
+        </div>
+        <div class="keyswitch" data-key="resetKey" data-positions="STANDBY,RUN">
+          <div class="hole">
+            <svg viewBox="0 0 60 60"><g transform="translate(30,30)"><rect x="-3" y="-20" width="6" height="26" rx="2" fill="#c9c2a6"/><circle r="9" fill="none" stroke="#c9c2a6" stroke-width="5"/></g></svg>
+          </div>
+          <div class="cname">RESET KEY</div>
+        </div>
+        <div class="ctrl" style="align-self:center;">
+          <div class="row" id="alarm-leds" style="gap:14px;">
+            <div class="lamp red" data-lamp="alHighTemp"><div class="bulb"></div>HI TEMP</div>
+            <div class="lamp red" data-lamp="alLowFlow"><div class="bulb"></div>LO FLOW</div>
+            <div class="lamp red" data-lamp="alHighPress"><div class="bulb"></div>HI PRESS</div>
+            <div class="lamp red" data-lamp="alRad"><div class="bulb"></div>RAD MON</div>
+            <div class="lamp red" data-lamp="alFault"><div class="bulb"></div>EQUIP FLT</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SCRAM -->
+    <section class="module full" id="scram-module">
+      <div class="scram-assembly">
+        <div class="scram-base"></div>
+        <div class="scram-btn" data-scram-btn>SCRAM</div>
+        <div class="scram-cover" data-scram-cover></div>
+      </div>
+      <div id="scram-status">
+        <div class="line"><div class="bulb" data-lamp="scramActive"></div> REACTOR TRIP</div>
+        <div style="font-size:10px; color:var(--label-dim); max-width:220px; line-height:1.5;">
+          Lift the striped guard, then press the button to trip all control rods. Turn the reset key to RUN to clear.
+        </div>
+      </div>
+    </section>
+
+  </div>
+
+  <footer>ALL VALUES SIMULATED &nbsp;·&nbsp; window.ControlPanel EXPOSES state / on() / setValue() FOR WIRING UP REAL LOGIC</footer>
+</div>
+
+<script>
+(function(){
+
+  /* ======================================================
+     CORE STATE + EVENT BUS
+     Every control writes to `state` and dispatches a
+     'panelchange' CustomEvent so this file can be dropped
+     into a bigger simulator and wired up from the outside.
+  ====================================================== */
+  const state = {};
+  const updaters = {}; // id -> fn(value) to push a value INTO a control's visuals
+
+  function emit(id, value){
+    state[id] = value;
+    document.dispatchEvent(new CustomEvent('panelchange', { detail: { id, value, state } }));
+  }
+
+  window.ControlPanel = {
+    state,
+    on(cb){ document.addEventListener('panelchange', e => cb(e.detail)); },
+    setValue(id, value){
+      emit(id, value);
+      if (updaters[id]) updaters[id](value);
+    },
+    getValue(id){ return state[id]; }
+  };
+
+  /* ================= CLOCK ================= */
+  function tickClock(){
+    const d = new Date();
+    const p = n => String(n).padStart(2,'0');
+    document.getElementById('clock').textContent = `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+  }
+  tickClock(); setInterval(tickClock, 1000);
+
+  /* ================= LAMPS ================= */
+  document.querySelectorAll('.lamp').forEach(l=>{
+    const id = l.dataset.lamp;
+    state[id] = l.classList.contains('on');
+    updaters[id] = v => l.classList.toggle('on', !!v);
+  });
+
+  /* ================= TOGGLES ================= */
+  document.querySelectorAll('[data-toggle]').forEach(t=>{
+    const id = t.dataset.toggle;
+    const wrap = t.closest('.toggle-wrap');
+    const setOn = v => {
+      t.classList.toggle('on', v);
+      if (wrap) wrap.classList.toggle('on', v);
+    };
+    state[id] = t.classList.contains('on');
+    setOn(state[id]);
+    updaters[id] = v => setOn(!!v);
+    t.addEventListener('click', ()=>{
+      const v = !state[id];
+      setOn(v);
+      emit(id, v);
+    });
+  });
+
+  /* ================= KNOBS ================= */
+  document.querySelectorAll('[data-knob]').forEach(k=>{
+    const id = k.dataset.knob;
+    const min = parseFloat(k.dataset.min ?? 0);
+    const max = parseFloat(k.dataset.max ?? 100);
+    const detents = parseInt(k.dataset.detents || '0', 10);
+    const pointer = k.querySelector('.pointer');
+    const readout = document.querySelector(`[data-readout="${id}"]`);
+    const bar = document.querySelector(`[data-bar="${id}"]`);
+    const SWEEP = 270; // degrees, -135 to +135
+
+    function valueToAngle(v){
+      const f = (v - min) / (max - min);
+      return -SWEEP/2 + f * SWEEP;
+    }
+    function angleToValue(a){
+      let f = (a + SWEEP/2) / SWEEP;
+      f = Math.max(0, Math.min(1, f));
+      let v = min + f * (max - min);
+      if (detents > 0){
+        const step = (max - min) / (detents - 1);
+        v = Math.round((v - min) / step) * step + min;
+      }
+      return v;
+    }
+    function renderBar(v){
+      if (!bar) return;
+      bar.innerHTML = '';
+      const lit = Math.round((v - min) / (max - min) * 10);
+      for (let i=0;i<10;i++){
+        const s = document.createElement('div');
+        s.className = 'seg' + (i < lit ? ' lit' : '') + (i < lit && i >= 8 ? ' top' : '');
+        bar.appendChild(s);
+      }
+    }
+    function renderReadout(v){
+      if (!readout) return;
+      if (id === 'reliefValve'){
+        const labels = ['CLOSED','25%','50%','75%','OPEN'];
+        readout.textContent = labels[Math.round((v-min)/(max-min)*(labels.length-1))];
+      } else {
+        readout.textContent = Math.round(v) + '%';
+      }
+    }
+    function setValue(v, fromUser){
+      v = Math.max(min, Math.min(max, v));
+      const angle = valueToAngle(v);
+      pointer.style.transform = `translateX(-50%) rotate(${angle}deg)`;
+      renderBar(v);
+      renderReadout(v);
+      if (fromUser) emit(id, v);
+    }
+
+    let start = parseFloat(k.dataset.start ?? min);
+    setValue(start, false);
+    state[id] = start;
+    updaters[id] = v => setValue(v, false);
+
+    let dragging = false, startY = 0, startVal = 0;
+    k.addEventListener('pointerdown', e=>{
+      dragging = true; startY = e.clientY; startVal = state[id] ?? start;
+      k.setPointerCapture(e.pointerId);
+      k.style.cursor = 'grabbing';
+    });
+    k.addEventListener('pointermove', e=>{
+      if (!dragging) return;
+      const dy = startY - e.clientY; // up = increase
+      const range = max - min;
+      const v = startVal + (dy / 140) * range;
+      setValue(v, true);
+    });
+    function endDrag(e){
+      if (!dragging) return;
+      dragging = false;
+      k.style.cursor = 'grab';
+    }
+    k.addEventListener('pointerup', endDrag);
+    k.addEventListener('pointercancel', endDrag);
+  });
+
+  /* ================= SLIDERS ================= */
+  document.querySelectorAll('[data-slider]').forEach(s=>{
+    const id = s.dataset.slider;
+    const readout = document.querySelector(`[data-readout="${id}"]`);
+    function render(v){ if (readout) readout.textContent = v + '%'; }
+    state[id] = parseFloat(s.value);
+    render(s.value);
+    updaters[id] = v => { s.value = v; render(v); };
+    s.addEventListener('input', ()=>{ render(s.value); emit(id, parseFloat(s.value)); });
+  });
+
+  /* ================= GAUGES (SVG) ================= */
+  function buildGauge(container){
+    const id = container.dataset.gauge;
+    const min = parseFloat(container.dataset.min);
+    const max = parseFloat(container.dataset.max);
+    const unit = container.dataset.unit || '';
+    const label = container.dataset.label || id;
+    const redline = container.dataset.redline ? parseFloat(container.dataset.redline) : null;
+    const jitter = container.dataset.jitter === '1';
+    const START = -120, END = 120, SWEEP = END - START;
+
+    const cx = 75, cy = 78, r = 60;
+    const NS = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(NS, 'svg');
+    svg.setAttribute('viewBox','0 0 150 150');
+
+    function polar(angleDeg, radius){
+      const a = (angleDeg - 90) * Math.PI/180;
+      return [cx + radius*Math.cos(a), cy + radius*Math.sin(a)];
+    }
+
+    const TICKS = 8;
+    for (let i=0;i<=TICKS;i++){
+      const val = min + (max-min) * (i/TICKS);
+      const angle = START + SWEEP * (i/TICKS);
+      const [x1,y1] = polar(angle, r);
+      const [x2,y2] = polar(angle, r-9);
+      const line = document.createElementNS(NS,'line');
+      line.setAttribute('x1',x1); line.setAttribute('y1',y1);
+      line.setAttribute('x2',x2); line.setAttribute('y2',y2);
+      line.setAttribute('class', 'tick' + (redline!==null && val>=redline ? ' red' : ''));
+      svg.appendChild(line);
+      if (i % 2 === 0){
+        const [tx,ty] = polar(angle, r-20);
+        const t = document.createElementNS(NS,'text');
+        t.setAttribute('x',tx); t.setAttribute('y',ty+3);
+        t.setAttribute('class','ticklabel');
+        t.textContent = Math.round(val);
+        svg.appendChild(t);
+      }
+    }
+
+    const facelabel = document.createElementNS(NS,'text');
+    facelabel.setAttribute('x', cx); facelabel.setAttribute('y', cy + 34);
+    facelabel.setAttribute('class','facelabel');
+    facelabel.textContent = label;
+    svg.appendChild(facelabel);
+
+    const unitEl = document.createElementNS(NS,'text');
+    unitEl.setAttribute('x', cx); unitEl.setAttribute('y', cy + 46);
+    unitEl.setAttribute('class','unit');
+    unitEl.textContent = unit;
+    svg.appendChild(unitEl);
+
+    const needle = document.createElementNS(NS,'line');
+    needle.setAttribute('class','needle');
+    needle.setAttribute('x1', cx); needle.setAttribute('y1', cy);
+    const [nx, ny] = polar(START, r-14);
+    needle.setAttribute('x2', nx); needle.setAttribute('y2', ny);
+    svg.appendChild(needle);
+
+    const hub = document.createElementNS(NS,'circle');
+    hub.setAttribute('cx', cx); hub.setAttribute('cy', cy); hub.setAttribute('r', 5);
+    hub.setAttribute('class','hub');
+    svg.appendChild(hub);
+
+    container.appendChild(svg);
+
+    function setValue(v, fromUser){
+      v = Math.max(min, Math.min(max, v));
+      const angle = START + SWEEP * ((v-min)/(max-min));
+      needle.setAttribute('transform', `rotate(${angle} ${cx} ${cy})`);
+      if (fromUser) emit(id, v);
+      const digital = document.querySelector(`[data-readout="${id}Digital"]`);
+      if (digital) digital.textContent = String(Math.round(v)).padStart(4,'0') + ' ' + unit;
+    }
+
+    const start = parseFloat(container.dataset.start ?? min);
+    setValue(start, false);
+    state[id] = start;
+    updaters[id] = v => setValue(v, false);
+
+    if (jitter){
+      setInterval(()=>{
+        const cur = state[id];
+        const span = (max-min) * 0.01;
+        const next = cur + (Math.random()-0.5) * span;
+        setValue(next, false);
+        state[id] = next;
+      }, 1400 + Math.random()*400);
+    }
+  }
+  document.querySelectorAll('.gauge').forEach(buildGauge);
+
+  /* ================= MODE ROTARY SWITCH (click-to-cycle) ================= */
+  document.querySelectorAll('[data-mode]').forEach(m=>{
+    const id = m.dataset.mode;
+    const positions = m.dataset.positions.split(',');
+    const dial = m.querySelector('.dial');
+    const needle = m.querySelector('.needle');
+    const labelsWrap = m.querySelector('.labels');
+    const spread = 140; // degrees total spread of labels
+    positions.forEach((name,i)=>{
+      const span = document.createElement('span');
+      span.textContent = name;
+      const angle = -spread/2 + (spread/(positions.length-1))*i;
+      const rad = (angle-90)*Math.PI/180;
+      const radius = 78;
+      span.style.left = `calc(50% + ${radius*Math.cos(rad)}px - 30px)`;
+      span.style.top = `calc(50% + ${radius*Math.sin(rad)}px - 6px)`;
+      labelsWrap.appendChild(span);
+    });
+    let idx = 0;
+    function render(){
+      const angle = -spread/2 + (spread/(positions.length-1))*idx;
+      needle.style.transform = `translateX(-50%) rotate(${angle}deg)`;
+      [...labelsWrap.children].forEach((s,i)=> s.classList.toggle('active', i===idx));
+    }
+    render();
+    state[id] = positions[idx];
+    updaters[id] = v => { idx = positions.indexOf(v); if (idx<0) idx=0; render(); };
+    dial.addEventListener('click', ()=>{
+      idx = (idx + 1) % positions.length;
+      render();
+      emit(id, positions[idx]);
+    });
+  });
+
+  /* ================= KEY SWITCH ================= */
+  document.querySelectorAll('[data-key]').forEach(k=>{
+    const id = k.dataset.key;
+    const positions = k.dataset.positions.split(',');
+    const svg = k.querySelector('svg');
+    let idx = 0;
+    function render(){ svg.style.transform = `rotate(${idx*70}deg)`; }
+    render();
+    state[id] = positions[idx];
+    updaters[id] = v => { idx = positions.indexOf(v); if (idx<0) idx=0; render(); };
+    k.querySelector('.hole').addEventListener('click', ()=>{
+      idx = (idx+1) % positions.length;
+      render();
+      emit(id, positions[idx]);
+      if (positions[idx] === 'RUN'){
+        clearScram();
+      }
+    });
+  });
+
+  /* ================= SCRAM ================= */
+  const scramCover = document.querySelector('[data-scram-cover]');
+  const scramBtn = document.querySelector('[data-scram-btn]');
+  const alarmIds = ['alHighTemp','alLowFlow','alHighPress','alRad','alFault'];
+
+  scramCover.addEventListener('click', ()=>{
+    scramCover.classList.toggle('open');
+  });
+
+  function tripScram(){
+    state.scram = true;
+    emit('scram', true);
+    ControlPanel.setValue('alarm', true);
+    document.querySelector('[data-lamp="scramActive"]').classList.add('lit');
+    alarmIds.forEach(a => ControlPanel.setValue(a, true));
+    ['rod1','rod2','rod3','rod4'].forEach(r => ControlPanel.setValue(r, 0));
+  }
+  function clearScram(){
+    if (!state.scram) return;
+    state.scram = false;
+    emit('scram', false);
+    ControlPanel.setValue('alarm', false);
+    document.querySelector('[data-lamp="scramActive"]').classList.remove('lit');
+    alarmIds.forEach(a => ControlPanel.setValue(a, false));
+    scramCover.classList.remove('open');
+  }
+  scramBtn.addEventListener('click', ()=>{
+    if (!scramCover.classList.contains('open')) return;
+    tripScram();
+  });
+
+  /* ================= LOAD -> DIGITAL READOUT ================= */
+  ControlPanel.on(({id, value})=>{
+    if (id === 'load'){
+      const el = document.querySelector('[data-readout="loadDigital"]');
+      if (el) el.textContent = String(Math.round(value)).padStart(4,'0') + ' MWe';
+    }
+  });
+
+})();
+</script>
+</body>
+</html>
