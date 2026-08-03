@@ -1,0 +1,863 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rick's Trading Tools</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0a0c11;
+    --bg-alt:#0f121a;
+    --panel:#141924;
+    --panel-2:#1a202c;
+    --border:#262d3d;
+    --border-soft:#1c2230;
+    --text:#e7eaf1;
+    --text-dim:#8891a6;
+    --text-faint:#565f74;
+    --amber:#f2a93c;
+    --amber-dim:#8a6a35;
+    --cyan:#5cd0d9;
+    --green:#3fcf8e;
+    --red:#e5555c;
+    --mono:'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+    --sans:'IBM Plex Sans', system-ui, -apple-system, sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:
+      radial-gradient(ellipse 900px 500px at 15% -10%, rgba(242,169,60,0.05), transparent),
+      var(--bg);
+    color:var(--text);
+    font-family:var(--sans);
+    min-height:100vh;
+  }
+  ::selection{background:rgba(242,169,60,0.3);}
+  :focus-visible{outline:2px solid var(--amber); outline-offset:2px;}
+
+  /* ---------- top bar ---------- */
+  .topbar{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:14px 22px;
+    border-bottom:1px solid var(--border);
+    background:var(--bg-alt);
+    position:sticky; top:0; z-index:20;
+  }
+  .brand{display:flex; align-items:baseline; gap:10px;}
+  .brand .mark{
+    font-family:var(--mono); font-weight:700; letter-spacing:0.5px;
+    font-size:17px; color:var(--text);
+  }
+  .brand .mark .r{color:var(--amber);}
+  .brand .sub{
+    font-family:var(--mono); font-size:11px; color:var(--text-faint);
+    letter-spacing:1.5px; text-transform:uppercase;
+  }
+  .status{
+    display:flex; align-items:center; gap:8px;
+    font-family:var(--mono); font-size:11px; color:var(--text-dim);
+    letter-spacing:1px;
+  }
+  .dot{
+    width:7px; height:7px; border-radius:50%;
+    background:var(--green);
+    box-shadow:0 0 6px rgba(63,207,142,0.8);
+    animation:pulse 2.4s ease-in-out infinite;
+  }
+  @keyframes pulse{ 0%,100%{opacity:1;} 50%{opacity:0.35;} }
+  @media (prefers-reduced-motion: reduce){ .dot{animation:none;} }
+  #clock{color:var(--text-dim);}
+
+  /* ---------- layout ---------- */
+  .app{display:flex; align-items:flex-start;}
+  .sidebar{
+    width:230px; flex-shrink:0;
+    border-right:1px solid var(--border);
+    min-height:calc(100vh - 53px);
+    padding:18px 0;
+    position:sticky; top:53px;
+  }
+  .cat-label{
+    font-family:var(--mono); font-size:10.5px; letter-spacing:1.5px;
+    color:var(--text-faint); text-transform:uppercase;
+    padding:14px 20px 6px;
+  }
+  .cat-label:first-child{padding-top:2px;}
+  .nav-btn{
+    display:block; width:100%; text-align:left;
+    background:transparent; border:none; cursor:pointer;
+    padding:9px 20px; margin:0;
+    color:var(--text-dim); font-family:var(--sans); font-size:13.5px;
+    border-left:2px solid transparent;
+    transition:background 0.15s, color 0.15s, border-color 0.15s;
+  }
+  .nav-btn:hover{background:var(--panel); color:var(--text);}
+  .nav-btn.active{
+    background:var(--panel);
+    color:var(--amber);
+    border-left:2px solid var(--amber);
+    font-weight:500;
+  }
+
+  main{flex:1; min-width:0; padding:28px 34px 60px;}
+
+  .tool{display:none;}
+  .tool.active{display:block; animation:fadein 0.25s ease;}
+  @keyframes fadein{from{opacity:0; transform:translateY(4px);} to{opacity:1; transform:translateY(0);}}
+
+  .tool-cat{
+    font-family:var(--mono); font-size:11px; letter-spacing:1.5px;
+    color:var(--amber-dim); text-transform:uppercase;
+  }
+  .tool h2{
+    font-family:var(--sans); font-weight:600; font-size:24px;
+    margin:6px 0 8px; color:var(--text);
+  }
+  .tool-desc{color:var(--text-dim); font-size:14px; max-width:680px; line-height:1.5; margin:0 0 18px;}
+
+  .formula-strip{
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-left:3px solid var(--amber);
+    border-radius:4px;
+    padding:14px 18px;
+    margin-bottom:22px;
+  }
+  .formula-strip .f{
+    font-family:var(--mono); font-size:17px; color:var(--amber); font-weight:500;
+    letter-spacing:0.3px;
+  }
+  .legend{
+    display:flex; flex-wrap:wrap; gap:6px 22px;
+    margin-top:10px;
+  }
+  .legend span{font-size:12.5px; color:var(--text-dim); font-family:var(--sans);}
+  .legend span b{
+    font-family:var(--mono); color:var(--cyan); font-weight:600; margin-right:4px;
+  }
+
+  .tool-body{
+    display:grid; grid-template-columns:340px 1fr; gap:24px;
+    align-items:start;
+  }
+
+  .card{
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:6px;
+    padding:18px 20px;
+  }
+  .field{margin-bottom:14px;}
+  .field label{
+    display:block; font-size:12px; color:var(--text-dim);
+    margin-bottom:5px; letter-spacing:0.2px;
+  }
+  .field .hint{color:var(--text-faint); font-size:10.5px; margin-top:4px; display:block;}
+  input[type=text], input[type=number], select, textarea{
+    width:100%; background:var(--bg-alt); color:var(--text);
+    border:1px solid var(--border); border-radius:4px;
+    padding:8px 10px; font-family:var(--mono); font-size:13.5px;
+    transition:border-color 0.15s;
+  }
+  textarea{resize:vertical; min-height:70px; line-height:1.4;}
+  input:focus, select:focus, textarea:focus{border-color:var(--amber);}
+  .row2{display:grid; grid-template-columns:1fr 1fr; gap:12px;}
+  .radio-row{display:flex; gap:16px; margin-top:2px;}
+  .radio-row label{
+    display:flex; align-items:center; gap:6px; font-size:13px; color:var(--text-dim); font-weight:normal;
+    cursor:pointer;
+  }
+  .radio-row input{width:auto;}
+
+  button.run{
+    width:100%; background:var(--amber); color:#1a1204; border:none;
+    font-family:var(--sans); font-weight:600; font-size:13.5px;
+    padding:10px 14px; border-radius:4px; cursor:pointer;
+    letter-spacing:0.2px;
+    transition:filter 0.15s;
+  }
+  button.run:hover{filter:brightness(1.08);}
+  button.run:active{filter:brightness(0.95);}
+
+  .stat-grid{
+    display:grid; grid-template-columns:repeat(auto-fit, minmax(150px,1fr));
+    gap:12px; margin-bottom:16px;
+  }
+  .stat{
+    background:var(--panel-2); border:1px solid var(--border-soft); border-radius:5px;
+    padding:12px 14px;
+  }
+  .stat .label{font-size:11px; color:var(--text-dim); letter-spacing:0.3px; margin-bottom:6px;}
+  .stat .value{font-family:var(--mono); font-size:21px; font-weight:600; color:var(--text);}
+  .stat .value.pos{color:var(--green);}
+  .stat .value.neg{color:var(--red);}
+  .stat .value.warn{color:var(--amber);}
+  .stat .sub{font-size:11px; color:var(--text-faint); margin-top:4px;}
+
+  .note{
+    font-size:12.5px; color:var(--text-dim); background:var(--panel-2);
+    border:1px solid var(--border-soft); border-radius:5px; padding:10px 14px;
+    line-height:1.5;
+  }
+  .note.alert{border-color:rgba(229,85,92,0.4); color:#f0a1a5;}
+
+  canvas{width:100%; height:280px; background:var(--bg-alt); border:1px solid var(--border-soft); border-radius:5px;}
+
+  .mobile-select{display:none;}
+
+  footer{
+    padding:22px 34px 40px; color:var(--text-faint); font-size:11.5px;
+    border-top:1px solid var(--border-soft); margin-top:10px;
+    font-family:var(--mono); line-height:1.6;
+  }
+
+  @media (max-width:860px){
+    .tool-body{grid-template-columns:1fr;}
+    .sidebar{display:none;}
+    .mobile-select{
+      display:block; margin:0 34px 18px; position:sticky; top:53px; z-index:15;
+      background:var(--bg); padding-top:14px;
+    }
+    main{padding:0 18px 50px;}
+    .topbar{padding:12px 16px;}
+    footer{padding:20px 18px 36px;}
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand">
+    <span class="mark"><span class="r">R</span>ICK'S TRADING TOOLS</span>
+    <span class="sub">quant desk</span>
+  </div>
+  <div class="status">
+    <span class="dot"></span>
+    <span id="clock">--:--:--</span>
+  </div>
+</div>
+
+<div class="mobile-select">
+  <select id="mobileNav"></select>
+</div>
+
+<div class="app">
+  <nav class="sidebar" id="sidebar"></nav>
+  <main id="main"></main>
+</div>
+
+<footer>
+  All figures are computed client-side from the inputs you provide, under the stated model assumptions (e.g. Black-Scholes assumes lognormal returns and constant volatility; GBM simulation assumes constant drift/vol).
+  These are quantitative reference tools, not financial advice, and no model here accounts for slippage, fees, gap risk, or regime change.
+</footer>
+
+<script>
+/* ================= MATH HELPERS ================= */
+function erf(x){
+  const sign = x<0 ? -1 : 1; x = Math.abs(x);
+  const a1=0.254829592,a2=-0.284496736,a3=1.421413741,a4=-1.453152027,a5=1.061405429,p=0.3275911;
+  const t = 1/(1+p*x);
+  const y = 1-(((((a5*t+a4)*t)+a3)*t+a2)*t+a1)*t*Math.exp(-x*x);
+  return sign*y;
+}
+function normCDF(x){ return 0.5*(1+erf(x/Math.sqrt(2))); }
+function normPDF(x){ return Math.exp(-0.5*x*x)/Math.sqrt(2*Math.PI); }
+function randNormal(){
+  let u=0,v=0;
+  while(u===0) u=Math.random();
+  while(v===0) v=Math.random();
+  return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);
+}
+function mean(arr){ return arr.reduce((a,b)=>a+b,0)/arr.length; }
+function stdev(arr){
+  const m = mean(arr);
+  const v = arr.reduce((a,b)=>a+(b-m)*(b-m),0)/(arr.length-1);
+  return Math.sqrt(v);
+}
+function percentile(arr,p){
+  const s = [...arr].sort((a,b)=>a-b);
+  const idx = (p/100)*(s.length-1);
+  const lo = Math.floor(idx), hi = Math.ceil(idx);
+  if(lo===hi) return s[lo];
+  return s[lo] + (s[hi]-s[lo])*(idx-lo);
+}
+function parseSeries(str){
+  return str.split(/[\s,;\n]+/).map(s=>s.trim()).filter(s=>s.length).map(Number).filter(n=>isFinite(n));
+}
+function fmt(n,d=2){ return isFinite(n) ? n.toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d}) : '—'; }
+function money(n,d=2){ return isFinite(n) ? '$'+fmt(n,d) : '—'; }
+function pct(n,d=2){ return isFinite(n) ? fmt(n,d)+'%' : '—'; }
+function val(id){ return document.getElementById(id).value; }
+function num(id){ return parseFloat(document.getElementById(id).value); }
+function setText(id, text, cls){
+  const el = document.getElementById(id);
+  el.textContent = text;
+  if(cls){ el.className = 'value '+cls; }
+}
+
+/* ================= TOOL DEFINITIONS ================= */
+const categories = [
+  { name:'Sizing & Risk', tools:['kelly','var','expectancy'] },
+  { name:'Options', tools:['bs'] },
+  { name:'Statistics', tools:['hvol','sharpe'] },
+  { name:'Simulation', tools:['mc'] },
+];
+
+const toolMeta = {
+  kelly:{title:"Kelly Criterion & Position Sizing", cat:"Sizing & Risk"},
+  var:{title:"Value at Risk (VaR)", cat:"Sizing & Risk"},
+  expectancy:{title:"Trade Expectancy & R-Multiple", cat:"Sizing & Risk"},
+  bs:{title:"Black-Scholes Pricer & Greeks", cat:"Options"},
+  hvol:{title:"Historical Volatility", cat:"Statistics"},
+  sharpe:{title:"Sharpe & Sortino Ratio", cat:"Statistics"},
+  mc:{title:"Monte Carlo Price Simulation (GBM)", cat:"Simulation"},
+};
+
+/* ================= BUILD NAV ================= */
+const sidebar = document.getElementById('sidebar');
+const mobileNav = document.getElementById('mobileNav');
+categories.forEach(cat=>{
+  const label = document.createElement('div');
+  label.className = 'cat-label';
+  label.textContent = cat.name;
+  sidebar.appendChild(label);
+  const grp = document.createElement('optgroup');
+  grp.label = cat.name;
+  cat.tools.forEach(id=>{
+    const btn = document.createElement('button');
+    btn.className='nav-btn'; btn.dataset.tool=id;
+    btn.textContent = toolMeta[id].title;
+    btn.onclick = ()=>showTool(id);
+    sidebar.appendChild(btn);
+    const opt = document.createElement('option');
+    opt.value=id; opt.textContent=toolMeta[id].title;
+    grp.appendChild(opt);
+  });
+  mobileNav.appendChild(grp);
+});
+mobileNav.onchange = ()=>showTool(mobileNav.value);
+
+function showTool(id){
+  document.querySelectorAll('.tool').forEach(t=>t.classList.remove('active'));
+  document.getElementById('tool-'+id).classList.add('active');
+  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.toggle('active', b.dataset.tool===id));
+  mobileNav.value = id;
+  window.scrollTo({top:0, behavior:'instant' in window ? 'instant' : 'auto'});
+}
+
+/* ================= CLOCK ================= */
+function tick(){
+  const d = new Date();
+  document.getElementById('clock').textContent = d.toLocaleTimeString('en-US',{hour12:false});
+}
+tick(); setInterval(tick,1000);
+
+/* ================= RENDER PANELS ================= */
+const main = document.getElementById('main');
+
+main.innerHTML = `
+
+<section class="tool" id="tool-kelly" data-tool="kelly">
+  <div class="tool-cat">Sizing & Risk</div>
+  <h2>Kelly Criterion & Position Sizing</h2>
+  <p class="tool-desc">Given your edge (win rate and payoff ratio), the Kelly criterion gives the fraction of capital that maximizes long-run geometric growth. Full Kelly is high-variance in practice — most traders run a fractional Kelly.</p>
+  <div class="formula-strip">
+    <div class="f">f* = W − (1 − W) / R</div>
+    <div class="legend">
+      <span><b>W</b>win probability (0–1)</span>
+      <span><b>R</b>win/loss ratio, avg win ÷ avg loss</span>
+      <span><b>f*</b>optimal fraction of capital to risk</span>
+    </div>
+  </div>
+  <div class="tool-body">
+    <div class="card">
+      <div class="field"><label>Win rate (%)</label><input type="number" id="k_win" value="45" step="0.1"></div>
+      <div class="field"><label>Average win ($ or R)</label><input type="number" id="k_avgwin" value="180" step="0.01"></div>
+      <div class="field"><label>Average loss ($ or R, positive number)</label><input type="number" id="k_avgloss" value="100" step="0.01"></div>
+      <div class="field"><label>Account size ($)</label><input type="number" id="k_account" value="25000" step="1"></div>
+      <div class="field"><label>Kelly fraction to actually use</label>
+        <select id="k_fraction">
+          <option value="1">Full Kelly</option>
+          <option value="0.5" selected>Half Kelly (recommended)</option>
+          <option value="0.25">Quarter Kelly</option>
+        </select>
+      </div>
+    </div>
+    <div>
+      <div class="stat-grid">
+        <div class="stat"><div class="label">Payoff ratio R</div><div class="value" id="k_R">—</div></div>
+        <div class="stat"><div class="label">Full Kelly f*</div><div class="value" id="k_full">—</div></div>
+        <div class="stat"><div class="label">Fraction applied</div><div class="value" id="k_applied">—</div></div>
+        <div class="stat"><div class="label">Position size</div><div class="value" id="k_size">—</div><div class="sub" id="k_size_sub"></div></div>
+      </div>
+      <div class="note" id="k_note">Edge, growth rate, and warnings appear here.</div>
+    </div>
+  </div>
+</section>
+
+<section class="tool" id="tool-var" data-tool="var">
+  <div class="tool-cat">Sizing & Risk</div>
+  <h2>Value at Risk (VaR)</h2>
+  <p class="tool-desc">Parametric (variance-covariance) VaR estimates the loss that won't be exceeded over a given horizon at a given confidence level, assuming normally distributed returns.</p>
+  <div class="formula-strip">
+    <div class="f">VaR = P · z<sub>α</sub> · σ · √t</div>
+    <div class="legend">
+      <span><b>P</b>position / portfolio value</span>
+      <span><b>z_α</b>z-score for confidence level</span>
+      <span><b>σ</b>daily volatility (fraction)</span>
+      <span><b>t</b>horizon in trading days</span>
+    </div>
+  </div>
+  <div class="tool-body">
+    <div class="card">
+      <div class="field"><label>Position value ($)</label><input type="number" id="v_value" value="50000" step="1"></div>
+      <div class="field"><label>Daily volatility (%)</label><input type="number" id="v_sigma" value="2.1" step="0.01"><span class="hint">Use the Historical Volatility tool if you need this from a price series.</span></div>
+      <div class="field"><label>Confidence level</label>
+        <select id="v_conf">
+          <option value="1.282">90%</option>
+          <option value="1.645" selected>95%</option>
+          <option value="2.326">99%</option>
+        </select>
+      </div>
+      <div class="field"><label>Horizon (trading days)</label><input type="number" id="v_days" value="1" step="1" min="1"></div>
+    </div>
+    <div>
+      <div class="stat-grid">
+        <div class="stat"><div class="label">VaR (% of position)</div><div class="value warn" id="v_pct">—</div></div>
+        <div class="stat"><div class="label">VaR ($)</div><div class="value neg" id="v_dollar">—</div></div>
+        <div class="stat"><div class="label">Expected value remaining</div><div class="value" id="v_remain">—</div></div>
+      </div>
+      <div class="note">At the chosen confidence level, losses over the horizon are expected to stay within this amount — meaning roughly 1 in every (1/(1−confidence)) periods, a loss this size or worse can still occur. VaR does not describe the size of that tail loss, only its threshold.</div>
+    </div>
+  </div>
+</section>
+
+<section class="tool" id="tool-expectancy" data-tool="expectancy">
+  <div class="tool-cat">Sizing & Risk</div>
+  <h2>Trade Expectancy & R-Multiple</h2>
+  <p class="tool-desc">Expectancy tells you the average result per trade, in units of R (your initial risk). A positive expectancy system can still have a low win rate if the payoff ratio is high enough.</p>
+  <div class="formula-strip">
+    <div class="f">E[R] = (W × AvgWin<sub>R</sub>) − (L × AvgLoss<sub>R</sub>)</div>
+    <div class="legend">
+      <span><b>W</b>win rate</span>
+      <span><b>L</b>loss rate = 1 − W</span>
+      <span><b>AvgWin_R / AvgLoss_R</b>average win/loss in R multiples</span>
+    </div>
+  </div>
+  <div class="tool-body">
+    <div class="card">
+      <div class="field"><label>Win rate (%)</label><input type="number" id="e_win" value="40" step="0.1"></div>
+      <div class="field"><label>Average win (in R)</label><input type="number" id="e_avgwinR" value="2.2" step="0.01"></div>
+      <div class="field"><label>Average loss (in R, positive number)</label><input type="number" id="e_avglossR" value="1" step="0.01"></div>
+      <div class="field"><label>Risk per trade ($)</label><input type="number" id="e_risk" value="250" step="1"></div>
+      <div class="field"><label>Trades per month</label><input type="number" id="e_trades" value="20" step="1"></div>
+    </div>
+    <div>
+      <div class="stat-grid">
+        <div class="stat"><div class="label">Expectancy (R per trade)</div><div class="value" id="e_expR">—</div></div>
+        <div class="stat"><div class="label">Expectancy ($ per trade)</div><div class="value" id="e_expD">—</div></div>
+        <div class="stat"><div class="label">Breakeven win rate needed</div><div class="value" id="e_be">—</div></div>
+        <div class="stat"><div class="label">Projected monthly P/L</div><div class="value" id="e_month">—</div></div>
+      </div>
+      <div class="note" id="e_note"></div>
+    </div>
+  </div>
+</section>
+
+<section class="tool" id="tool-bs" data-tool="bs">
+  <div class="tool-cat">Options</div>
+  <h2>Black-Scholes Pricer & Greeks</h2>
+  <p class="tool-desc">Standard Black-Scholes-Merton pricing for European options, plus the first-order and second-order Greeks. Assumes constant volatility and a lognormal price process — real skew and jumps aren't captured.</p>
+  <div class="formula-strip">
+    <div class="f">C = S·N(d₁) − K·e<sup>−rT</sup>·N(d₂) &nbsp;&nbsp; d₁ = [ln(S/K) + (r + σ²/2)T] / (σ√T)</div>
+    <div class="legend">
+      <span><b>S</b>underlying price</span>
+      <span><b>K</b>strike</span>
+      <span><b>T</b>time to expiry (years)</span>
+      <span><b>r</b>risk-free rate</span>
+      <span><b>σ</b>implied volatility</span>
+    </div>
+  </div>
+  <div class="tool-body">
+    <div class="card">
+      <div class="field"><label>Underlying price S</label><input type="number" id="b_S" value="100" step="0.01"></div>
+      <div class="field"><label>Strike price K</label><input type="number" id="b_K" value="100" step="0.01"></div>
+      <div class="field"><label>Days to expiry</label><input type="number" id="b_days" value="30" step="1" min="1"></div>
+      <div class="row2">
+        <div class="field"><label>Risk-free rate (%)</label><input type="number" id="b_r" value="5" step="0.01"></div>
+        <div class="field"><label>Implied vol σ (%)</label><input type="number" id="b_sigma" value="28" step="0.01"></div>
+      </div>
+      <div class="field"><label>Option type</label>
+        <div class="radio-row">
+          <label><input type="radio" name="b_type" value="call" checked> Call</label>
+          <label><input type="radio" name="b_type" value="put"> Put</label>
+        </div>
+      </div>
+    </div>
+    <div>
+      <div class="stat-grid">
+        <div class="stat"><div class="label">Theoretical price</div><div class="value" id="b_price">—</div></div>
+        <div class="stat"><div class="label">Delta</div><div class="value" id="b_delta">—</div><div class="sub">Δ price per $1 move in S</div></div>
+        <div class="stat"><div class="label">Gamma</div><div class="value" id="b_gamma">—</div><div class="sub">Δ delta per $1 move in S</div></div>
+        <div class="stat"><div class="label">Vega</div><div class="value" id="b_vega">—</div><div class="sub">Δ price per 1pt move in IV</div></div>
+        <div class="stat"><div class="label">Theta (per day)</div><div class="value neg" id="b_theta">—</div><div class="sub">time decay per calendar day</div></div>
+        <div class="stat"><div class="label">Rho</div><div class="value" id="b_rho">—</div><div class="sub">Δ price per 1pt move in rate</div></div>
+      </div>
+      <div class="note">d₂ = d₁ − σ√T. N(·) is the standard normal CDF, N′(·) the standard normal PDF. Vega and Rho are scaled per 1 percentage-point move; Theta is scaled per calendar day (÷365).</div>
+    </div>
+  </div>
+</section>
+
+<section class="tool" id="tool-hvol" data-tool="hvol">
+  <div class="tool-cat">Statistics</div>
+  <h2>Historical Volatility</h2>
+  <p class="tool-desc">Computes realized volatility from a price series using log returns, then annualizes it. Paste closing prices in order (oldest first), separated by commas, spaces, or newlines.</p>
+  <div class="formula-strip">
+    <div class="f">σ<sub>ann</sub> = σ<sub>daily</sub> · √N</div>
+    <div class="legend">
+      <span><b>r_i</b>ln(P_i / P_(i−1))</span>
+      <span><b>σ_daily</b>sample std dev of log returns</span>
+      <span><b>N</b>periods per year (252 trading days)</span>
+    </div>
+  </div>
+  <div class="tool-body">
+    <div class="card">
+      <div class="field"><label>Closing prices (oldest → newest)</label>
+        <textarea id="h_prices">182.10, 183.45, 181.90, 185.20, 187.00, 186.10, 189.55, 191.20, 188.75, 190.40, 193.10, 192.00, 195.60, 197.25, 196.40</textarea>
+      </div>
+      <div class="field"><label>Periods per year</label><input type="number" id="h_periods" value="252" step="1"></div>
+    </div>
+    <div>
+      <div class="stat-grid">
+        <div class="stat"><div class="label">Observations</div><div class="value" id="h_n">—</div></div>
+        <div class="stat"><div class="label">Mean daily return</div><div class="value" id="h_mean">—</div></div>
+        <div class="stat"><div class="label">Daily volatility</div><div class="value" id="h_daily">—</div></div>
+        <div class="stat"><div class="label">Annualized volatility</div><div class="value warn" id="h_ann">—</div></div>
+      </div>
+      <div class="note" id="h_note">Needs at least 3 prices to compute a standard deviation.</div>
+    </div>
+  </div>
+</section>
+
+<section class="tool" id="tool-sharpe" data-tool="sharpe">
+  <div class="tool-cat">Statistics</div>
+  <h2>Sharpe & Sortino Ratio</h2>
+  <p class="tool-desc">Risk-adjusted return measures. Sharpe penalizes all volatility; Sortino only penalizes downside volatility below your minimum acceptable return, which is often more relevant to traders.</p>
+  <div class="formula-strip">
+    <div class="f">Sharpe = (R̄ − R<sub>f</sub>) / σ &nbsp;&nbsp; Sortino = (R̄ − R<sub>f</sub>) / σ<sub>down</sub></div>
+    <div class="legend">
+      <span><b>R̄</b>mean periodic return, annualized</span>
+      <span><b>R_f</b>annual risk-free rate</span>
+      <span><b>σ</b>std dev of returns, annualized</span>
+      <span><b>σ_down</b>downside deviation only, annualized</span>
+    </div>
+  </div>
+  <div class="tool-body">
+    <div class="card">
+      <div class="field"><label>Periodic returns (%), one per period</label>
+        <textarea id="s_returns">1.2, -0.8, 0.5, 2.1, -1.4, 0.9, 1.6, -0.3, 0.7, -2.0, 1.1, 0.4, -0.6, 1.8, 0.2</textarea>
+      </div>
+      <div class="row2">
+        <div class="field"><label>Annual risk-free rate (%)</label><input type="number" id="s_rf" value="4.5" step="0.01"></div>
+        <div class="field"><label>Periods per year</label><input type="number" id="s_periods" value="252" step="1"></div>
+      </div>
+    </div>
+    <div>
+      <div class="stat-grid">
+        <div class="stat"><div class="label">Observations</div><div class="value" id="s_n">—</div></div>
+        <div class="stat"><div class="label">Annualized return</div><div class="value" id="s_annret">—</div></div>
+        <div class="stat"><div class="label">Sharpe ratio</div><div class="value" id="s_sharpe">—</div></div>
+        <div class="stat"><div class="label">Sortino ratio</div><div class="value" id="s_sortino">—</div></div>
+      </div>
+      <div class="note" id="s_note"></div>
+    </div>
+  </div>
+</section>
+
+<section class="tool" id="tool-mc" data-tool="mc">
+  <div class="tool-cat">Simulation</div>
+  <h2>Monte Carlo Price Simulation (GBM)</h2>
+  <p class="tool-desc">Simulates future price paths under geometric Brownian motion. Each path is one possible future; the spread across paths is the point, not any single line.</p>
+  <div class="formula-strip">
+    <div class="f">S<sub>t+Δt</sub> = S<sub>t</sub> · exp[(μ − σ²/2)Δt + σ√Δt · Z]</div>
+    <div class="legend">
+      <span><b>μ</b>annualized expected return (drift)</span>
+      <span><b>σ</b>annualized volatility</span>
+      <span><b>Z</b>standard normal random draw</span>
+      <span><b>Δt</b>1/252 (one trading day)</span>
+    </div>
+  </div>
+  <div class="tool-body">
+    <div class="card">
+      <div class="field"><label>Starting price S₀</label><input type="number" id="m_S0" value="100" step="0.01"></div>
+      <div class="row2">
+        <div class="field"><label>Expected annual return μ (%)</label><input type="number" id="m_mu" value="8" step="0.1"></div>
+        <div class="field"><label>Annual volatility σ (%)</label><input type="number" id="m_sigma" value="30" step="0.1"></div>
+      </div>
+      <div class="row2">
+        <div class="field"><label>Trading days to simulate</label><input type="number" id="m_days" value="60" step="1" min="2"></div>
+        <div class="field"><label>Number of paths</label><input type="number" id="m_paths" value="60" step="1" min="1" max="300"></div>
+      </div>
+      <button class="run" id="m_run">Run simulation</button>
+    </div>
+    <div>
+      <canvas id="m_canvas" width="900" height="280"></canvas>
+      <div class="stat-grid" style="margin-top:14px;">
+        <div class="stat"><div class="label">5th percentile</div><div class="value neg" id="m_p5">—</div></div>
+        <div class="stat"><div class="label">Median outcome</div><div class="value" id="m_p50">—</div></div>
+        <div class="stat"><div class="label">95th percentile</div><div class="value pos" id="m_p95">—</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+`;
+
+/* ================= KELLY ================= */
+function calcKelly(){
+  const W = num('k_win')/100;
+  const avgWin = num('k_avgwin');
+  const avgLoss = num('k_avgloss');
+  const account = num('k_account');
+  const frac = parseFloat(val('k_fraction'));
+  const R = avgWin/avgLoss;
+  setText('k_R', isFinite(R) ? fmt(R,2) : '—');
+  const fStar = W - (1-W)/R;
+  setText('k_full', isFinite(fStar) ? pct(fStar*100,1) : '—', fStar<0 ? 'neg' : 'value');
+  const applied = fStar*frac;
+  setText('k_applied', isFinite(applied) ? pct(applied*100,1) : '—');
+  const size = Math.max(applied,0)*account;
+  setText('k_size', isFinite(size) ? money(size,0) : '—');
+  document.getElementById('k_size_sub').textContent = frac<1 ? (frac===0.5?'half Kelly':'quarter Kelly') : 'full Kelly';
+  const note = document.getElementById('k_note');
+  if(fStar<=0){
+    note.className='note alert';
+    note.textContent = "Negative edge: this system's win rate and payoff ratio don't justify risking capital under Kelly — f* ≤ 0. Improve W or R before sizing up.";
+  } else if(fStar>0.5){
+    note.className='note alert';
+    note.textContent = `Full Kelly (${pct(fStar*100,1)}) is unusually aggressive — double-check your win rate and payoff estimates, and strongly consider the fractional version.`;
+  } else {
+    note.className='note';
+    note.textContent = `With this edge, full Kelly suggests risking ${pct(fStar*100,1)} of capital per trade. Most practitioners run half or quarter Kelly to reduce drawdown variance, since Kelly assumes your W and R estimates are exact.`;
+  }
+}
+['k_win','k_avgwin','k_avgloss','k_account','k_fraction'].forEach(id=>document.getElementById(id).addEventListener('input',calcKelly));
+
+/* ================= VAR ================= */
+function calcVar(){
+  const P = num('v_value');
+  const sigma = num('v_sigma')/100;
+  const z = parseFloat(val('v_conf'));
+  const t = num('v_days');
+  const varPct = z*sigma*Math.sqrt(t);
+  const varDollar = P*varPct;
+  setText('v_pct', pct(varPct*100,2));
+  setText('v_dollar', money(varDollar,0), 'neg');
+  setText('v_remain', money(P-varDollar,0));
+}
+['v_value','v_sigma','v_conf','v_days'].forEach(id=>document.getElementById(id).addEventListener('input',calcVar));
+
+/* ================= EXPECTANCY ================= */
+function calcExpectancy(){
+  const W = num('e_win')/100;
+  const L = 1-W;
+  const avgWinR = num('e_avgwinR');
+  const avgLossR = num('e_avglossR');
+  const risk = num('e_risk');
+  const trades = num('e_trades');
+  const expR = W*avgWinR - L*avgLossR;
+  setText('e_expR', isFinite(expR) ? fmt(expR,3)+' R' : '—', expR<0?'neg':(expR>0?'pos':'value'));
+  const expD = expR*risk;
+  setText('e_expD', isFinite(expD) ? money(expD,2) : '—', expD<0?'neg':(expD>0?'pos':'value'));
+  const be = 1/(1+avgWinR/avgLossR)*100;
+  setText('e_be', isFinite(be) ? pct(be,1) : '—');
+  const month = expD*trades;
+  setText('e_month', isFinite(month) ? money(month,0) : '—', month<0?'neg':(month>0?'pos':'value'));
+  const note = document.getElementById('e_note');
+  if(expR<0){
+    note.className='note alert';
+    note.textContent = `Negative expectancy: this system loses ${fmt(Math.abs(expR),2)}R on average per trade. Your actual win rate (${fmt(W*100,1)}%) is below the breakeven rate (${fmt(be,1)}%) for this payoff ratio.`;
+  } else {
+    note.className='note';
+    note.textContent = `Your win rate (${fmt(W*100,1)}%) clears the breakeven rate (${fmt(be,1)}%) needed at this payoff ratio, so the edge is structurally positive before considering fees, slippage, or variance in the estimates themselves.`;
+  }
+}
+['e_win','e_avgwinR','e_avglossR','e_risk','e_trades'].forEach(id=>document.getElementById(id).addEventListener('input',calcExpectancy));
+
+/* ================= BLACK-SCHOLES ================= */
+function calcBS(){
+  const S = num('b_S'), K = num('b_K');
+  const T = num('b_days')/365;
+  const r = num('b_r')/100, sigma = num('b_sigma')/100;
+  const type = document.querySelector('input[name=b_type]:checked').value;
+  const d1 = (Math.log(S/K)+(r+sigma*sigma/2)*T)/(sigma*Math.sqrt(T));
+  const d2 = d1 - sigma*Math.sqrt(T);
+  const Nd1 = normCDF(d1), Nd2 = normCDF(d2);
+  const nd1 = normPDF(d1);
+  const gamma = nd1/(S*sigma*Math.sqrt(T));
+  const vega = S*nd1*Math.sqrt(T)/100;
+  let price, delta, theta, rho;
+  if(type==='call'){
+    price = S*Nd1 - K*Math.exp(-r*T)*Nd2;
+    delta = Nd1;
+    theta = (-(S*nd1*sigma)/(2*Math.sqrt(T)) - r*K*Math.exp(-r*T)*Nd2)/365;
+    rho = K*T*Math.exp(-r*T)*Nd2/100;
+  } else {
+    const Nnd1 = normCDF(-d1), Nnd2 = normCDF(-d2);
+    price = K*Math.exp(-r*T)*Nnd2 - S*Nnd1;
+    delta = Nd1-1;
+    theta = (-(S*nd1*sigma)/(2*Math.sqrt(T)) + r*K*Math.exp(-r*T)*Nnd2)/365;
+    rho = -K*T*Math.exp(-r*T)*Nnd2/100;
+  }
+  setText('b_price', isFinite(price) ? money(price,2) : '—');
+  setText('b_delta', isFinite(delta) ? fmt(delta,3) : '—');
+  setText('b_gamma', isFinite(gamma) ? fmt(gamma,4) : '—');
+  setText('b_vega', isFinite(vega) ? fmt(vega,3) : '—');
+  setText('b_theta', isFinite(theta) ? fmt(theta,3) : '—', 'neg');
+  setText('b_rho', isFinite(rho) ? fmt(rho,3) : '—');
+}
+['b_S','b_K','b_days','b_r','b_sigma'].forEach(id=>document.getElementById(id).addEventListener('input',calcBS));
+document.querySelectorAll('input[name=b_type]').forEach(r=>r.addEventListener('change',calcBS));
+
+/* ================= HISTORICAL VOLATILITY ================= */
+function calcHVol(){
+  const prices = parseSeries(val('h_prices'));
+  const periods = num('h_periods');
+  const note = document.getElementById('h_note');
+  setText('h_n', prices.length);
+  if(prices.length<3){
+    ['h_mean','h_daily','h_ann'].forEach(id=>setText(id,'—'));
+    note.textContent = 'Needs at least 3 prices to compute a standard deviation.';
+    return;
+  }
+  const rets = [];
+  for(let i=1;i<prices.length;i++){ rets.push(Math.log(prices[i]/prices[i-1])); }
+  const m = mean(rets);
+  const sd = stdev(rets);
+  setText('h_mean', pct(m*100,3));
+  setText('h_daily', pct(sd*100,3));
+  setText('h_ann', pct(sd*Math.sqrt(periods)*100,2));
+  note.textContent = `Computed from ${rets.length} log returns across ${prices.length} prices, annualized assuming ${periods} periods/year.`;
+}
+['h_prices','h_periods'].forEach(id=>document.getElementById(id).addEventListener('input',calcHVol));
+
+/* ================= SHARPE / SORTINO ================= */
+function calcSharpe(){
+  const returns = parseSeries(val('s_returns')).map(r=>r/100);
+  const rf = num('s_rf')/100;
+  const periods = num('s_periods');
+  const note = document.getElementById('s_note');
+  setText('s_n', returns.length);
+  if(returns.length<3){
+    ['s_annret','s_sharpe','s_sortino'].forEach(id=>setText(id,'—'));
+    note.textContent = 'Needs at least 3 periodic returns.';
+    return;
+  }
+  const m = mean(returns);
+  const sd = stdev(returns);
+  const rfPeriodic = rf/periods;
+  const downside = returns.map(r=>Math.min(0, r-rfPeriodic));
+  const downsideDev = Math.sqrt(downside.reduce((a,b)=>a+b*b,0)/returns.length);
+  const annRet = m*periods;
+  setText('s_annret', pct(annRet*100,2));
+  const sharpe = (annRet-rf)/(sd*Math.sqrt(periods));
+  const sortino = (annRet-rf)/(downsideDev*Math.sqrt(periods));
+  setText('s_sharpe', isFinite(sharpe)?fmt(sharpe,3):'—', sharpe<0?'neg':'pos');
+  setText('s_sortino', isFinite(sortino)?fmt(sortino,3):'—', sortino<0?'neg':'pos');
+  note.textContent = `Sharpe uses full volatility (${pct(sd*Math.sqrt(periods)*100,2)} annualized); Sortino uses downside deviation only (${pct(downsideDev*Math.sqrt(periods)*100,2)} annualized), against a periodic risk-free rate of ${pct(rfPeriodic*100,4)}.`;
+}
+['s_returns','s_rf','s_periods'].forEach(id=>document.getElementById(id).addEventListener('input',calcSharpe));
+
+/* ================= MONTE CARLO ================= */
+function runMonteCarlo(){
+  const S0 = num('m_S0');
+  const mu = num('m_mu')/100;
+  const sigma = num('m_sigma')/100;
+  const days = Math.max(2, Math.round(num('m_days')));
+  const nPaths = Math.max(1, Math.min(300, Math.round(num('m_paths'))));
+  const dt = 1/252;
+
+  const paths = [];
+  for(let p=0;p<nPaths;p++){
+    const path = [S0];
+    let S = S0;
+    for(let d=1;d<=days;d++){
+      const Z = randNormal();
+      S = S*Math.exp((mu - sigma*sigma/2)*dt + sigma*Math.sqrt(dt)*Z);
+      path.push(S);
+    }
+    paths.push(path);
+  }
+
+  const finals = paths.map(p=>p[p.length-1]);
+  setText('m_p5', money(percentile(finals,5),2));
+  setText('m_p50', money(percentile(finals,50),2));
+  setText('m_p95', money(percentile(finals,95),2));
+
+  const canvas = document.getElementById('m_canvas');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  ctx.clearRect(0,0,W,H);
+
+  let min = Infinity, max = -Infinity;
+  paths.forEach(p=>p.forEach(v=>{ if(v<min)min=v; if(v>max)max=v; }));
+  const pad = (max-min)*0.08 || 1;
+  min -= pad; max += pad;
+
+  const marginL = 55, marginR = 15, marginT = 15, marginB = 25;
+  const plotW = W-marginL-marginR, plotH = H-marginT-marginB;
+  const x = i => marginL + (i/days)*plotW;
+  const y = v => marginT + plotH - ((v-min)/(max-min))*plotH;
+
+  // grid
+  ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+  ctx.lineWidth = 1;
+  ctx.font = '10px IBM Plex Mono, monospace';
+  ctx.fillStyle = 'rgba(136,145,166,0.9)';
+  for(let g=0; g<=4; g++){
+    const gv = min + (max-min)*g/4;
+    const gy = y(gv);
+    ctx.beginPath(); ctx.moveTo(marginL,gy); ctx.lineTo(W-marginR,gy); ctx.stroke();
+    ctx.fillText(gv.toFixed(1), 4, gy+3);
+  }
+
+  // paths
+  paths.forEach((p,idx)=>{
+    ctx.beginPath();
+    ctx.strokeStyle = 'rgba(92,208,217,0.25)';
+    ctx.lineWidth = 1;
+    p.forEach((v,i)=>{ i===0 ? ctx.moveTo(x(i),y(v)) : ctx.lineTo(x(i),y(v)); });
+    ctx.stroke();
+  });
+
+  // median path highlight
+  const medianPath = [];
+  for(let d=0; d<=days; d++){
+    medianPath.push(percentile(paths.map(p=>p[d]), 50));
+  }
+  ctx.beginPath();
+  ctx.strokeStyle = '#f2a93c';
+  ctx.lineWidth = 2;
+  medianPath.forEach((v,i)=>{ i===0 ? ctx.moveTo(x(i),y(v)) : ctx.lineTo(x(i),y(v)); });
+  ctx.stroke();
+
+  // starting price line
+  ctx.beginPath();
+  ctx.strokeStyle = 'rgba(231,234,241,0.35)';
+  ctx.setLineDash([4,4]);
+  ctx.moveTo(marginL, y(S0)); ctx.lineTo(W-marginR, y(S0));
+  ctx.stroke();
+  ctx.setLineDash([]);
+}
+document.getElementById('m_run').addEventListener('click', runMonteCarlo);
+
+/* ================= INIT ================= */
+calcKelly(); calcVar(); calcExpectancy(); calcBS(); calcHVol(); calcSharpe();
+runMonteCarlo();
+showTool('kelly');
+</script>
+</body>
+</html>
