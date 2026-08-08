@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GeoSim — Geopolitics Simulator</title>
+    <link rel="stylesheet" href="geo.css">
+</head>
+<body>
+    <div class="topbar">
+        <h1><span>Geo</span>Sim</h1>
+        <div class="coords" id="coords">—</div>
+    </div>
+    <div class="app">
+        <aside class="sidebar">
+            <div class="section-title">Tools</div>
+            <p class="sidebar-note">Drag to rotate. Scroll to zoom. Nation-state tools coming soon.</p>
+        </aside>
+        <main class="viewport">
+            <canvas id="globeCanvas"></canvas>
+        </main>
+    </div>
+    <script src="globe.js"></script>
+</body>
+</html>
