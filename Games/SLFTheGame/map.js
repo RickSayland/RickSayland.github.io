@@ -14,11 +14,7 @@ const mapSystem = {
         forest: { color: '#0d2610', walkable: true }
     },
 
-    // Woods level - mostly grass with trees and some water
-    woodsMap: null,
-    beachMap: null,
-    erinMap: null,
-    forestMap: null,
+    maps: {},
     minimapCache: {},
 
     init() {
@@ -26,6 +22,9 @@ const mapSystem = {
         this.generateBeachMap();
         this.generateErinMap();
         this.generateForestMap();
+        this.generateCanyonMap();
+        this.generateSwampMap();
+        this.generateIslandMap();
     },
 
     generateWoodsMap() {
@@ -60,7 +59,7 @@ const mapSystem = {
                 map.push(terrain);
             }
         }
-        this.woodsMap = map;
+        this.maps.woods = map;
     },
 
     generateBeachMap() {
@@ -82,7 +81,7 @@ const mapSystem = {
                 map.push(terrain);
             }
         }
-        this.beachMap = map;
+        this.maps.beach = map;
     },
 
     generateErinMap() {
@@ -120,7 +119,7 @@ const mapSystem = {
         /* y=29 */  'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass', 'grass'
         ];
 
-        this.erinMap = map;
+        this.maps.erin = map;
     },
 
     generateForestMap() {
@@ -157,24 +156,92 @@ const mapSystem = {
         /* y=29 */  'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree'
         ];
 
-        this.forestMap = map;
+        this.maps.forest = map;
+    },
+
+    generateCanyonMap() {
+        const W = this.mapWidth, H = this.mapHeight;
+        const map = [];
+        for (let y = 0; y < H; y++) {
+            for (let x = 0; x < W; x++) {
+                let t = 'rock';
+                const cx = W / 2, cy = H / 2;
+                const pathY = cy + Math.sin(x * 0.25) * 4;
+                if (Math.abs(y - pathY) < 3) t = 'sand';
+                const vertPath = cx + Math.cos(y * 0.3) * 5;
+                if (Math.abs(x - vertPath) < 2) t = 'sand';
+                if (t === 'sand' && Math.abs(y - pathY) < 1 && x > 8 && x < 32) t = 'water';
+                if (y <= 1 || y >= H - 2 || x <= 1 || x >= W - 2) t = 'rock';
+                const nx = Math.sin(x * 0.7 + y * 0.4) * Math.cos(x * 0.3 - y * 0.6);
+                if (t === 'rock' && nx > 0.6) t = 'grass';
+                if (t === 'sand' && Math.random() < 0.04) t = 'rock';
+                map.push(t);
+            }
+        }
+        this.maps.canyon = map;
+    },
+
+    generateSwampMap() {
+        const W = this.mapWidth, H = this.mapHeight;
+        const map = [];
+        for (let y = 0; y < H; y++) {
+            for (let x = 0; x < W; x++) {
+                let t = 'forest';
+                const pool1 = (x - 10) ** 2 + (y - 8) ** 2;
+                const pool2 = (x - 30) ** 2 + (y - 22) ** 2;
+                const pool3 = (x - 20) ** 2 + (y - 15) ** 2;
+                const pool4 = (x - 8) ** 2 + (y - 24) ** 2;
+                const pool5 = (x - 35) ** 2 + (y - 6) ** 2;
+                if (pool1 < 16 || pool2 < 20 || pool3 < 12 || pool4 < 10 || pool5 < 14) t = 'water';
+                if (t === 'forest' && Math.random() < 0.18) t = 'tree';
+                if (t === 'forest') {
+                    const n = Math.sin(x * 0.8) * Math.cos(y * 0.6);
+                    if (n > 0.5) t = 'grass';
+                }
+                if (y === 0 || y === H - 1 || x === 0 || x === W - 1) t = 'tree';
+                map.push(t);
+            }
+        }
+        this.maps.swamp = map;
+    },
+
+    generateIslandMap() {
+        const W = this.mapWidth, H = this.mapHeight;
+        const cx = W / 2, cy = H / 2;
+        const map = [];
+        for (let y = 0; y < H; y++) {
+            for (let x = 0; x < W; x++) {
+                const dx = (x - cx) / (W * 0.42);
+                const dy = (y - cy) / (H * 0.42);
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                const wobble = Math.sin(Math.atan2(dy, dx) * 5) * 0.08;
+                let t;
+                if (dist > 1.0 + wobble) {
+                    t = 'water';
+                } else if (dist > 0.85 + wobble) {
+                    t = 'sand';
+                } else {
+                    t = 'grass';
+                    const pond = (x - cx - 3) ** 2 + (y - cy + 2) ** 2;
+                    if (pond < 10) t = 'water';
+                    if (pond >= 10 && pond < 16) t = 'sand';
+                    const grove1 = (x - cx + 6) ** 2 + (y - cy - 5) ** 2;
+                    const grove2 = (x - cx - 8) ** 2 + (y - cy + 6) ** 2;
+                    if ((grove1 < 12 || grove2 < 10) && Math.random() < 0.6) t = 'tree';
+                    if (t === 'grass' && Math.random() < 0.05) t = 'tree';
+                }
+                map.push(t);
+            }
+        }
+        this.maps.island = map;
     },
 
     getCurrentMap() {
-        if (this.currentLevel === 'woods')
-            return this.woodsMap;
-            else if (this.currentLevel === 'beach')
-                return this.beachMap;
-                else if (this.currentLevel === 'erin')
-                    return this.erinMap;
-                    else if (this.currentLevel === 'forest')
-                        return this.forestMap;
-                        else
-                            return this.woodsMap;
+        return this.maps[this.currentLevel] || this.maps.woods;
     },
 
     setLevel(levelName) {
-        if (levelName === 'woods' || levelName === 'beach' || levelName === 'erin' || levelName === 'forest') {
+        if (this.maps[levelName]) {
             this.currentLevel = levelName;
             // Find and set player to a safe spawn point
             const spawnPoint = this.findSpawnPoint(400, 300);
@@ -347,7 +414,7 @@ const mapSystem = {
     // only needs a single scaled drawImage() per frame instead of
     // redrawing every tile.
     buildMinimapTexture(levelName) {
-        const map = levelName === 'woods' ? this.woodsMap : this.beachMap;
+        const map = this.maps[levelName];
         const texture = document.createElement('canvas');
         texture.width = this.mapWidth;
         texture.height = this.mapHeight;
