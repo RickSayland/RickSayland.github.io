@@ -270,6 +270,7 @@ const mapSystem = {
     },
 
     isWalkable(x, y) {
+        if (x < 0 || y < 0 || x >= this.mapWidth * this.tileSize || y >= this.mapHeight * this.tileSize) return false;
         const terrain = this.getTileAt(x, y);
         return this.terrainTypes[terrain].walkable !== false;
     },
