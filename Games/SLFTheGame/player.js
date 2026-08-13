@@ -20,6 +20,7 @@ const player = {
     color: '#00ff00',
     name: 'Hero', // placeholder until character select asks for a name
     direction: { x: 0, y: 0 },
+    facing: { x: 1, y: 0 },
     isMoving: false,
 
     health: 100,
@@ -27,12 +28,23 @@ const player = {
 
     magic: 100,
     maxMagic: 100,
-    magicRegenRate: 8, // MP per second, passive regen
-    shockwaveCost: 20, // MP spent per cast
+    magicRegenRate: 8,
+    shockwaveCost: 20,
+    shootCost: 5,
+
+    shootCooldown: 0,
+    shootCooldownMax: 400,
+    shockwaveCooldown: 0,
+    shockwaveCooldownMax: 5000,
 
     update(deltaTime) {
-        // Apply movement based on direction
+        const scaled = deltaTime * simulationSpeed;
+        if (this.shootCooldown > 0) this.shootCooldown = Math.max(0, this.shootCooldown - scaled);
+        if (this.shockwaveCooldown > 0) this.shockwaveCooldown = Math.max(0, this.shockwaveCooldown - scaled);
+
         if (this.direction.x !== 0 || this.direction.y !== 0) {
+            this.facing.x = this.direction.x;
+            this.facing.y = this.direction.y;
             const distance = this.speed * weatherSystem.getSpeedModifier() * (deltaTime / 1000) * simulationSpeed;
             
             const buf = this.width / 2;
@@ -75,10 +87,9 @@ const player = {
             this.height
         );
 
-        // Draw direction indicator (circle at top of sprite)
         ctx.fillStyle = shadeColor(this.color, 0.7);
-        const indicatorX = this.x + this.direction.x * 15;
-        const indicatorY = this.y + this.direction.y * 15;
+        const indicatorX = this.x + this.facing.x * 15;
+        const indicatorY = this.y + this.facing.y * 15;
         ctx.beginPath();
         ctx.arc(indicatorX, indicatorY, 5, 0, Math.PI * 2);
         ctx.fill();
@@ -110,11 +121,17 @@ const player = {
     },
 
     castShockwave() {
-        if (this.magic < this.shockwaveCost) {
-            return;
-        }
+        if (this.shockwaveCooldown > 0 || this.magic < this.shockwaveCost) return;
         this.magic -= this.shockwaveCost;
+        this.shockwaveCooldown = this.shockwaveCooldownMax;
         shockwaveSystem.spawn(this.x, this.y);
+    },
+
+    castProjectile() {
+        if (this.shootCooldown > 0 || this.magic < this.shootCost) return;
+        this.magic -= this.shootCost;
+        this.shootCooldown = this.shootCooldownMax;
+        projectileSystem.spawn(this.x, this.y, this.facing.x, this.facing.y);
     },
 
     // Draws the HP/MP HUD panel in screen space (top-left corner).
@@ -128,16 +145,15 @@ const player = {
         const nameY = panelY + 20;
         const healthY = panelY + 30;
         const magicY = healthY + barHeight + 8;
-        const panelHeight = (magicY + barHeight + 10) - panelY;
+        const cdY = magicY + barHeight + 10;
+        const panelHeight = (cdY + 22) - panelY;
 
-        // Panel backdrop
         ctx.fillStyle = 'rgba(10, 10, 10, 0.75)';
         ctx.fillRect(panelX, panelY, panelWidth, panelHeight);
         ctx.strokeStyle = '#4a9eff';
         ctx.lineWidth = 1;
         ctx.strokeRect(panelX, panelY, panelWidth, panelHeight);
 
-        // Character name
         ctx.fillStyle = '#ffffff';
         ctx.font = 'bold 13px Arial';
         ctx.textAlign = 'left';
@@ -155,6 +171,15 @@ const player = {
             this.magic, this.maxMagic, '#3a8de0', '#142a4a',
             `MP ${Math.round(this.magic)}/${this.maxMagic}`
         );
+
+        const halfW = barWidth / 2 - 2;
+        const shootPct = this.shootCooldown / this.shootCooldownMax;
+        const aoePct = this.shockwaveCooldown / this.shockwaveCooldownMax;
+
+        this.drawStatBar(ctx, innerX, cdY, halfW, 12,
+            1 - shootPct, 1, this.color, '#1a1a1a', shootPct > 0 ? (this.shootCooldown / 1000).toFixed(1) + 's' : 'Shot');
+        this.drawStatBar(ctx, innerX + halfW + 4, cdY, halfW, 12,
+            1 - aoePct, 1, '#78c8ff', '#1a1a1a', aoePct > 0 ? (this.shockwaveCooldown / 1000).toFixed(1) + 's' : 'AOE');
     },
 
     // Generic filled/empty bar with a centered label, used for both HP and MP
@@ -195,6 +220,9 @@ const input = {
 
             if (e.code === 'Space' && !e.repeat && gameState === 'playing') {
                 e.preventDefault();
+                player.castProjectile();
+            }
+            if ((e.code === 'KeyE') && !e.repeat && gameState === 'playing') {
                 player.castShockwave();
             }
         });
@@ -250,8 +278,16 @@ const input = {
 
         actionBtn.addEventListener('touchstart', (e) => {
             e.preventDefault();
-            if (gameState === 'playing') player.castShockwave();
+            if (gameState === 'playing') player.castProjectile();
         });
+
+        const aoeBtn = document.getElementById('aoeBtn');
+        if (aoeBtn) {
+            aoeBtn.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                if (gameState === 'playing') player.castShockwave();
+            });
+        }
     },
 
     handleJoystickMove(touch, zone, knob, baseRadius, knobRadius) {

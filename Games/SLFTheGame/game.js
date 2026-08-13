@@ -1,6 +1,7 @@
 // ============ GAME STATE ============
 let gameState = 'menu'; // 'menu' or 'playing'
-const GAME_VERSION = 'v0.3.0';
+const GAME_VERSION = 'v0.4.0';
+const levelOrder = ['woods', 'beach', 'erin', 'forest', 'canyon', 'swamp', 'island'];
 
 // ============ WORLD STATE ============
 const world = {
@@ -132,6 +133,7 @@ const menuUI = {
         gameState = 'playing';
         document.getElementById('menuContainer').style.display = 'none';
         document.querySelector('.container').style.display = 'flex';
+        resizeCanvas();
         // Ensure player is on a walkable tile
         const spawnPoint = mapSystem.findSpawnPoint(400, 300);
         player.x = spawnPoint.x;
@@ -247,6 +249,20 @@ function updateDebugUI() {
     document.getElementById('currentLevel').textContent = levelName;
 }
 
+// ============ LEVEL PROGRESSION ============
+let levelClearTimer = 0;
+
+function advanceLevel() {
+    const currentIndex = levelOrder.indexOf(mapSystem.currentLevel);
+    const nextIndex = (currentIndex + 1) % levelOrder.length;
+    mapSystem.setLevel(levelOrder[nextIndex]);
+    levelClearTimer = 2000;
+    if (debugMode) {
+        const sel = document.getElementById('levelSelect');
+        if (sel) sel.value = levelOrder[nextIndex];
+    }
+}
+
 // ============ RENDER FUNCTION ============
 function render() {
     if (gameState !== 'playing') {
@@ -273,7 +289,8 @@ function render() {
     // Render player
     player.render(ctx);
 
-    // Render shockwave ripples on top of everything in world space
+    // Render projectiles and shockwave ripples in world space
+    projectileSystem.render(ctx);
     shockwaveSystem.render(ctx);
 
     // Restore context state
@@ -297,6 +314,21 @@ function render() {
         ctx.fillText('Use Arrow Keys or WASD to move', 20, 115);
         ctx.fillText('Space: Shockwave', 20, 135);
     }
+
+    if (levelClearTimer > 0) {
+        const alpha = Math.min(1, levelClearTimer / 500);
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = '#000000';
+        ctx.fillRect(0, canvas.height / 2 - 40, canvas.width, 80);
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = '#4a9eff';
+        ctx.font = 'bold ' + Math.min(48, canvas.width / 12) + 'px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('Level Clear!', canvas.width / 2, canvas.height / 2);
+        ctx.restore();
+    }
 }
 
 // ============ UPDATE FUNCTION ============
@@ -315,14 +347,22 @@ function update(deltaTime) {
     weatherSystem.update(scaledDeltaTime, world.time);
     player.update(deltaTime);
     shockwaveSystem.update(deltaTime);
+    projectileSystem.update(deltaTime);
     enemySystem.update(deltaTime);
+
+    if (levelClearTimer > 0) {
+        levelClearTimer -= deltaTime;
+    } else if (enemySystem.enemies.length === 0) {
+        advanceLevel();
+    }
 
     // Update camera to keep player centered
     world.camera.x = player.x - canvas.width / 2;
     world.camera.y = player.y - canvas.height / 2;
 
-    // Update debug delta time display
-    document.getElementById('deltaTimeValue').textContent = deltaTime.toFixed(1);
+    if (debugMode) {
+        document.getElementById('deltaTimeValue').textContent = deltaTime.toFixed(1);
+    }
 }
 
 // ============ MAIN GAME LOOP ============

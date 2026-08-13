@@ -324,6 +324,17 @@ canvas {
     background: rgba(74, 158, 255, 0.4);
 }
 
+.touch-action-secondary {
+    bottom: 130px;
+    width: 64px;
+    height: 64px;
+    font-size: 11px;
+    right: 38px;
+    background: rgba(120, 200, 255, 0.15);
+    border-color: rgba(120, 200, 255, 0.35);
+    color: rgba(120, 200, 255, 0.7);
+}
+
 /* ============ MOBILE RESPONSIVE ============ */
 @media (max-width: 768px) {
     .container {
