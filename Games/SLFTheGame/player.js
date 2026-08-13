@@ -186,44 +186,116 @@ const player = {
 // ============ INPUT HANDLER ============
 const input = {
     keys: {},
+    touchDir: { x: 0, y: 0 },
 
     init() {
         document.addEventListener('keydown', (e) => {
             this.keys[e.key.toLowerCase()] = true;
-            this.handleInput();
+            this.updateDirection();
 
             if (e.code === 'Space' && !e.repeat && gameState === 'playing') {
-                e.preventDefault(); // stop the page from scrolling
+                e.preventDefault();
                 player.castShockwave();
             }
         });
 
         document.addEventListener('keyup', (e) => {
             this.keys[e.key.toLowerCase()] = false;
-            this.handleInput();
+            this.updateDirection();
+        });
+
+        this.initTouch();
+    },
+
+    initTouch() {
+        const zone = document.getElementById('joystickZone');
+        const knob = document.getElementById('joystickKnob');
+        const actionBtn = document.getElementById('actionBtn');
+        if (!zone) return;
+
+        const baseRadius = 70;
+        const knobRadius = 25;
+        let activeTouch = null;
+
+        zone.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            const touch = e.changedTouches[0];
+            activeTouch = touch.identifier;
+            this.handleJoystickMove(touch, zone, knob, baseRadius, knobRadius);
+        });
+
+        zone.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            for (const touch of e.changedTouches) {
+                if (touch.identifier === activeTouch) {
+                    this.handleJoystickMove(touch, zone, knob, baseRadius, knobRadius);
+                }
+            }
+        });
+
+        const endTouch = (e) => {
+            for (const touch of e.changedTouches) {
+                if (touch.identifier === activeTouch) {
+                    activeTouch = null;
+                    this.touchDir.x = 0;
+                    this.touchDir.y = 0;
+                    knob.style.left = (baseRadius - knobRadius) + 'px';
+                    knob.style.top = (baseRadius - knobRadius) + 'px';
+                    this.updateDirection();
+                }
+            }
+        };
+        zone.addEventListener('touchend', endTouch);
+        zone.addEventListener('touchcancel', endTouch);
+
+        actionBtn.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            if (gameState === 'playing') player.castShockwave();
         });
     },
 
-    handleInput() {
-        // Reset direction
+    handleJoystickMove(touch, zone, knob, baseRadius, knobRadius) {
+        const rect = zone.getBoundingClientRect();
+        const cx = rect.left + baseRadius;
+        const cy = rect.top + baseRadius;
+        let dx = touch.clientX - cx;
+        let dy = touch.clientY - cy;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        const maxDist = baseRadius - knobRadius;
+
+        if (dist > maxDist) {
+            dx = (dx / dist) * maxDist;
+            dy = (dy / dist) * maxDist;
+        }
+
+        knob.style.left = (baseRadius - knobRadius + dx) + 'px';
+        knob.style.top = (baseRadius - knobRadius + dy) + 'px';
+
+        const deadzone = 8;
+        if (dist < deadzone) {
+            this.touchDir.x = 0;
+            this.touchDir.y = 0;
+        } else {
+            this.touchDir.x = dx / maxDist;
+            this.touchDir.y = dy / maxDist;
+        }
+        this.updateDirection();
+    },
+
+    updateDirection() {
         player.direction.x = 0;
         player.direction.y = 0;
 
-        // Check arrow keys and WASD
-        if (this.keys['arrowup'] || this.keys['w']) {
-            player.direction.y = -1;
-        }
-        if (this.keys['arrowdown'] || this.keys['s']) {
-            player.direction.y = 1;
-        }
-        if (this.keys['arrowleft'] || this.keys['a']) {
-            player.direction.x = -1;
-        }
-        if (this.keys['arrowright'] || this.keys['d']) {
-            player.direction.x = 1;
+        if (this.keys['arrowup'] || this.keys['w']) player.direction.y = -1;
+        if (this.keys['arrowdown'] || this.keys['s']) player.direction.y = 1;
+        if (this.keys['arrowleft'] || this.keys['a']) player.direction.x = -1;
+        if (this.keys['arrowright'] || this.keys['d']) player.direction.x = 1;
+
+        if (player.direction.x === 0 && player.direction.y === 0) {
+            player.direction.x = this.touchDir.x;
+            player.direction.y = this.touchDir.y;
         }
 
-        // Normalize diagonal movement
         if (player.direction.x !== 0 && player.direction.y !== 0) {
             const length = Math.sqrt(
                 player.direction.x * player.direction.x +

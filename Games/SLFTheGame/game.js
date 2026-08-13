@@ -1,6 +1,6 @@
 // ============ GAME STATE ============
 let gameState = 'menu'; // 'menu' or 'playing'
-const GAME_VERSION = 'v0.1.0';
+const GAME_VERSION = 'v0.2.0';
 
 // ============ WORLD STATE ============
 const world = {
@@ -28,6 +28,17 @@ let frameCounter = 0;
 let lastFpsUpdate = Date.now();
 let currentFps = 0;
 
+// ============ DEBUG MODE ============
+const debugMode = new URLSearchParams(window.location.search).has('debug');
+if (!debugMode) {
+    const rightPanel = document.querySelector('.right-panel');
+    if (rightPanel) rightPanel.style.display = 'none';
+    const leftPanel = document.querySelector('.left-panel');
+    if (leftPanel) leftPanel.style.display = 'none';
+    const centerPanel = document.querySelector('.center-panel');
+    if (centerPanel) centerPanel.style.flex = '1 1 100%';
+}
+
 // ============ CANVAS SETUP ============
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
@@ -42,14 +53,21 @@ resizeCanvas();
 window.addEventListener('resize', resizeCanvas);
 
 // ============ CONTROL LISTENERS ============
-document.getElementById('speedSlider').addEventListener('input', (e) => {
-    simulationSpeed = parseFloat(e.target.value);
-    document.getElementById('speedValue').textContent = simulationSpeed.toFixed(1) + 'x';
-});
+const speedSlider = document.getElementById('speedSlider');
+const levelSelect = document.getElementById('levelSelect');
 
-document.getElementById('levelSelect').addEventListener('change', (e) => {
-    mapSystem.setLevel(e.target.value);
-});
+if (speedSlider) {
+    speedSlider.addEventListener('input', (e) => {
+        simulationSpeed = parseFloat(e.target.value);
+        document.getElementById('speedValue').textContent = simulationSpeed.toFixed(1) + 'x';
+    });
+}
+
+if (levelSelect) {
+    levelSelect.addEventListener('change', (e) => {
+        mapSystem.setLevel(e.target.value);
+    });
+}
 
 // ============ MENU UI ============
 const menuUI = {
@@ -209,6 +227,7 @@ const characterSelectUI = {
 
 // ============ DEBUG UI UPDATE ============
 function updateDebugUI() {
+    if (!debugMode) return;
     document.getElementById('fpsValue').textContent = currentFps.toFixed(0);
     document.getElementById('frameValue').textContent = world.frameCount;
     
@@ -272,11 +291,12 @@ function render() {
         ...enemySystem.enemies.map(e => ({ x: e.x, y: e.y, color: '#ff4444', radius: 2.5 }))
     ]);
 
-    // Draw placeholder text (UI layer, not affected by camera)
-    ctx.fillStyle = '#4a9eff';
-    ctx.font = '14px Arial';
-    ctx.fillText('Use Arrow Keys or WASD to move', 20, 115);
-    ctx.fillText('Space: Shockwave', 20, 135);
+    if (debugMode) {
+        ctx.fillStyle = '#4a9eff';
+        ctx.font = '14px Arial';
+        ctx.fillText('Use Arrow Keys or WASD to move', 20, 115);
+        ctx.fillText('Space: Shockwave', 20, 135);
+    }
 }
 
 // ============ UPDATE FUNCTION ============

@@ -439,11 +439,12 @@ const mapSystem = {
     // Draws the minimap panel in screen space (bottom-left corner).
     // `entities` is a list of { x, y, color, radius } in world coordinates.
     renderMinimap(ctx, camera, entities) {
+        const isMobile = canvas.width < 768;
         const padding = 15;
-        const mmWidth = 160;
+        const mmWidth = isMobile ? 120 : 160;
         const mmHeight = mmWidth * (this.mapHeight / this.mapWidth);
-        const mmX = padding;
-        const mmY = canvas.height - mmHeight - padding;
+        const mmX = isMobile ? canvas.width - mmWidth - padding : padding;
+        const mmY = isMobile ? padding : canvas.height - mmHeight - padding;
 
         const mapPixelWidth = this.mapWidth * this.tileSize;
         const mapPixelHeight = this.mapHeight * this.tileSize;
