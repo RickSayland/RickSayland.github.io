@@ -35,36 +35,22 @@ const player = {
         if (this.direction.x !== 0 || this.direction.y !== 0) {
             const distance = this.speed * weatherSystem.getSpeedModifier() * (deltaTime / 1000) * simulationSpeed;
             
-            // Calculate new position
-            let newX = this.x + this.direction.x * distance;
-            let newY = this.y + this.direction.y * distance;
-            
-            // Check collision with a buffer for smooth walls
-            const collisionBuffer = this.width / 2;
-            
-            // Check multiple points around the player for collision
-            const corners = [
-                { x: newX - collisionBuffer, y: newY - collisionBuffer },
-                { x: newX + collisionBuffer, y: newY - collisionBuffer },
-                { x: newX - collisionBuffer, y: newY + collisionBuffer },
-                { x: newX + collisionBuffer, y: newY + collisionBuffer },
-                { x: newX, y: newY }
-            ];
-            
-            let canMove = true;
-            for (let corner of corners) {
-                if (!mapSystem.isWalkable(corner.x, corner.y)) {
-                    canMove = false;
-                    break;
-                }
-            }
-            
-            if (canMove) {
+            const buf = this.width / 2;
+            const newX = this.x + this.direction.x * distance;
+            const newY = this.y + this.direction.y * distance;
+
+            if (this.canMoveTo(newX, newY, buf)) {
                 this.x = newX;
                 this.y = newY;
                 this.isMoving = true;
             } else {
-                this.isMoving = false;
+                const slideX = this.x + Math.sign(this.direction.x) * distance;
+                const slideY = this.y + Math.sign(this.direction.y) * distance;
+                const slidX = this.direction.x !== 0 && this.canMoveTo(slideX, this.y, buf);
+                const slidY = this.direction.y !== 0 && this.canMoveTo(this.x, slideY, buf);
+                if (slidX) { this.x = slideX; this.isMoving = true; }
+                else if (slidY) { this.y = slideY; this.isMoving = true; }
+                else { this.isMoving = false; }
             }
         } else {
             this.isMoving = false;
@@ -109,6 +95,20 @@ const player = {
 
     // Spends MP to release an expanding shockwave centered on the player.
     // Does nothing if there isn't enough magic.
+    canMoveTo(x, y, buf) {
+        const points = [
+            { x: x - buf, y: y - buf },
+            { x: x + buf, y: y - buf },
+            { x: x - buf, y: y + buf },
+            { x: x + buf, y: y + buf },
+            { x: x, y: y }
+        ];
+        for (const p of points) {
+            if (!mapSystem.isWalkable(p.x, p.y)) return false;
+        }
+        return true;
+    },
+
     castShockwave() {
         if (this.magic < this.shockwaveCost) {
             return;

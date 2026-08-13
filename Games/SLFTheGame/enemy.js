@@ -12,17 +12,16 @@ const enemySystem = {
     touchDamage: 8, // HP drained from the player per contact tick
     touchCooldownDuration: 600, // ms between contact hits, per enemy
 
-    init(count = 1) {
+    init(count = 3) {
         this.enemies = [];
-        const mapPixelWidth = mapSystem.mapWidth * mapSystem.tileSize;
-        const mapPixelHeight = mapSystem.mapHeight * mapSystem.tileSize;
+        const spread = 12 * mapSystem.tileSize;
 
         for (let i = 0; i < count; i++) {
-            // Pick a random spot on the map, then snap it to the nearest
-            // walkable tile (same helper the player uses to spawn).
+            const offsetX = (Math.random() - 0.5) * 2 * spread;
+            const offsetY = (Math.random() - 0.5) * 2 * spread;
             const spawn = mapSystem.findSpawnPoint(
-                Math.random() * mapPixelWidth,
-                Math.random() * mapPixelHeight
+                player.x + offsetX,
+                player.y + offsetY
             );
             this.enemies.push(this.createEnemy(spawn.x, spawn.y));
         }
@@ -46,6 +45,20 @@ const enemySystem = {
 
     randomWanderInterval() {
         return 1000 + Math.random() * 1500; // 1-2.5s between direction changes
+    },
+
+    canMoveTo(x, y, buf) {
+        const points = [
+            { x: x - buf, y: y - buf },
+            { x: x + buf, y: y - buf },
+            { x: x - buf, y: y + buf },
+            { x: x + buf, y: y + buf },
+            { x: x, y: y }
+        ];
+        for (const p of points) {
+            if (!mapSystem.isWalkable(p.x, p.y)) return false;
+        }
+        return true;
     },
 
     pickNewDirection(enemy) {
@@ -91,32 +104,21 @@ const enemySystem = {
             const distance = enemy.speed * weatherSystem.getSpeedModifier() * (deltaTime / 1000) * simulationSpeed;
             const newX = enemy.x + enemy.direction.x * distance;
             const newY = enemy.y + enemy.direction.y * distance;
+            const buf = enemy.width / 2;
 
-            // Same multi-corner collision check as player.update()
-            const collisionBuffer = enemy.width / 2;
-            const corners = [
-                { x: newX - collisionBuffer, y: newY - collisionBuffer },
-                { x: newX + collisionBuffer, y: newY - collisionBuffer },
-                { x: newX - collisionBuffer, y: newY + collisionBuffer },
-                { x: newX + collisionBuffer, y: newY + collisionBuffer },
-                { x: newX, y: newY }
-            ];
-
-            let canMove = true;
-            for (const corner of corners) {
-                if (!mapSystem.isWalkable(corner.x, corner.y)) {
-                    canMove = false;
-                    break;
-                }
-            }
-
-            if (canMove) {
+            if (this.canMoveTo(newX, newY, buf)) {
                 enemy.x = newX;
                 enemy.y = newY;
             } else {
-                // Walked into water/trees/rock - pick a new direction now
-                // instead of waiting out the rest of the timer
-                this.pickNewDirection(enemy);
+                const slideX = enemy.x + Math.sign(enemy.direction.x) * distance;
+                const slideY = enemy.y + Math.sign(enemy.direction.y) * distance;
+                if (enemy.direction.x !== 0 && this.canMoveTo(slideX, enemy.y, buf)) {
+                    enemy.x = slideX;
+                } else if (enemy.direction.y !== 0 && this.canMoveTo(enemy.x, slideY, buf)) {
+                    enemy.y = slideY;
+                } else {
+                    this.pickNewDirection(enemy);
+                }
             }
         }
     },

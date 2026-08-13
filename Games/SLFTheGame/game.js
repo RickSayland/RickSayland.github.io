@@ -1,6 +1,6 @@
 // ============ GAME STATE ============
 let gameState = 'menu'; // 'menu' or 'playing'
-const GAME_VERSION = 'v0.2.0';
+const GAME_VERSION = 'v0.3.0';
 
 // ============ WORLD STATE ============
 const world = {
