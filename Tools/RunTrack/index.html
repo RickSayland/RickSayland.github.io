@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>RunTrack — Florida Route Tracker</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="container">
+    <h1>RunTrack — Florida Route Tracker</h1>
+    <p class="lead">Track 25 × 10-mile segments (approx. 250 miles). Start: Pinellas Trail → East Coast.</p>
+
+    <div class="controls">
+      <div class="progress-wrap">
+        <div id="progressBar" class="progress-bar"><div id="progressFill" class="progress-fill"></div></div>
+        <div id="progressText" class="progress-text">0 / 25 segments (0%)</div>
+      </div>
+      <div class="buttons">
+        <button id="markAll">Mark All</button>
+        <button id="clearAll">Clear All</button>
+      </div>
+    </div>
+
+    <section id="segments" class="segments"></section>
+
+    <footer class="footnote">Progress saved locally in your browser.</footer>
+  </main>
+
+  <script src="script.js"></script>
+</body>
+</html>
