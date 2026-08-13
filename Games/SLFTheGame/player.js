@@ -33,7 +33,7 @@ const player = {
     update(deltaTime) {
         // Apply movement based on direction
         if (this.direction.x !== 0 || this.direction.y !== 0) {
-            const distance = this.speed * (deltaTime / 1000) * simulationSpeed;
+            const distance = this.speed * weatherSystem.getSpeedModifier() * (deltaTime / 1000) * simulationSpeed;
             
             // Calculate new position
             let newX = this.x + this.direction.x * distance;

@@ -88,7 +88,7 @@ const enemySystem = {
                 continue;
             }
 
-            const distance = enemy.speed * (deltaTime / 1000) * simulationSpeed;
+            const distance = enemy.speed * weatherSystem.getSpeedModifier() * (deltaTime / 1000) * simulationSpeed;
             const newX = enemy.x + enemy.direction.x * distance;
             const newY = enemy.y + enemy.direction.y * distance;
 

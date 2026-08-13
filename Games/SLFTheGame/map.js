@@ -207,75 +207,84 @@ const mapSystem = {
         return this.terrainTypes[terrain].walkable !== false;
     },
 
+    floodFillSize(tileX, tileY, minSize) {
+        const map = this.getCurrentMap();
+        const visited = new Set();
+        const queue = [[tileX, tileY]];
+        const key = (x, y) => y * this.mapWidth + x;
+        visited.add(key(tileX, tileY));
+
+        while (queue.length > 0) {
+            if (minSize && visited.size >= minSize) return visited.size;
+            const [cx, cy] = queue.shift();
+            for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+                const nx = cx + dx;
+                const ny = cy + dy;
+                if (nx < 0 || nx >= this.mapWidth || ny < 0 || ny >= this.mapHeight) continue;
+                const k = key(nx, ny);
+                if (visited.has(k)) continue;
+                const terrain = map[k];
+                if (!this.terrainTypes[terrain].walkable) continue;
+                visited.add(k);
+                queue.push([nx, ny]);
+            }
+        }
+        return visited.size;
+    },
+
+    isTileSpawnable(tileX, tileY, collisionBuffer) {
+        const x = tileX * this.tileSize + this.tileSize / 2;
+        const y = tileY * this.tileSize + this.tileSize / 2;
+        const corners = [
+            { x: x - collisionBuffer, y: y - collisionBuffer },
+            { x: x + collisionBuffer, y: y - collisionBuffer },
+            { x: x - collisionBuffer, y: y + collisionBuffer },
+            { x: x + collisionBuffer, y: y + collisionBuffer },
+            { x: x, y: y }
+        ];
+        for (const corner of corners) {
+            if (!this.isWalkable(corner.x, corner.y)) return false;
+        }
+        return true;
+    },
+
     findSpawnPoint(startX = canvas.width / 2, startY = canvas.height / 2) {
-        // Search for a walkable tile starting from the given position
-        // Align to tile centers so player doesn't clip into obstacles
         const searchRadius = 10;
-        const collisionBuffer = 15; // Player half-width
-        
+        const collisionBuffer = 15;
+        const minRegionSize = 20;
+
         for (let radius = 0; radius <= searchRadius; radius++) {
             for (let dy = -radius; dy <= radius; dy++) {
                 for (let dx = -radius; dx <= radius; dx++) {
-                    if (Math.abs(dx) === radius || Math.abs(dy) === radius) {
-                        // Align to tile center
-                        const tileX = Math.floor(startX / this.tileSize) + dx;
-                        const tileY = Math.floor(startY / this.tileSize) + dy;
-                        const x = tileX * this.tileSize + this.tileSize / 2;
-                        const y = tileY * this.tileSize + this.tileSize / 2;
-                        
-                        // Check all collision points like in player.update()
-                        const corners = [
-                            { x: x - collisionBuffer, y: y - collisionBuffer },
-                            { x: x + collisionBuffer, y: y - collisionBuffer },
-                            { x: x - collisionBuffer, y: y + collisionBuffer },
-                            { x: x + collisionBuffer, y: y + collisionBuffer },
-                            { x: x, y: y }
-                        ];
-                        
-                        let canSpawn = true;
-                        for (let corner of corners) {
-                            if (!this.isWalkable(corner.x, corner.y)) {
-                                canSpawn = false;
-                                break;
-                            }
-                        }
-                        
-                        if (canSpawn) {
-                            return { x, y };
-                        }
+                    if (Math.abs(dx) !== radius && Math.abs(dy) !== radius) continue;
+                    const tileX = Math.floor(startX / this.tileSize) + dx;
+                    const tileY = Math.floor(startY / this.tileSize) + dy;
+                    if (tileX < 0 || tileX >= this.mapWidth || tileY < 0 || tileY >= this.mapHeight) continue;
+
+                    if (this.isTileSpawnable(tileX, tileY, collisionBuffer) &&
+                        this.floodFillSize(tileX, tileY, minRegionSize) >= minRegionSize) {
+                        return {
+                            x: tileX * this.tileSize + this.tileSize / 2,
+                            y: tileY * this.tileSize + this.tileSize / 2
+                        };
                     }
                 }
             }
         }
-        
-        // Fallback - search entire map if needed
+
+        // Fallback — search entire map
         for (let ty = 0; ty < this.mapHeight; ty++) {
             for (let tx = 0; tx < this.mapWidth; tx++) {
-                const x = tx * this.tileSize + this.tileSize / 2;
-                const y = ty * this.tileSize + this.tileSize / 2;
-                
-                const corners = [
-                    { x: x - collisionBuffer, y: y - collisionBuffer },
-                    { x: x + collisionBuffer, y: y - collisionBuffer },
-                    { x: x - collisionBuffer, y: y + collisionBuffer },
-                    { x: x + collisionBuffer, y: y + collisionBuffer },
-                    { x: x, y: y }
-                ];
-                
-                let canSpawn = true;
-                for (let corner of corners) {
-                    if (!this.isWalkable(corner.x, corner.y)) {
-                        canSpawn = false;
-                        break;
-                    }
-                }
-                
-                if (canSpawn) {
-                    return { x, y };
+                if (this.isTileSpawnable(tx, ty, collisionBuffer) &&
+                    this.floodFillSize(tx, ty, minRegionSize) >= minRegionSize) {
+                    return {
+                        x: tx * this.tileSize + this.tileSize / 2,
+                        y: ty * this.tileSize + this.tileSize / 2
+                    };
                 }
             }
         }
-        
+
         return { x: startX, y: startY };
     },
 

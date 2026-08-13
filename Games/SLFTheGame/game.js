@@ -10,7 +10,7 @@ const world = {
         humidity: 50,
         windSpeed: 5,
         lastUpdate: 0,
-        updateInterval: 2000 // Update every 2 seconds
+        updateInterval: 30000 // Update every 30 seconds
     },
     time: 0,
     frameCount: 0,
@@ -259,6 +259,9 @@ function render() {
 
     // Restore context state
     ctx.restore();
+
+    // Weather visibility overlay (screen space, drawn over world but under HUD)
+    weatherSystem.renderOverlay();
 
     // HUD: HP/MP bars (screen space, top-left)
     player.renderStatsBar(ctx);

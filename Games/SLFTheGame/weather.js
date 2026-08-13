@@ -2,42 +2,48 @@
 const weatherSystem = {
     conditions: ['Clear', 'Cloudy', 'Rainy', 'Stormy', 'Foggy'],
     particles: [],
-    
+
+    conditionConfig: {
+        'Clear':  { speedMod: 1.0, visibility: Infinity, cloudCount: 1, cloudColor: '#ffffff', cloudAlpha: 0.3 },
+        'Cloudy': { speedMod: 1.0, visibility: Infinity, cloudCount: 3, cloudColor: '#d0d0d0', cloudAlpha: 0.6 },
+        'Rainy':  { speedMod: 0.85, visibility: 400,     cloudCount: 4, cloudColor: '#888888', cloudAlpha: 0.7 },
+        'Stormy': { speedMod: 0.7,  visibility: 280,     cloudCount: 5, cloudColor: '#444444', cloudAlpha: 0.8 },
+        'Foggy':  { speedMod: 0.9,  visibility: 220,     cloudCount: 2, cloudColor: '#cccccc', cloudAlpha: 0.5 }
+    },
+
+    _vignetteCache: { key: null, gradient: null },
+
+    getConfig() {
+        return this.conditionConfig[world.weather.condition] || this.conditionConfig['Clear'];
+    },
+
+    getSpeedModifier() {
+        return this.getConfig().speedMod;
+    },
+
     update(deltaTime, time) {
         if (time - world.weather.lastUpdate > world.weather.updateInterval) {
-            // Random weather condition
             world.weather.condition = this.conditions[
                 Math.floor(Math.random() * this.conditions.length)
             ];
-            
-            // Random temperature between 10-30°C
             world.weather.temperature = Math.floor(10 + Math.random() * 20);
-            
-            // Random humidity between 30-90%
             world.weather.humidity = Math.floor(30 + Math.random() * 60);
-            
-            // Random wind speed between 0-20 m/s
             world.weather.windSpeed = (Math.random() * 20).toFixed(1);
-            
-            // Reset particles when weather changes
             this.particles = [];
-            
             world.weather.lastUpdate = time;
         }
 
-        // Update particles
         for (let i = this.particles.length - 1; i >= 0; i--) {
             const p = this.particles[i];
             p.x += (p.vx * simulationSpeed);
             p.y += (p.vy * simulationSpeed);
             p.life -= (deltaTime * simulationSpeed);
-            
+
             if (p.life <= 0) {
                 this.particles.splice(i, 1);
             }
         }
 
-        // Generate new particles based on weather
         if (world.weather.condition === 'Rainy' || world.weather.condition === 'Stormy') {
             const particleCount = world.weather.condition === 'Stormy' ? 8 : 3;
             for (let i = 0; i < particleCount; i++) {
@@ -54,80 +60,40 @@ const weatherSystem = {
     },
 
     getBackgroundColor() {
-        // Color changes based on temperature and condition
         const temp = world.weather.temperature;
-        let baseColor;
-
-        if (world.weather.condition === 'Clear') {
-            // Blue sky, warmer = lighter
-            const hue = 200;
-            const lightness = 65 + (temp - 10) * 1.5;
-            return `hsl(${hue}, 70%, ${Math.min(lightness, 80)}%)`;
-        } else if (world.weather.condition === 'Cloudy') {
-            return `hsl(200, 40%, ${50 + (temp - 10) * 0.5}%)`;
-        } else if (world.weather.condition === 'Rainy') {
-            return `hsl(200, 30%, 45%)`;
-        } else if (world.weather.condition === 'Stormy') {
-            return `hsl(200, 20%, 30%)`;
-        } else if (world.weather.condition === 'Foggy') {
-            return `hsl(200, 10%, 60%)`;
+        switch (world.weather.condition) {
+            case 'Clear': {
+                const lightness = 65 + (temp - 10) * 1.5;
+                return `hsl(200, 70%, ${Math.min(lightness, 80)}%)`;
+            }
+            case 'Cloudy':
+                return `hsl(200, 40%, ${50 + (temp - 10) * 0.5}%)`;
+            case 'Rainy':
+                return 'hsl(200, 30%, 45%)';
+            case 'Stormy':
+                return 'hsl(200, 20%, 30%)';
+            case 'Foggy':
+                return 'hsl(200, 10%, 60%)';
         }
     },
 
     drawClouds() {
-        const cloudCount = this.getCloudCount();
-        ctx.fillStyle = this.getCloudColor();
-        ctx.globalAlpha = this.getCloudAlpha();
+        const cfg = this.getConfig();
+        ctx.fillStyle = cfg.cloudColor;
+        ctx.globalAlpha = cfg.cloudAlpha;
 
-        for (let i = 0; i < cloudCount; i++) {
+        for (let i = 0; i < cfg.cloudCount; i++) {
             const x = (world.time * 0.02 + i * 200) % (canvas.width + 200) - 100;
             const y = 40 + Math.sin(world.time * 0.001 + i) * 20;
-            this.drawCloud(x, y);
+            const scale = 25;
+            ctx.beginPath();
+            ctx.arc(x, y, scale, 0, Math.PI * 2);
+            ctx.arc(x + scale * 0.8, y - scale * 0.3, scale * 0.9, 0, Math.PI * 2);
+            ctx.arc(x + scale * 1.6, y, scale, 0, Math.PI * 2);
+            ctx.fill();
         }
 
         ctx.globalAlpha = 1;
-    },
-
-    drawCloud(x, y) {
-        const scale = 25;
-        ctx.beginPath();
-        ctx.arc(x, y, scale, 0, Math.PI * 2);
-        ctx.arc(x + scale * 0.8, y - scale * 0.3, scale * 0.9, 0, Math.PI * 2);
-        ctx.arc(x + scale * 1.6, y, scale, 0, Math.PI * 2);
-        ctx.fill();
-    },
-
-    getCloudCount() {
-        const counts = {
-            'Clear': 1,
-            'Cloudy': 3,
-            'Rainy': 4,
-            'Stormy': 5,
-            'Foggy': 2
-        };
-        return counts[world.weather.condition] || 1;
-    },
-
-    getCloudColor() {
-        const colors = {
-            'Clear': '#ffffff',
-            'Cloudy': '#d0d0d0',
-            'Rainy': '#888888',
-            'Stormy': '#444444',
-            'Foggy': '#cccccc'
-        };
-        return colors[world.weather.condition] || '#ffffff';
-    },
-
-    getCloudAlpha() {
-        const alphas = {
-            'Clear': 0.3,
-            'Cloudy': 0.6,
-            'Rainy': 0.7,
-            'Stormy': 0.8,
-            'Foggy': 0.5
-        };
-        return alphas[world.weather.condition] || 0.5;
     },
 
     drawRain() {
@@ -163,18 +129,33 @@ const weatherSystem = {
         ctx.fillRect(0, 0, canvas.width, canvas.height);
     },
 
+    drawVignette() {
+        const radius = this.getConfig().visibility;
+        if (radius === Infinity) return;
+
+        const cacheKey = `${world.weather.condition}:${canvas.width}:${canvas.height}`;
+        if (this._vignetteCache.key !== cacheKey) {
+            const cx = canvas.width / 2;
+            const cy = canvas.height / 2;
+            const gradient = ctx.createRadialGradient(cx, cy, radius * 0.5, cx, cy, radius);
+            gradient.addColorStop(0, 'rgba(0, 0, 0, 0)');
+            gradient.addColorStop(1, 'rgba(0, 0, 0, 0.7)');
+            this._vignetteCache = { key: cacheKey, gradient };
+        }
+
+        ctx.fillStyle = this._vignetteCache.gradient;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+    },
+
     render() {
-        // Draw background
         ctx.fillStyle = this.getBackgroundColor();
         ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-        // Draw clouds
         this.drawClouds();
-
-        // Draw rain
         this.drawRain();
-
-        // Draw fog
         this.drawFog();
+    },
+
+    renderOverlay() {
+        this.drawVignette();
     }
 };
