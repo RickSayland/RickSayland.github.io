@@ -1,20 +1,31 @@
 // ============ PLAYER SYSTEM ============
-import { simulationSpeed, gameState } from './core.js?v=0.4.1';
-import { mapSystem } from './map.js?v=0.4.1';
-import { shockwaveSystem } from './shockwave.js?v=0.4.1';
-import { weatherSystem } from './weather.js?v=0.4.1';
-import { projectileSystem } from './projectile.js?v=0.4.1';
+import { simulationSpeed, gameState } from './core.js?v=0.5.0';
+import { mapSystem } from './map.js?v=0.5.0';
+import { shockwaveSystem } from './shockwave.js?v=0.5.0';
+import { weatherSystem } from './weather.js?v=0.5.0';
+import { projectileSystem } from './projectile.js?v=0.5.0';
+import { SpriteSheet } from './sprite.js?v=0.5.0';
 
-// Darkens (factor < 1) or lightens (factor > 1) a hex color. Used to derive
-// the direction-indicator shade from whatever body color was picked at
-// character select, so any chosen color still has a matching accent.
-export function shadeColor(hex, factor) {
-    const num = parseInt(hex.slice(1), 16);
-    const r = Math.max(0, Math.min(255, Math.round(((num >> 16) & 0xff) * factor)));
-    const g = Math.max(0, Math.min(255, Math.round(((num >> 8) & 0xff) * factor)));
-    const b = Math.max(0, Math.min(255, Math.round((num & 0xff) * factor)));
-    return '#' + [r, g, b].map(c => c.toString(16).padStart(2, '0')).join('');
-}
+// Selectable characters. Each atlas is baked from a labeled content/*.png sheet
+// by tools/bakeAtlas.py (bg keyed out, frames trimmed + baseline-aligned) and
+// shares the row layout: 0 Idle, 1-4 Walk, 5 Attack, 6 Hurt, 7 Death. Frame
+// sizes differ per sheet, so each SpriteSheet carries its own.
+export const CHARACTERS = [
+    {
+        key: 'rex',
+        name: 'Rex',
+        blurb: 'Warrior',
+        color: '#5fd23a', // accent used for projectiles / minimap / HUD
+        sheet: new SpriteSheet({ src: 'content/player_atlas.png?v=0.5.0', frameW: 145, frameH: 136, pad: 6, walkFrameMs: 130 })
+    },
+    {
+        key: 'vex',
+        name: 'Vex',
+        blurb: 'Mage',
+        color: '#a64dff',
+        sheet: new SpriteSheet({ src: 'content/player2_atlas.png?v=0.5.0', frameW: 140, frameH: 120, pad: 6, walkFrameMs: 130 })
+    }
+];
 
 export const player = {
     x: 400,
@@ -22,11 +33,23 @@ export const player = {
     width: 30,
     height: 30,
     speed: 150, // pixels per second
-    color: '#00ff00',
-    name: 'Hero', // placeholder until character select asks for a name
+    color: '#5fd23a', // accent color; set from the chosen character on Play
+    name: 'Hero', // replaced with the character's name at character select
     direction: { x: 0, y: 0 },
     facing: { x: 1, y: 0 },
     isMoving: false,
+
+    // ---- sprite animation ----
+    character: CHARACTERS[0],   // selected character; swapped by setCharacter()
+    spriteHeight: 68,           // on-screen height (px) of a full atlas frame
+    animState: 'idle',         // 'idle' | 'walk' | 'attack' | 'hurt' | 'dead'
+    animTime: 0,               // ms accumulator driving the walk cycle
+    attackTimer: 0,            // ms remaining on the attack pose
+    hurtTimer: 0,              // ms remaining on the hurt pose/flash
+    deathTimer: 0,             // ms remaining before respawn while dead
+    attackDuration: 280,
+    hurtDuration: 260,
+    deathDuration: 1200,
 
     health: 100,
     maxHealth: 100,
@@ -46,6 +69,19 @@ export const player = {
         const scaled = deltaTime * simulationSpeed;
         if (this.shootCooldown > 0) this.shootCooldown = Math.max(0, this.shootCooldown - scaled);
         if (this.shockwaveCooldown > 0) this.shockwaveCooldown = Math.max(0, this.shockwaveCooldown - scaled);
+
+        // Animation timers advance on the same simulation clock as everything else
+        this.animTime += scaled;
+        if (this.attackTimer > 0) this.attackTimer = Math.max(0, this.attackTimer - scaled);
+        if (this.hurtTimer > 0) this.hurtTimer = Math.max(0, this.hurtTimer - scaled);
+
+        // While dead the player is frozen; the death pose holds until respawn
+        if (this.animState === 'dead') {
+            this.isMoving = false;
+            this.deathTimer -= scaled;
+            if (this.deathTimer <= 0) this.respawn();
+            return;
+        }
 
         if (this.direction.x !== 0 || this.direction.y !== 0) {
             this.facing.x = this.direction.x;
@@ -80,37 +116,82 @@ export const player = {
                 this.magic + this.magicRegenRate * (deltaTime / 1000) * simulationSpeed
             );
         }
+
+        // Resolve which animation to show (priority: hurt > attack > walk > idle)
+        if (this.hurtTimer > 0) this.animState = 'hurt';
+        else if (this.attackTimer > 0) this.animState = 'attack';
+        else if (this.isMoving) this.animState = 'walk';
+        else this.animState = 'idle';
+    },
+
+    // Swap the active character sprite (called from the character-select screen)
+    setCharacter(key) {
+        const found = CHARACTERS.find(c => c.key === key);
+        if (found) {
+            this.character = found;
+            this.name = found.name;
+            this.color = found.color;
+        }
+    },
+
+    // Sprite sheet row for the current animation state
+    animRow() {
+        switch (this.animState) {
+            case 'walk': return this.character.sheet.walkRow(this.animTime); // rows 1-4
+            case 'attack': return 5;
+            case 'hurt': return 6;
+            case 'dead': return 7;
+            default: return 0; // idle
+        }
+    },
+
+    // Applies incoming damage and triggers the matching animation. Enemies call
+    // this instead of poking health directly so the hurt/death poses fire.
+    takeDamage(amount) {
+        if (this.animState === 'dead') return;
+        this.health = Math.max(0, this.health - amount);
+        if (this.health <= 0) {
+            this.animState = 'dead';
+            this.deathTimer = this.deathDuration;
+            this.isMoving = false;
+        } else {
+            this.hurtTimer = this.hurtDuration;
+        }
+    },
+
+    // Full-heal and reposition after the death animation finishes
+    respawn() {
+        this.health = this.maxHealth;
+        this.magic = this.maxMagic;
+        const spawn = mapSystem.findSpawnPoint(this.x, this.y);
+        this.x = spawn.x;
+        this.y = spawn.y;
+        this.animState = 'idle';
+        this.deathTimer = 0;
+        this.hurtTimer = 0;
+        this.attackTimer = 0;
     },
 
     render(ctx) {
-        // Draw player as a rectangle with a direction indicator
-        ctx.fillStyle = this.color;
-        ctx.fillRect(
-            this.x - this.width / 2,
-            this.y - this.height / 2,
-            this.width,
-            this.height
-        );
+        const sheet = this.character.sheet;
+        const scale = this.spriteHeight / sheet.frameH;
+        const col = sheet.facingColumn(this.facing.x, this.facing.y);
+        const row = this.animRow();
+        // Feet baseline sits at the bottom of the collision box
+        const feetY = this.y + this.height / 2;
+        // Blink while hurt so a hit reads even when the pose is subtle
+        const blink = this.hurtTimer > 0 && Math.floor(this.hurtTimer / 80) % 2 === 0;
 
-        ctx.fillStyle = shadeColor(this.color, 0.7);
-        const indicatorX = this.x + this.facing.x * 15;
-        const indicatorY = this.y + this.facing.y * 15;
-        ctx.beginPath();
-        ctx.arc(indicatorX, indicatorY, 5, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Draw a simple face
-        ctx.fillStyle = '#000000';
-        ctx.beginPath();
-        ctx.arc(this.x - 8, this.y - 8, 3, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.beginPath();
-        ctx.arc(this.x + 8, this.y - 8, 3, 0, Math.PI * 2);
-        ctx.fill();
+        const drawn = sheet.draw(ctx, col, row, this.x, feetY, scale, blink ? 0.45 : 1);
+        if (!drawn) {
+            // Fallback marker until the atlas image has loaded
+            ctx.fillStyle = this.color;
+            ctx.fillRect(this.x - this.width / 2, this.y - this.height / 2, this.width, this.height);
+        }
     },
 
-    // Spends MP to release an expanding shockwave centered on the player.
-    // Does nothing if there isn't enough magic.
+    // True only if all four corners (plus center) of the hitbox at (x,y) land
+    // on walkable tiles. Used to gate movement against walls.
     canMoveTo(x, y, buf) {
         const points = [
             { x: x - buf, y: y - buf },
@@ -126,16 +207,20 @@ export const player = {
     },
 
     castShockwave() {
+        if (this.animState === 'dead') return;
         if (this.shockwaveCooldown > 0 || this.magic < this.shockwaveCost) return;
         this.magic -= this.shockwaveCost;
         this.shockwaveCooldown = this.shockwaveCooldownMax;
+        this.attackTimer = this.attackDuration;
         shockwaveSystem.spawn(this.x, this.y);
     },
 
     castProjectile() {
+        if (this.animState === 'dead') return;
         if (this.shootCooldown > 0 || this.magic < this.shootCost) return;
         this.magic -= this.shootCost;
         this.shootCooldown = this.shootCooldownMax;
+        this.attackTimer = this.attackDuration;
         projectileSystem.spawn(this.x, this.y, this.facing.x, this.facing.y);
     },
 

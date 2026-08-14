@@ -1,8 +1,8 @@
 // ============ PROJECTILE SYSTEM ============
-import { simulationSpeed } from './core.js?v=0.4.1';
-import { mapSystem } from './map.js?v=0.4.1';
-import { enemySystem } from './enemy.js?v=0.4.1';
-import { player } from './player.js?v=0.4.1';
+import { simulationSpeed } from './core.js?v=0.5.0';
+import { mapSystem } from './map.js?v=0.5.0';
+import { enemySystem } from './enemy.js?v=0.5.0';
+import { player } from './player.js?v=0.5.0';
 
 export const projectileSystem = {
     projectiles: [],
@@ -42,11 +42,12 @@ export const projectileSystem = {
             }
 
             for (const enemy of enemySystem.enemies) {
+                if (enemy.animState === 'dead') continue;
                 const dx = enemy.x - p.x;
                 const dy = enemy.y - p.y;
                 if (Math.abs(dx) < enemy.width / 2 + 6 &&
                     Math.abs(dy) < enemy.height / 2 + 6) {
-                    enemy.health = Math.max(0, enemy.health - this.damage);
+                    enemySystem.damageEnemy(enemy, this.damage);
                     this.projectiles.splice(i, 1);
                     break;
                 }

@@ -1,7 +1,7 @@
 // ============ MENU / CHARACTER SELECT UI ============
-import { GAME_VERSION, resizeCanvas, setGameState } from './core.js?v=0.4.1';
-import { player } from './player.js?v=0.4.1';
-import { mapSystem } from './map.js?v=0.4.1';
+import { GAME_VERSION, resizeCanvas, setGameState } from './core.js?v=0.5.0';
+import { player, CHARACTERS } from './player.js?v=0.5.0';
+import { mapSystem } from './map.js?v=0.5.0';
 
 // ============ MENU UI ============
 export const menuUI = {
@@ -92,16 +92,8 @@ export const menuUI = {
 
 // ============ CHARACTER SELECT UI ============
 export const characterSelectUI = {
-    colors: [
-        { name: 'Green', value: '#00ff00' },
-        { name: 'Blue', value: '#4a9eff' },
-        { name: 'Yellow', value: '#ffd700' },
-        { name: 'Purple', value: '#a64dff' },
-        { name: 'Orange', value: '#ff8c42' },
-        { name: 'Pink', value: '#ff66cc' }
-    ],
-    selectedColor: '#00ff00',
-    swatchButtons: [],
+    selectedCharacter: CHARACTERS[0].key,
+    characterButtons: [],
 
     init() {
         const container = document.createElement('div');
@@ -113,41 +105,63 @@ export const characterSelectUI = {
         title.className = 'character-select-title';
         title.textContent = 'Choose Your Character';
 
-        const swatchRow = document.createElement('div');
-        swatchRow.className = 'character-swatches';
+        // ---- character (sprite) chooser ----
+        const charRow = document.createElement('div');
+        charRow.className = 'character-options';
 
-        this.swatchButtons = [];
-        this.colors.forEach((c) => {
-            const swatch = document.createElement('button');
-            swatch.className = 'character-swatch';
-            swatch.style.backgroundColor = c.value;
-            swatch.title = c.name;
-            swatch.setAttribute('aria-label', c.name);
-            if (c.value === this.selectedColor) {
-                swatch.classList.add('selected');
-            }
+        this.characterButtons = [];
+        CHARACTERS.forEach((c) => {
+            const btn = document.createElement('button');
+            btn.className = 'character-option';
+            if (c.key === this.selectedCharacter) btn.classList.add('selected');
 
-            swatch.addEventListener('click', () => {
-                this.selectedColor = c.value;
-                this.swatchButtons.forEach(b => b.classList.remove('selected'));
-                swatch.classList.add('selected');
+            // Preview shows the idle/down frame (col 0, row 0) of the atlas
+            const preview = document.createElement('div');
+            preview.className = 'character-preview';
+            const sheet = c.sheet;
+            const pw = 92;
+            const scale = pw / sheet.frameW;
+            preview.style.width = pw + 'px';
+            preview.style.height = Math.round(sheet.frameH * scale) + 'px';
+            preview.style.backgroundImage = `url('${sheet.img.src}')`;
+            preview.style.backgroundSize =
+                `${Math.round(sheet.frameW * 8 * scale)}px ${Math.round(sheet.frameH * 8 * scale)}px`;
+            preview.style.backgroundPosition = '0px 0px';
+            preview.style.backgroundRepeat = 'no-repeat';
+
+            const nameEl = document.createElement('div');
+            nameEl.className = 'character-name';
+            nameEl.textContent = c.name;
+
+            const roleEl = document.createElement('div');
+            roleEl.className = 'character-role';
+            roleEl.textContent = c.blurb;
+
+            btn.appendChild(preview);
+            btn.appendChild(nameEl);
+            btn.appendChild(roleEl);
+
+            btn.addEventListener('click', () => {
+                this.selectedCharacter = c.key;
+                this.characterButtons.forEach(b => b.classList.remove('selected'));
+                btn.classList.add('selected');
             });
 
-            this.swatchButtons.push(swatch);
-            swatchRow.appendChild(swatch);
+            this.characterButtons.push(btn);
+            charRow.appendChild(btn);
         });
 
         const playButton = document.createElement('button');
         playButton.className = 'menu-button';
         playButton.textContent = 'Play';
         playButton.addEventListener('click', () => {
-            player.color = this.selectedColor;
+            player.setCharacter(this.selectedCharacter);
             container.style.display = 'none';
             menuUI.startGame();
         });
 
         container.appendChild(title);
-        container.appendChild(swatchRow);
+        container.appendChild(charRow);
         container.appendChild(playButton);
 
         document.body.appendChild(container);

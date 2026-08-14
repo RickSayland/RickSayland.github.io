@@ -1,21 +1,31 @@
 // ============ MAP SYSTEM ============
-import { canvas } from './core.js?v=0.4.1';
-import { player } from './player.js?v=0.4.1';
-import { enemySystem } from './enemy.js?v=0.4.1';
+import { canvas } from './core.js?v=0.5.0';
+import { player } from './player.js?v=0.5.0';
+import { enemySystem } from './enemy.js?v=0.5.0';
+import { TileSheet } from './sprite.js?v=0.5.0';
+
+// content/ground_atlas.png is baked from the labeled content/ground.png sheet by
+// tools/bakeGround.py. Rows are terrain types (see terrainTypes.row), columns
+// are variants. Fill terrains are opaque; the tree row is transparent and drawn
+// over a grass base.
+const GROUND = new TileSheet({ src: 'content/ground_atlas.png?v=0.5.0', tileSize: 118 });
 
 export const mapSystem = {
     currentLevel: 'woods',
     tileSize: 50,
     mapWidth: 40,
     mapHeight: 30,
-    
+
+    // `row` indexes the ground atlas; `variants` are the atlas columns safe to
+    // scatter for this terrain; `color` is the minimap/fallback fill. `base`
+    // (tree only) names a fill terrain drawn underneath the transparent overlay.
     terrainTypes: {
-        grass: { color: '#2d5016', walkable: true },
-        water: { color: '#1a4d7a', walkable: false },
-        sand: { color: '#d4a574', walkable: true },
-        tree: { color: '#0a1a0a', walkable: false },
-        rock: { color: '#666666', walkable: false },
-        forest: { color: '#0d2610', walkable: true }
+        grass:  { row: 0, variants: [0, 1, 4, 6],          color: '#2d5016', walkable: true },
+        water:  { row: 1, variants: [0, 1],                color: '#1a4d7a', walkable: false },
+        sand:   { row: 2, variants: [0, 1],                color: '#d4a574', walkable: true },
+        tree:   { row: 3, variants: [0, 1, 2, 3, 4], base: 'grass', color: '#0a1a0a', walkable: false },
+        rock:   { row: 4, variants: [0, 1, 2],             color: '#666666', walkable: false },
+        forest: { row: 5, variants: [0, 1, 2, 3, 4, 5, 7], color: '#0d2610', walkable: true }
     },
 
     maps: {},
@@ -360,56 +370,57 @@ export const mapSystem = {
         return { x: startX, y: startY };
     },
 
+    // Deterministic variant column for a tile, so a level renders identically
+    // every frame while still looking varied across the map.
+    tileVariant(tx, ty, terrainData) {
+        const variants = terrainData.variants;
+        if (!variants || variants.length === 0) return 0;
+        const h = ((tx * 73856093) ^ (ty * 19349663)) >>> 0;
+        return variants[h % variants.length];
+    },
+
     render(ctx, cameraX, cameraY) {
         const map = this.getCurrentMap();
-        
+        const ts = this.tileSize;
+
         // Calculate which tiles are visible
-        const startTileX = Math.floor(cameraX / this.tileSize) - 1;
-        const startTileY = Math.floor(cameraY / this.tileSize) - 1;
-        const endTileX = startTileX + Math.ceil(canvas.width / this.tileSize) + 2;
-        const endTileY = startTileY + Math.ceil(canvas.height / this.tileSize) + 2;
-        
+        const startTileX = Math.floor(cameraX / ts) - 1;
+        const startTileY = Math.floor(cameraY / ts) - 1;
+        const endTileX = startTileX + Math.ceil(canvas.width / ts) + 2;
+        const endTileY = startTileY + Math.ceil(canvas.height / ts) + 2;
+
+        const useTiles = GROUND.loaded;
+
         // Render only visible tiles
         for (let ty = Math.max(0, startTileY); ty < Math.min(this.mapHeight, endTileY); ty++) {
             for (let tx = Math.max(0, startTileX); tx < Math.min(this.mapWidth, endTileX); tx++) {
-                const index = ty * this.mapWidth + tx;
-                const terrain = map[index];
+                const terrain = map[ty * this.mapWidth + tx];
                 const terrainData = this.terrainTypes[terrain];
-                
-                const worldX = tx * this.tileSize;
-                const worldY = ty * this.tileSize;
-                
-                ctx.fillStyle = terrainData.color;
-                ctx.fillRect(
-                    worldX,
-                    worldY,
-                    this.tileSize,
-                    this.tileSize
-                );
-                
-                // Draw tree markers for better visibility
-                if (terrain === 'tree') {
-                    ctx.fillStyle = '#2d5016';
-                    ctx.beginPath();
-                    ctx.arc(
-                        worldX + this.tileSize / 2,
-                        worldY + this.tileSize / 2,
-                        this.tileSize / 3,
-                        0,
-                        Math.PI * 2
-                    );
-                    ctx.fill();
+                const worldX = tx * ts;
+                const worldY = ty * ts;
+
+                if (useTiles) {
+                    // Draw the fill base first (grass under a tree), then the
+                    // terrain's own tile (transparent overlay for trees).
+                    if (terrainData.base) {
+                        const baseData = this.terrainTypes[terrainData.base];
+                        GROUND.drawTile(ctx, this.tileVariant(tx, ty, baseData), baseData.row, worldX, worldY, ts);
+                    }
+                    GROUND.drawTile(ctx, this.tileVariant(tx, ty, terrainData), terrainData.row, worldX, worldY, ts);
+                } else {
+                    // Fallback until the atlas loads: flat color (+ tree marker)
+                    ctx.fillStyle = terrainData.color;
+                    ctx.fillRect(worldX, worldY, ts, ts);
+                    if (terrain === 'tree') {
+                        ctx.fillStyle = '#2d5016';
+                        ctx.beginPath();
+                        ctx.arc(worldX + ts / 2, worldY + ts / 2, ts / 3, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                    ctx.strokeStyle = 'rgba(0, 0, 0, 0.1)';
+                    ctx.lineWidth = 1;
+                    ctx.strokeRect(worldX, worldY, ts, ts);
                 }
-                
-                // Add a subtle border
-                ctx.strokeStyle = 'rgba(0, 0, 0, 0.1)';
-                ctx.lineWidth = 1;
-                ctx.strokeRect(
-                    worldX,
-                    worldY,
-                    this.tileSize,
-                    this.tileSize
-                );
             }
         }
     },

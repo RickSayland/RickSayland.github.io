@@ -1,6 +1,6 @@
 // ============ SHOCKWAVE (ABILITY) SYSTEM ============
-import { simulationSpeed } from './core.js?v=0.4.1';
-import { enemySystem } from './enemy.js?v=0.4.1';
+import { simulationSpeed } from './core.js?v=0.5.0';
+import { enemySystem } from './enemy.js?v=0.5.0';
 
 export const shockwaveSystem = {
     ripples: [],
@@ -28,14 +28,14 @@ export const shockwaveSystem = {
 
             // Anything the leading edge has swept past takes damage once
             for (const enemy of enemySystem.enemies) {
-                if (ripple.hitEnemies.has(enemy)) {
+                if (enemy.animState === 'dead' || ripple.hitEnemies.has(enemy)) {
                     continue;
                 }
                 const dx = enemy.x - ripple.x;
                 const dy = enemy.y - ripple.y;
                 const dist = Math.sqrt(dx * dx + dy * dy);
                 if (dist <= ripple.radius) {
-                    enemy.health = Math.max(0, enemy.health - this.damage);
+                    enemySystem.damageEnemy(enemy, this.damage);
                     ripple.hitEnemies.add(enemy);
                 }
             }

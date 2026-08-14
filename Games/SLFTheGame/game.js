@@ -2,14 +2,14 @@
 // Loaded as the single <script type="module"> entry; everything else is
 // pulled in through these imports, so load order is driven by the module
 // graph rather than the order of <script> tags.
-import { canvas, ctx, world, gameState, simulationSpeed, setSimulationSpeed } from './core.js?v=0.4.1';
-import { player, input } from './player.js?v=0.4.1';
-import { mapSystem } from './map.js?v=0.4.1';
-import { enemySystem } from './enemy.js?v=0.4.1';
-import { shockwaveSystem } from './shockwave.js?v=0.4.1';
-import { projectileSystem } from './projectile.js?v=0.4.1';
-import { weatherSystem } from './weather.js?v=0.4.1';
-import { menuUI, characterSelectUI } from './ui.js?v=0.4.1';
+import { canvas, ctx, world, gameState, simulationSpeed, setSimulationSpeed } from './core.js?v=0.5.0';
+import { player, input } from './player.js?v=0.5.0';
+import { mapSystem } from './map.js?v=0.5.0';
+import { enemySystem } from './enemy.js?v=0.5.0';
+import { shockwaveSystem } from './shockwave.js?v=0.5.0';
+import { projectileSystem } from './projectile.js?v=0.5.0';
+import { weatherSystem } from './weather.js?v=0.5.0';
+import { menuUI, characterSelectUI } from './ui.js?v=0.5.0';
 
 const levelOrder = ['woods', 'beach', 'erin', 'forest', 'canyon', 'swamp', 'island'];
 

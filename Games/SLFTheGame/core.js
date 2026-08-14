@@ -4,7 +4,7 @@
 // boundaries. Those are exposed with setters because imported bindings are
 // read-only — an importer can read a live `let` export but cannot assign to it.
 
-export const GAME_VERSION = 'v0.4.1';
+export const GAME_VERSION = 'v0.5.0';
 
 // ============ GAME STATE ============
 export let gameState = 'menu'; // 'menu' or 'playing'
