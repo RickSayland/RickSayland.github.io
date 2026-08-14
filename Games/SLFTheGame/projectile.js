@@ -1,5 +1,10 @@
 // ============ PROJECTILE SYSTEM ============
-const projectileSystem = {
+import { simulationSpeed } from './core.js?v=0.4.1';
+import { mapSystem } from './map.js?v=0.4.1';
+import { enemySystem } from './enemy.js?v=0.4.1';
+import { player } from './player.js?v=0.4.1';
+
+export const projectileSystem = {
     projectiles: [],
     damage: 20,
     speed: 400,

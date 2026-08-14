@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SLF The Game</title>
-    <link rel="stylesheet" href="game.css?v=0.4.0">
+    <link rel="stylesheet" href="game.css?v=0.4.1">
 </head>
 <body>
     <div class="container">
@@ -109,12 +109,8 @@
         <div class="touch-action-btn" id="actionBtn">Shot</div>
     </div>
 
-    <script src="player.js?v=0.4.0"></script>
-    <script src="map.js?v=0.4.0"></script>
-    <script src="enemy.js?v=0.4.0"></script>
-    <script src="shockwave.js?v=0.4.0"></script>
-    <script src="projectile.js?v=0.4.0"></script>
-    <script src="game.js?v=0.4.0"></script>
-    <script src="weather.js?v=0.4.0"></script>
+    <!-- Single ES-module entry; every other system is pulled in via imports.
+         Requires serving over http(s) — ES modules don't load from file://. -->
+    <script type="module" src="game.js?v=0.4.1"></script>
 </body>
 </html>

@@ -1,5 +1,9 @@
 // ============ MAP SYSTEM ============
-const mapSystem = {
+import { canvas } from './core.js?v=0.4.1';
+import { player } from './player.js?v=0.4.1';
+import { enemySystem } from './enemy.js?v=0.4.1';
+
+export const mapSystem = {
     currentLevel: 'woods',
     tileSize: 50,
     mapWidth: 40,

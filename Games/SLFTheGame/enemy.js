@@ -1,13 +1,17 @@
 // ============ ENEMY SYSTEM ============
+import { simulationSpeed } from './core.js?v=0.4.1';
+import { mapSystem } from './map.js?v=0.4.1';
+import { player } from './player.js?v=0.4.1';
+import { weatherSystem } from './weather.js?v=0.4.1';
 
 // Centered-rectangle overlap test, used for player <-> enemy contact.
 // Matches how both are actually drawn (fillRect from the center out).
-function rectsOverlap(a, b) {
+export function rectsOverlap(a, b) {
     return Math.abs(a.x - b.x) < (a.width + b.width) / 2 &&
            Math.abs(a.y - b.y) < (a.height + b.height) / 2;
 }
 
-const enemySystem = {
+export const enemySystem = {
     enemies: [],
     touchDamage: 8, // HP drained from the player per contact tick
     touchCooldownDuration: 600, // ms between contact hits, per enemy

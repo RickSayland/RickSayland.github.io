@@ -1,5 +1,8 @@
 // ============ SHOCKWAVE (ABILITY) SYSTEM ============
-const shockwaveSystem = {
+import { simulationSpeed } from './core.js?v=0.4.1';
+import { enemySystem } from './enemy.js?v=0.4.1';
+
+export const shockwaveSystem = {
     ripples: [],
     damage: 30, // HP dealt to an enemy caught in the ring
 

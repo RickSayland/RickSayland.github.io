@@ -1,5 +1,7 @@
 // ============ WEATHER SYSTEM ============
-const weatherSystem = {
+import { world, simulationSpeed, canvas, ctx } from './core.js?v=0.4.1';
+
+export const weatherSystem = {
     conditions: ['Clear', 'Cloudy', 'Rainy', 'Stormy', 'Foggy'],
     particles: [],
 

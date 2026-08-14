@@ -1,9 +1,14 @@
 // ============ PLAYER SYSTEM ============
+import { simulationSpeed, gameState } from './core.js?v=0.4.1';
+import { mapSystem } from './map.js?v=0.4.1';
+import { shockwaveSystem } from './shockwave.js?v=0.4.1';
+import { weatherSystem } from './weather.js?v=0.4.1';
+import { projectileSystem } from './projectile.js?v=0.4.1';
 
 // Darkens (factor < 1) or lightens (factor > 1) a hex color. Used to derive
 // the direction-indicator shade from whatever body color was picked at
 // character select, so any chosen color still has a matching accent.
-function shadeColor(hex, factor) {
+export function shadeColor(hex, factor) {
     const num = parseInt(hex.slice(1), 16);
     const r = Math.max(0, Math.min(255, Math.round(((num >> 16) & 0xff) * factor)));
     const g = Math.max(0, Math.min(255, Math.round(((num >> 8) & 0xff) * factor)));
@@ -11,7 +16,7 @@ function shadeColor(hex, factor) {
     return '#' + [r, g, b].map(c => c.toString(16).padStart(2, '0')).join('');
 }
 
-const player = {
+export const player = {
     x: 400,
     y: 300,
     width: 30,
@@ -209,7 +214,7 @@ const player = {
 };
 
 // ============ INPUT HANDLER ============
-const input = {
+export const input = {
     keys: {},
     touchDir: { x: 0, y: 0 },
 
