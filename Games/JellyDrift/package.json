@@ -1,0 +1,14 @@
+{
+  "name": "jellydrift",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "A 2D sidescroller where you drift the seas as a jellyfish.",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0"
+  }
+}
