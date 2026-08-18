@@ -3,6 +3,7 @@
 
 import { ctx, view, world } from "./core.js";
 import { input } from "./input.js";
+import { zapSystem } from "./zap.js";
 
 const GRAVITY = 26; // px/s^2, gentle downward sink
 const STEER = 220; // px/s^2 of directional thrust while holding a direction
@@ -26,13 +27,14 @@ export const jelly = {
     if (input.up) this.vy -= STEER * dt;
     if (input.down) this.vy += STEER * dt;
 
-    // Pulse: a rhythmic burst of propulsion on a cooldown.
+    // Pulse: a rhythmic burst of propulsion that also fires the electric sting.
     this.pulseCooldown -= dt;
     if (input.pulse && this.pulseCooldown <= 0) {
       this.vx += PULSE_IMPULSE.x;
       this.vy += PULSE_IMPULSE.y;
       this.pulseCooldown = PULSE_COOLDOWN;
       this.bellPhase = Math.PI; // snap to the contracted part of the cycle
+      zapSystem.emit(this.x, this.y, this.hue); // electric attack discharge
     }
 
     // Integrate with gravity + frame-rate-independent drag.

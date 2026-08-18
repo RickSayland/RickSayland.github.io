@@ -9,6 +9,7 @@ import { lightRaySystem } from "./lightrays.js";
 import { fishSystem } from "./fish.js";
 import { bubbleSystem } from "./bubbles.js";
 import { pineappleSystem } from "./pineapple.js";
+import { zapSystem } from "./zap.js";
 
 let last = 0;
 
@@ -44,6 +45,7 @@ function frame(now: number): void {
   jelly.update(dt);
   fishSystem.update(dt);
   bubbleSystem.update(dt);
+  zapSystem.update(dt);
 
   ctx.clearRect(0, 0, view.width, view.height);
   drawOcean();
@@ -54,10 +56,11 @@ function frame(now: number): void {
   bubbleSystem.draw(time);
   drawMotes();
   jelly.draw();
+  zapSystem.draw(time);
 
   ctx.fillStyle = "rgba(255, 255, 255, 0.35)";
   ctx.font = "12px monospace";
-  ctx.fillText(`JellyDrift v${GAME_VERSION}  —  WASD/arrows to steer, Space to pulse`, 12, view.height - 12);
+  ctx.fillText(`JellyDrift v${GAME_VERSION}  —  WASD/arrows to steer, Space to zap`, 12, view.height - 12);
 
   requestAnimationFrame(frame);
 }
