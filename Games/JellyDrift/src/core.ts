@@ -3,7 +3,7 @@
 // that every other system imports. Keep this file free of imports from other
 // game systems so it stays the root of the graph.
 
-export const GAME_VERSION = "0.1.0";
+export const GAME_VERSION = "0.2.0";
 
 export const canvas = document.getElementById("game") as HTMLCanvasElement;
 export const ctx = canvas.getContext("2d")!;

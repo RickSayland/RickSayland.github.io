@@ -2,7 +2,7 @@
 // Owns the canvas, drawing context, viewport metrics, and shared world state
 // that every other system imports. Keep this file free of imports from other
 // game systems so it stays the root of the graph.
-export const GAME_VERSION = "0.1.0";
+export const GAME_VERSION = "0.2.0";
 export const canvas = document.getElementById("game");
 export const ctx = canvas.getContext("2d");
 /** Live CSS-pixel size of the viewport plus the device-pixel-ratio in use. */

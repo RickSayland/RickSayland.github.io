@@ -10,17 +10,54 @@ const STEER = 220; // px/s^2 of directional thrust while holding a direction
 const PULSE_IMPULSE = { x: 150, y: -320 }; // burst applied on a pulse
 const PULSE_COOLDOWN = 0.65; // seconds between pulses
 const DRAG = 0.92; // velocity retention (per 1/60s), water resistance
+const MAX_HP = 100;
+const INVULN_TIME = 0.9; // i-frames after taking a hit (seconds)
+const START = { x: 220, y: 300 };
 
 export const jelly = {
-  x: 220,
-  y: 300,
+  x: START.x,
+  y: START.y,
   vx: 0,
   vy: 0,
   bellPhase: 0, // drives bell contraction + tentacle sway
   pulseCooldown: 0,
   hue: 190,
+  radius: 26, // collision radius (bell)
+  hp: MAX_HP,
+  maxHp: MAX_HP,
+  invuln: 0, // remaining i-frame time
+  hurtFlash: 0, // remaining red-flash time
+
+  /** Take contact damage from an enemy at (fromX, fromY). No-op during i-frames. */
+  takeDamage(amount: number, fromX: number, fromY: number): void {
+    if (this.invuln > 0) return;
+    this.hp -= amount;
+    this.invuln = INVULN_TIME;
+    this.hurtFlash = 0.3;
+    // Knock the jelly away from the attacker.
+    const dx = this.x - fromX;
+    const dy = this.y - fromY;
+    const d = Math.hypot(dx, dy) || 1;
+    this.vx += (dx / d) * 220;
+    this.vy += (dy / d) * 220;
+    if (this.hp <= 0) this.respawn();
+  },
+
+  respawn(): void {
+    this.hp = this.maxHp;
+    this.x = START.x;
+    this.y = START.y;
+    this.vx = 0;
+    this.vy = 0;
+    this.invuln = 1.6; // brief safety on respawn
+    this.hurtFlash = 0;
+    world.camX = 0;
+  },
 
   update(dt: number): void {
+    this.invuln = Math.max(0, this.invuln - dt);
+    this.hurtFlash = Math.max(0, this.hurtFlash - dt);
+
     // Directional steering (a slow drift the player nudges).
     if (input.left) this.vx -= STEER * dt;
     if (input.right) this.vx += STEER * dt;
@@ -62,6 +99,9 @@ export const jelly = {
     const sx = this.x - world.camX;
     const sy = this.y;
 
+    // Blink while invulnerable.
+    if (this.invuln > 0 && Math.floor(this.invuln * 12) % 2 === 0) return;
+
     // Bell contraction: 0 = relaxed (wide), 1 = contracted (tall/narrow).
     const contract = Math.sin(this.bellPhase) * 0.5 + 0.5;
     const bellW = 52 - contract * 12;
@@ -101,6 +141,13 @@ export const jelly = {
     ctx.quadraticCurveTo(-bellW * 0.28, bellH * 0.28, -bellW / 2, 0);
     ctx.closePath();
     ctx.fill();
+
+    // Red flash when recently hurt.
+    if (this.hurtFlash > 0) {
+      ctx.globalCompositeOperation = "lighter";
+      ctx.fillStyle = `rgba(255, 60, 60, ${this.hurtFlash * 1.4})`;
+      ctx.fill();
+    }
 
     ctx.restore();
   },

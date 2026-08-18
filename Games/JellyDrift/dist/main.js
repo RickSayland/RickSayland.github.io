@@ -9,7 +9,26 @@ import { fishSystem } from "./fish.js";
 import { bubbleSystem } from "./bubbles.js";
 import { pineappleSystem } from "./pineapple.js";
 import { zapSystem } from "./zap.js";
+import { enemySystem } from "./enemy.js";
 let last = 0;
+/** Player health bar, top-left. */
+function drawHUD() {
+    const x = 14;
+    const y = 14;
+    const w = 190;
+    const h = 16;
+    const frac = Math.max(0, jelly.hp / jelly.maxHp);
+    ctx.fillStyle = "rgba(0, 0, 0, 0.45)";
+    ctx.fillRect(x - 2, y - 2, w + 4, h + 4);
+    ctx.fillStyle = `hsl(${frac * 120}, 75%, 48%)`;
+    ctx.fillRect(x, y, w * frac, h);
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.35)";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x - 2, y - 2, w + 4, h + 4);
+    ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
+    ctx.font = "11px monospace";
+    ctx.fillText(`HP ${Math.max(0, Math.ceil(jelly.hp))}/${jelly.maxHp}`, x + 6, y + 12);
+}
 /** Vertical ocean gradient — the deepest background layer. */
 function drawOcean() {
     const g = ctx.createLinearGradient(0, 0, 0, view.height);
@@ -40,6 +59,7 @@ function frame(now) {
     fishSystem.update(dt);
     bubbleSystem.update(dt);
     zapSystem.update(dt);
+    enemySystem.update(dt);
     ctx.clearRect(0, 0, view.width, view.height);
     drawOcean();
     lightRaySystem.draw(time);
@@ -48,8 +68,10 @@ function frame(now) {
     fishSystem.draw(time);
     bubbleSystem.draw(time);
     drawMotes();
+    enemySystem.draw(time);
     jelly.draw();
     zapSystem.draw(time);
+    drawHUD();
     ctx.fillStyle = "rgba(255, 255, 255, 0.35)";
     ctx.font = "12px monospace";
     ctx.fillText(`JellyDrift v${GAME_VERSION}  —  WASD/arrows to steer, Space to zap`, 12, view.height - 12);
@@ -62,6 +84,7 @@ function boot() {
     lightRaySystem.init();
     fishSystem.init();
     bubbleSystem.init();
+    enemySystem.init();
     initInput();
     requestAnimationFrame((t) => {
         last = t;

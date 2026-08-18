@@ -6,10 +6,11 @@
 // enemy system can test whether it was caught in the discharge. `damage` and
 // `ATTACK_REACH` are the knobs for that.
 import { ctx, world } from "./core.js";
-const ATTACK_REACH = 120; // px — how far the sting reaches
+export const ATTACK_REACH = 120; // px — how far the sting reaches
 const LIFE = 0.24; // seconds a zap stays on screen
 const BOLTS = 8; // lightning arcs per zap
-export const ZAP_DAMAGE = 18; // per discharge (for enemies, later)
+export const ZAP_DAMAGE = 18; // per discharge (applied by the enemy system)
+let nextId = 1;
 /** Cheap deterministic hash → [0,1). */
 function hash(n) {
     const s = Math.sin(n * 12.9898) * 43758.5453;
@@ -27,7 +28,7 @@ export const zapSystem = {
                 seed: hash(i * 7.1 + x * 0.3) * 1000,
             });
         }
-        this.zaps.push({ x, y, hue: hue + 10, age: 0, bolts });
+        this.zaps.push({ id: nextId++, x, y, hue: hue + 10, age: 0, bolts });
     },
     update(dt) {
         for (const z of this.zaps)
