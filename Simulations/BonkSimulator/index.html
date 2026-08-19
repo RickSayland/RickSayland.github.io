@@ -298,7 +298,7 @@ function simulate(p) {
 
 // ─── runner drawing ───
 
-function drawScene(ctx, w, h, prog, bonk, phase, flash, pace, dMi, tMin, pct) {
+function drawScene(ctx, w, h, prog, bonk, phase, flash, pace, dMi, tMin, pct, sex) {
     // sky
     const sky = ctx.createLinearGradient(0, 0, 0, h * 0.58);
     sky.addColorStop(0, '#111d30');
@@ -382,7 +382,7 @@ function drawScene(ctx, w, h, prog, bonk, phase, flash, pace, dMi, tMin, pct) {
 
     // runner
     const rx = w * 0.28, ry = rY + rH - 4;
-    drawRunner(ctx, rx, ry, phase, bonk);
+    drawRunner(ctx, rx, ry, phase, bonk, sex);
 
     // gel flash
     if (flash) {
@@ -421,7 +421,7 @@ function drawScene(ctx, w, h, prog, bonk, phase, flash, pace, dMi, tMin, pct) {
     ctx.fillText(`${pm}:${String(ps).padStart(2,'0')} /mi`, w - 14, 62);
 }
 
-function drawRunner(ctx, x, y, ph, bonk) {
+function drawRunner(ctx, x, y, ph, bonk, sex) {
     const s = 1.5;
     const cr = Math.min(255, 230 + bonk * 0.3);
     const cg = Math.max(50, 145 - bonk * 1.3);
@@ -440,6 +440,20 @@ function drawRunner(ctx, x, y, ph, bonk) {
     const hx = nx + Math.sin(lean) * 7 * s;
     const hy = ny - 7 * s;
     ctx.beginPath(); ctx.arc(hx, hy, hr, 0, Math.PI * 2); ctx.fill();
+
+    // bow
+    if (sex === 'female') {
+        const bx = hx - hr * 0.3, by = hy - hr * 0.85;
+        const bs = 12 * s;
+        ctx.fillStyle = '#ff6b9d';
+        ctx.beginPath();
+        ctx.moveTo(bx, by);
+        ctx.quadraticCurveTo(bx - bs, by - bs * 0.9, bx - bs * 0.3, by - bs * 0.1);
+        ctx.quadraticCurveTo(bx, by - bs * 0.5, bx + bs * 0.3, by - bs * 0.1);
+        ctx.quadraticCurveTo(bx + bs, by - bs * 0.9, bx, by);
+        ctx.fill();
+        ctx.fillStyle = col;
+    }
 
     // body
     const hipX = x, hipY = y - 14 * s;
@@ -768,7 +782,7 @@ function drawHRChart(canvas, data, idx, maxHR) {
 
 // ─── animation ───
 
-let simD = null, aIdx = 0, aRun = false, aPh = 0, gelFlash = 0;
+let simD = null, aIdx = 0, aRun = false, aPh = 0, gelFlash = 0, aRaf = 0;
 
 function go() {
     const p = {
@@ -787,11 +801,12 @@ function go() {
     resize();
     const r = simulate(p);
     simD = r.pts;
+    cancelAnimationFrame(aRaf);
     aIdx = 0;
     aRun = true;
     gelFlash = 0;
     aPh = 0;
-    requestAnimationFrame(tick);
+    aRaf = requestAnimationFrame(tick);
 }
 
 function tick() {
@@ -809,7 +824,7 @@ function tick() {
     const rCtx = $('rc').getContext('2d');
     rCtx.setTransform(DPR, 0, 0, DPR, 0, 0);
     drawScene(rCtx, RW, RH, prog, d.bonk, aPh,
-        gelFlash > 0 ? gelFlash : 0, d.pace, d.dMi, d.t, d.pct);
+        gelFlash > 0 ? gelFlash : 0, d.pace, d.dMi, d.t, d.pct, $('sex').value);
 
     drawGraph($('gc'), simD, aIdx, {
         maxY: 1, val: p => p.pct, yFmt: v => Math.round(v * 100) + '%',
@@ -824,7 +839,7 @@ function tick() {
     drawFuelChart($('fc'), simD, aIdx);
     drawHRChart($('hc'), simD, aIdx, +$('mhr').value);
 
-    if (aIdx < simD.length - 1) requestAnimationFrame(tick);
+    if (aIdx < simD.length - 1) aRaf = requestAnimationFrame(tick);
     else { aRun = false; drawEnd(); }
 }
 
@@ -854,7 +869,7 @@ function idle() {
     resize();
     const ctx = $('rc').getContext('2d');
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
-    drawScene(ctx, RW, RH, 0, 0, 0, 0, 10.5, 0, 0, 1);
+    drawScene(ctx, RW, RH, 0, 0, 0, 0, 10.5, 0, 0, 1, $('sex').value);
     ctx.fillStyle = 'rgba(0,0,0,0.35)';
     ctx.fillRect(0, 0, RW, RH);
     ctx.fillStyle = '#888';
