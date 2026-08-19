@@ -1,0 +1,24 @@
+<svg viewBox="0 0 570 214" xmlns="http://www.w3.org/2000/svg">
+  <rect width="570" height="214" rx="15" fill="#0a0c14"/>
+
+  <circle cx="100" cy="90" r="70" fill="none" stroke="rgba(255,140,40,0.08)" stroke-width="1.5"/>
+
+  <g transform="translate(85, 55) scale(1.8)" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="18" cy="8" r="6" fill="#e87830" stroke="none"/>
+    <line x1="16" y1="14" x2="12" y2="38" stroke="#e87830" stroke-width="3"/>
+    <line x1="12" y1="22" x2="0" y2="16" stroke="#e87830" stroke-width="2.5"/>
+    <line x1="12" y1="22" x2="24" y2="28" stroke="#e87830" stroke-width="2.5"/>
+    <line x1="12" y1="38" x2="-2" y2="52" stroke="#e87830" stroke-width="2.5"/>
+    <line x1="12" y1="38" x2="26" y2="46" stroke="#e87830" stroke-width="2.5"/>
+    <line x1="26" y1="46" x2="22" y2="56" stroke="#e87830" stroke-width="2.5"/>
+  </g>
+
+  <line x1="30" y1="170" x2="170" y2="170" stroke="#2a2d3e" stroke-width="2"/>
+  <polyline points="40,160 55,140 70,150 85,120 100,125 115,100 130,110 145,95 160,130"
+            fill="none" stroke="#e87830" stroke-width="2" opacity="0.5"/>
+  <line x1="130" y1="95" x2="130" y2="170" stroke="rgba(255,60,60,0.3)" stroke-width="1" stroke-dasharray="3,3"/>
+  <text x="122" y="185" font-family="ui-monospace,monospace" font-size="8" fill="#ff4444" opacity="0.6">BONK</text>
+
+  <text x="210" y="98" font-family="system-ui,-apple-system,sans-serif" font-size="42" font-weight="700" fill="#c8ccd4" letter-spacing="1">Bonk Sim</text>
+  <text x="210" y="128" font-family="ui-monospace,monospace" font-size="14" fill="#4a5a70" letter-spacing="2">GLYCOGEN DEPLETION SIM</text>
+</svg>

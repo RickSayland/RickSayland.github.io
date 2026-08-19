@@ -1,0 +1,881 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bonk Simulator</title>
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #0f1117;
+            color: #e0e0e0;
+            min-height: 100vh;
+            padding: 20px 20px 40px;
+        }
+        .header { text-align: center; margin-bottom: 20px; }
+        .header h1 { font-size: 1.8rem; color: #fff; }
+        .header p { font-size: 0.85rem; color: #666; margin-top: 4px; }
+        .controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 14px;
+            padding: 18px 20px;
+            background: #1a1c2a;
+            border-radius: 12px;
+            max-width: 1200px;
+            margin: 0 auto 20px;
+            align-items: end;
+        }
+        .g {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .g label {
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: #666;
+            font-weight: 600;
+        }
+        .g input, .g select {
+            background: #0f1117;
+            border: 1px solid #2a2d3e;
+            color: #e0e0e0;
+            padding: 7px 10px;
+            border-radius: 6px;
+            font-size: 14px;
+            font-family: inherit;
+            width: 72px;
+        }
+        .g select { width: 88px; cursor: pointer; }
+        .g input:focus, .g select:focus { outline: none; border-color: #e87830; }
+        .compound { display: flex; align-items: center; gap: 3px; }
+        .compound input { width: 56px; text-align: center; }
+        .compound span { color: #555; font-size: 12px; }
+        .spacer { flex: 1; min-width: 0; }
+        .run-btn {
+            background: #e87830;
+            color: #fff;
+            border: none;
+            padding: 9px 32px;
+            border-radius: 8px;
+            font-size: 15px;
+            font-weight: 700;
+            cursor: pointer;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            transition: background 0.15s;
+            white-space: nowrap;
+        }
+        .run-btn:hover { background: #ff8c3a; }
+        .run-btn:active { background: #d06828; }
+        .canvas-wrap {
+            position: relative;
+            max-width: 1200px;
+            margin: 0 auto 20px;
+            background: #1a1c2a;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+        canvas { display: block; width: 100%; }
+        .graphs {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        @media (max-width: 768px) {
+            .graphs { grid-template-columns: 1fr; }
+            .controls { gap: 10px; padding: 14px; }
+        }
+        .graph-card {
+            background: #1a1c2a;
+            border-radius: 12px;
+            padding: 16px 16px 8px;
+        }
+        .graph-card h3 {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: #666;
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Bonk Simulator</h1>
+        <p>Predict glycogen depletion and when you'll hit the wall</p>
+    </div>
+
+    <div class="controls">
+        <div class="g">
+            <label>Sex</label>
+            <select id="sex"><option value="male">Male</option><option value="female">Female</option></select>
+        </div>
+        <div class="g">
+            <label>Age</label>
+            <input type="number" id="age" value="37" min="16" max="80">
+        </div>
+        <div class="g">
+            <label>Height</label>
+            <div class="compound">
+                <input type="number" id="htFt" value="5" min="4" max="7">
+                <span>ft</span>
+                <input type="number" id="htIn" value="8" min="0" max="11">
+                <span>in</span>
+            </div>
+        </div>
+        <div class="g">
+            <label>Weight (lbs)</label>
+            <input type="number" id="wt" value="160" min="80" max="400">
+        </div>
+        <div class="g">
+            <label>VO2 Max</label>
+            <input type="number" id="vo2" value="44" min="20" max="85">
+        </div>
+        <div class="g">
+            <label>Max HR</label>
+            <input type="number" id="mhr" value="175" min="100" max="230">
+        </div>
+        <div class="g">
+            <label>Pace (/mi)</label>
+            <div class="compound">
+                <input type="number" id="pMin" value="10" min="4" max="25">
+                <span>:</span>
+                <input type="number" id="pSec" value="30" min="0" max="59">
+            </div>
+        </div>
+        <div class="g">
+            <label>Gel every (min)</label>
+            <input type="number" id="gel" value="45" min="0" max="180" title="0 = no gels">
+        </div>
+        <div class="g">
+            <label>Distance (mi)</label>
+            <input type="number" id="dist" value="26.2" min="1" max="200" step="0.1">
+        </div>
+        <div class="spacer"></div>
+        <button class="run-btn" id="runBtn">Run</button>
+    </div>
+
+    <div class="canvas-wrap">
+        <canvas id="rc"></canvas>
+    </div>
+
+    <div class="graphs">
+        <div class="graph-card">
+            <h3>Glycogen Stores</h3>
+            <canvas id="gc"></canvas>
+        </div>
+        <div class="graph-card">
+            <h3>Bonk Level</h3>
+            <canvas id="bc"></canvas>
+        </div>
+        <div class="graph-card">
+            <h3>Fuel Mix</h3>
+            <canvas id="fc"></canvas>
+        </div>
+        <div class="graph-card">
+            <h3>Heart Rate</h3>
+            <canvas id="hc"></canvas>
+        </div>
+    </div>
+
+<script>
+const DPR = window.devicePixelRatio || 1;
+const $ = id => document.getElementById(id);
+
+function sizeCanvas(c, w, h) {
+    c.width = w * DPR; c.height = h * DPR;
+    c.style.height = h + 'px';
+    const x = c.getContext('2d');
+    x.scale(DPR, DPR);
+    return x;
+}
+
+let RW, RH = 220, GW, GH = 210;
+function resize() {
+    const wrap = document.querySelector('.canvas-wrap');
+    RW = wrap.clientWidth;
+    sizeCanvas($('rc'), RW, RH);
+    const card = document.querySelector('.graph-card');
+    GW = card ? card.clientWidth - 32 : 400;
+    sizeCanvas($('gc'), GW, GH);
+    sizeCanvas($('bc'), GW, GH);
+    sizeCanvas($('fc'), GW, GH);
+    sizeCanvas($('hc'), GW, GH);
+}
+
+// ─── simulation model ───
+
+function simulate(p) {
+    const wKg = p.wt * 0.4536;
+    const vVO2 = ((p.vo2 - 3.5) / 0.2) * 60 / 1000; // km/h at VO2max
+    const targetKmh = (60 / (p.paceMin + p.paceSec / 60)) / 0.6214;
+    const distKm = p.dist * 1.6093;
+
+    // glycogen stores (kcal)
+    let gMax = 2000 * (wKg / 70);
+    if (p.sex === 'female') gMax *= 0.9;
+    gMax *= 1 + (p.vo2 - 40) * 0.005;
+    gMax *= Math.max(0.85, 1 - (p.age - 25) * 0.002);
+    gMax = Math.max(gMax, 900);
+
+    const dt = 0.25; // min
+    let gly = gMax, dKm = 0, t = 0, lastGel = 0;
+    const gelQ = []; // {rem, rate}
+    const pts = [];
+
+    while (dKm < distKm && t < 720) {
+        const pct = gly / gMax;
+
+        // pace degradation
+        let spd = targetKmh;
+        if (pct < 0.30) spd *= 0.45 + 0.55 * (pct / 0.30);
+        if (pct < 0.08) spd *= 0.6;
+        spd = Math.max(spd, 2.5);
+
+        // carb fraction (crossover)
+        const inten = Math.min(spd / vVO2, 1);
+        let cf = 0.28 + inten * 0.68 - (p.vo2 - 30) * 0.003;
+        if (pct < 0.20) cf *= Math.max(0.18, pct / 0.20);
+        cf = Math.max(0.12, Math.min(0.95, cf));
+
+        // cardiac drift
+        const drift = 1 + Math.min(t / 300, 0.12) * 0.12;
+
+        const burn = wKg * 1.0 * spd * (dt / 60) * cf * drift;
+
+        // gel absorption (gradual over ~18 min per gel)
+        let absorbed = 0;
+        for (const g of gelQ) {
+            const a = Math.min(g.rate * dt, g.rem);
+            absorbed += a; g.rem -= a;
+        }
+        {
+            const keep = [];
+            for (const g of gelQ) if (g.rem > 0.5) keep.push(g);
+            gelQ.length = 0;
+            for (const g of keep) gelQ.push(g);
+        }
+
+        let took = false;
+        if (p.gel > 0 && t - lastGel >= p.gel && t > 5) {
+            gelQ.push({ rem: 100, rate: 100 / 18 });
+            lastGel = t;
+            took = true;
+        }
+
+        gly = Math.min(gMax, Math.max(0, gly - burn + absorbed));
+        dKm += spd * (dt / 60);
+        t += dt;
+
+        let bonk = 0;
+        if (pct <= 0.50 && pct > 0.30) bonk = (0.50 - pct) / 0.20 * 25;
+        else if (pct <= 0.30 && pct > 0.10) bonk = 25 + (0.30 - pct) / 0.20 * 40;
+        else if (pct <= 0.10) bonk = 65 + Math.min(1, (0.10 - pct) / 0.10) * 35;
+
+        // simulated heart rate
+        const hrBase = p.mhr * (0.58 + inten * 0.34);
+        const hrDrift = Math.min(t / 240, 1) * p.mhr * 0.07;
+        const hrNoise = Math.sin(t * 0.031) * 2.5 + Math.sin(t * 0.073) * 1.5
+                      + Math.sin(t * 0.17) * 1.0 + (Math.random() - 0.5) * 3;
+        const hr = Math.max(90, Math.min(p.mhr + 3, hrBase + hrDrift + hrNoise));
+
+        pts.push({
+            t, dKm, dMi: dKm * 0.6214, gly, pct, spd,
+            pace: 60 / (spd * 0.6214), bonk: Math.min(100, bonk), took,
+            cf, hr
+        });
+    }
+    return { pts, gMax };
+}
+
+// ─── runner drawing ───
+
+function drawScene(ctx, w, h, prog, bonk, phase, flash, pace, dMi, tMin, pct) {
+    // sky
+    const sky = ctx.createLinearGradient(0, 0, 0, h * 0.58);
+    sky.addColorStop(0, '#111d30');
+    sky.addColorStop(1, '#2a4a6a');
+    ctx.fillStyle = sky;
+    ctx.fillRect(0, 0, w, h * 0.58);
+
+    const scroll = prog * w * 4;
+
+    // far hills
+    ctx.fillStyle = '#14263a';
+    for (let i = 0; i < 7; i++) {
+        const bx = ((i * 420 - scroll * 0.06) % (w + 500)) - 250;
+        ctx.beginPath();
+        ctx.ellipse(bx + 200, h * 0.53, 210, 55, 0, Math.PI, 0);
+        ctx.fill();
+    }
+    // near hills
+    ctx.fillStyle = '#1a3045';
+    for (let i = 0; i < 9; i++) {
+        const bx = ((i * 280 - scroll * 0.15) % (w + 400)) - 200;
+        ctx.beginPath();
+        ctx.ellipse(bx + 140, h * 0.56, 160, 35 + (i % 3) * 12, 0, Math.PI, 0);
+        ctx.fill();
+    }
+
+    // ground
+    ctx.fillStyle = '#223322';
+    ctx.fillRect(0, h * 0.55, w, h * 0.45);
+
+    // trees
+    ctx.fillStyle = '#193820';
+    const treeFill2 = '#152e18';
+    for (let i = 0; i < 18; i++) {
+        const tx = ((i * 190 + 60 - scroll * 0.7) % (w + 350)) - 150;
+        const base = h * 0.56 + (i % 3) * 3;
+        const sz = 10 + (i % 4) * 4;
+        ctx.fillStyle = '#3a2a18';
+        ctx.fillRect(tx - 1.5, base - sz * 0.4, 3, sz * 0.5);
+        ctx.fillStyle = i % 2 ? '#193820' : '#152e18';
+        ctx.beginPath();
+        ctx.moveTo(tx, base - sz * 1.3);
+        ctx.lineTo(tx - sz * 0.6, base - sz * 0.3);
+        ctx.lineTo(tx + sz * 0.6, base - sz * 0.3);
+        ctx.fill();
+    }
+
+    // road
+    const rY = h * 0.72, rH = 36;
+    ctx.fillStyle = '#383838';
+    ctx.fillRect(0, rY, w, rH);
+    ctx.fillStyle = '#444';
+    ctx.fillRect(0, rY, w, 1.5);
+    ctx.fillRect(0, rY + rH - 1.5, w, 1.5);
+
+    // dashes
+    ctx.strokeStyle = '#58582e';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([18, 28]);
+    ctx.lineDashOffset = -scroll * 0.7;
+    ctx.beginPath();
+    ctx.moveTo(0, rY + rH / 2);
+    ctx.lineTo(w, rY + rH / 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // mile markers
+    const totalDist = +$('dist').value || 26.2;
+    for (let mi = 1; mi <= totalDist; mi++) {
+        const mx = w * 0.28 + (mi / totalDist - prog) * w * 3;
+        if (mx < -30 || mx > w + 30) continue;
+        ctx.fillStyle = '#bbb';
+        ctx.fillRect(mx - 1, rY - 22, 2.5, 22);
+        ctx.fillStyle = '#e8e8e8';
+        ctx.fillRect(mx - 10, rY - 32, 22, 13);
+        ctx.fillStyle = '#222';
+        ctx.font = 'bold 9px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText(mi, mx + 1, rY - 22);
+    }
+
+    // runner
+    const rx = w * 0.28, ry = rY + rH - 4;
+    drawRunner(ctx, rx, ry, phase, bonk);
+
+    // gel flash
+    if (flash) {
+        ctx.fillStyle = '#4ade80';
+        ctx.font = 'bold 13px system-ui';
+        ctx.textAlign = 'center';
+        ctx.globalAlpha = flash;
+        ctx.fillText('GEL', rx, ry - 78);
+        ctx.globalAlpha = 1;
+    }
+
+    // energy bar
+    const bx = 14, by = 14, bw = 150, bh = 14;
+    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    ctx.fillRect(bx - 2, by - 2, bw + 4, bh + 4);
+    const cr = Math.min(255, (1 - pct) * 2.2 * 255);
+    const cg = Math.min(255, pct * 2.2 * 255);
+    ctx.fillStyle = `rgb(${cr|0},${cg|0},40)`;
+    ctx.fillRect(bx, by, bw * Math.max(0, pct), bh);
+    ctx.strokeStyle = '#555';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(bx, by, bw, bh);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 9px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('GLYCOGEN ' + Math.round(pct * 100) + '%', bx + 4, by + 11);
+
+    // stats
+    ctx.textAlign = 'right';
+    ctx.fillStyle = '#ccc';
+    ctx.font = '13px ui-monospace, monospace';
+    const pm = Math.floor(pace), ps = Math.round((pace - pm) * 60);
+    const th = Math.floor(tMin / 60), tm = Math.floor(tMin % 60), ts = Math.round((tMin % 1) * 60);
+    ctx.fillText(`${dMi.toFixed(1)} mi`, w - 14, 26);
+    ctx.fillText(`${th}:${String(tm).padStart(2,'0')}:${String(ts).padStart(2,'0')}`, w - 14, 44);
+    ctx.fillText(`${pm}:${String(ps).padStart(2,'0')} /mi`, w - 14, 62);
+}
+
+function drawRunner(ctx, x, y, ph, bonk) {
+    const s = 1.5;
+    const cr = Math.min(255, 230 + bonk * 0.3);
+    const cg = Math.max(50, 145 - bonk * 1.3);
+    const col = `rgb(${cr|0},${cg|0},48)`;
+    ctx.strokeStyle = col;
+    ctx.fillStyle = col;
+    ctx.lineCap = 'round';
+
+    const lean = 0.28 + bonk * 0.003;
+    const stride = Math.max(0.2, 0.72 - bonk * 0.005);
+
+    // head
+    const hr = 5.5 * s;
+    const nx = x + Math.sin(lean) * 22 * s;
+    const ny = y - Math.cos(lean) * 22 * s;
+    const hx = nx + Math.sin(lean) * 7 * s;
+    const hy = ny - 7 * s;
+    ctx.beginPath(); ctx.arc(hx, hy, hr, 0, Math.PI * 2); ctx.fill();
+
+    // body
+    const hipX = x, hipY = y - 14 * s;
+    ctx.lineWidth = 2.8 * s;
+    ctx.beginPath(); ctx.moveTo(nx, ny); ctx.lineTo(hipX, hipY); ctx.stroke();
+
+    // shoulders
+    const sx = nx + (hipX - nx) * 0.25, sy = ny + (hipY - ny) * 0.25;
+    const al = 10 * s;
+
+    ctx.lineWidth = 2.2 * s;
+    // arms
+    for (let sign = -1; sign <= 1; sign += 2) {
+        const a = Math.sin(ph + (sign > 0 ? 0 : Math.PI)) * stride * 0.55;
+        ctx.beginPath();
+        ctx.moveTo(sx, sy);
+        ctx.lineTo(sx + Math.sin(a + lean) * al, sy + Math.cos(a) * al);
+        ctx.stroke();
+    }
+
+    // legs
+    const ll = 13 * s;
+    ctx.lineWidth = 2.8 * s;
+    for (let sign = -1; sign <= 1; sign += 2) {
+        const la = Math.sin(ph + (sign > 0 ? 0 : Math.PI)) * stride;
+        const kx = hipX + Math.sin(la) * ll * 0.55;
+        const ky = hipY + Math.cos(la * 0.3) * ll * 0.55;
+        const fa = la + Math.max(0, Math.sin(ph + (sign > 0 ? -0.5 : Math.PI - 0.5))) * 0.55;
+        ctx.beginPath();
+        ctx.moveTo(hipX, hipY);
+        ctx.lineTo(kx, ky);
+        ctx.lineTo(kx + Math.sin(fa) * ll * 0.55, ky + Math.cos(fa * 0.25) * ll * 0.55);
+        ctx.stroke();
+    }
+}
+
+// ─── graph drawing ───
+
+function drawGraph(canvas, data, idx, cfg) {
+    const ctx = canvas.getContext('2d');
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    const w = canvas.width / DPR, h = canvas.height / DPR;
+    ctx.clearRect(0, 0, w, h);
+
+    const pad = { t: 8, r: 14, b: 28, l: 42 };
+    const pw = w - pad.l - pad.r, ph = h - pad.t - pad.b;
+
+    ctx.fillStyle = '#12141e';
+    ctx.fillRect(pad.l, pad.t, pw, ph);
+
+    // grid
+    ctx.strokeStyle = '#1e2030';
+    ctx.lineWidth = 0.8;
+    for (let i = 0; i <= 4; i++) {
+        const gy = pad.t + ph * (1 - i / 4);
+        ctx.beginPath(); ctx.moveTo(pad.l, gy); ctx.lineTo(pad.l + pw, gy); ctx.stroke();
+    }
+
+    // axes labels
+    const maxDist = data && data.length ? data[data.length - 1].dMi : (+$('dist').value || 26.2);
+    ctx.fillStyle = '#555';
+    ctx.font = '10px system-ui';
+    ctx.textAlign = 'center';
+    const xt = Math.min(6, Math.ceil(maxDist / 5));
+    for (let i = 0; i <= xt; i++) {
+        const mi = (maxDist / xt) * i;
+        ctx.fillText(mi.toFixed(0), pad.l + (mi / maxDist) * pw, h - 6);
+    }
+    ctx.fillText('miles', pad.l + pw / 2, h);
+
+    ctx.textAlign = 'right';
+    for (let i = 0; i <= 4; i++) {
+        const gy = pad.t + ph * (1 - i / 4);
+        ctx.fillText(cfg.yFmt((cfg.maxY / 4) * i), pad.l - 5, gy + 3);
+    }
+
+    // bonk zone
+    if (cfg.zone) {
+        const zt = pad.t + ph * 0.75;
+        ctx.fillStyle = 'rgba(255,50,50,0.05)';
+        ctx.fillRect(pad.l, zt, pw, pad.t + ph - zt);
+        ctx.strokeStyle = 'rgba(255,60,60,0.2)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([4, 4]);
+        ctx.beginPath(); ctx.moveTo(pad.l, zt); ctx.lineTo(pad.l + pw, zt); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = '#ff5555';
+        ctx.font = '8px system-ui';
+        ctx.textAlign = 'left';
+        ctx.fillText('BONK ZONE', pad.l + 4, zt + 10);
+    }
+
+    if (!data || idx < 1) return;
+    const sl = data.slice(0, idx + 1);
+
+    // fill
+    ctx.beginPath();
+    ctx.moveTo(pad.l, pad.t + ph);
+    for (const p of sl) {
+        ctx.lineTo(pad.l + (p.dMi / maxDist) * pw,
+                   pad.t + ph * (1 - cfg.val(p) / cfg.maxY));
+    }
+    ctx.lineTo(pad.l + (sl[sl.length - 1].dMi / maxDist) * pw, pad.t + ph);
+    ctx.closePath();
+    const gr = ctx.createLinearGradient(0, pad.t, 0, pad.t + ph);
+    gr.addColorStop(0, cfg.ft); gr.addColorStop(1, cfg.fb);
+    ctx.fillStyle = gr;
+    ctx.fill();
+
+    // line
+    ctx.beginPath();
+    for (let i = 0; i < sl.length; i++) {
+        const gx = pad.l + (sl[i].dMi / maxDist) * pw;
+        const gy = pad.t + ph * (1 - cfg.val(sl[i]) / cfg.maxY);
+        i === 0 ? ctx.moveTo(gx, gy) : ctx.lineTo(gx, gy);
+    }
+    ctx.strokeStyle = cfg.lc;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // gel markers
+    if (cfg.gels) {
+        for (const p of sl) {
+            if (!p.took) continue;
+            const gx = pad.l + (p.dMi / maxDist) * pw;
+            ctx.fillStyle = '#4ade80';
+            ctx.beginPath();
+            ctx.moveTo(gx, pad.t + ph + 3);
+            ctx.lineTo(gx - 3.5, pad.t + ph + 11);
+            ctx.lineTo(gx + 3.5, pad.t + ph + 11);
+            ctx.fill();
+        }
+    }
+}
+
+// ─── fuel mix chart (stacked area: carbs bottom, fat top) ───
+
+function drawFuelChart(canvas, data, idx) {
+    const ctx = canvas.getContext('2d');
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    const w = canvas.width / DPR, h = canvas.height / DPR;
+    ctx.clearRect(0, 0, w, h);
+
+    const pad = { t: 8, r: 14, b: 28, l: 42 };
+    const pw = w - pad.l - pad.r, ph = h - pad.t - pad.b;
+
+    ctx.fillStyle = '#12141e';
+    ctx.fillRect(pad.l, pad.t, pw, ph);
+
+    ctx.strokeStyle = '#1e2030'; ctx.lineWidth = 0.8;
+    for (let i = 0; i <= 4; i++) {
+        const gy = pad.t + ph * (1 - i / 4);
+        ctx.beginPath(); ctx.moveTo(pad.l, gy); ctx.lineTo(pad.l + pw, gy); ctx.stroke();
+    }
+
+    const maxDist = data && data.length ? data[data.length - 1].dMi : (+$('dist').value || 26.2);
+    ctx.fillStyle = '#555'; ctx.font = '10px system-ui'; ctx.textAlign = 'center';
+    const xt = Math.min(6, Math.ceil(maxDist / 5));
+    for (let i = 0; i <= xt; i++) {
+        const mi = (maxDist / xt) * i;
+        ctx.fillText(mi.toFixed(0), pad.l + (mi / maxDist) * pw, h - 6);
+    }
+    ctx.fillText('miles', pad.l + pw / 2, h);
+    ctx.textAlign = 'right';
+    for (let i = 0; i <= 4; i++) {
+        ctx.fillText(Math.round(i * 25) + '%', pad.l - 5, pad.t + ph * (1 - i / 4) + 3);
+    }
+
+    // legend
+    ctx.font = '9px system-ui'; ctx.textAlign = 'left';
+    ctx.fillStyle = 'rgba(56,189,248,0.55)';
+    ctx.fillRect(pad.l + pw - 110, pad.t + 5, 9, 9);
+    ctx.fillStyle = '#7dd3fc';
+    ctx.fillText('CARBS', pad.l + pw - 98, pad.t + 13);
+    ctx.fillStyle = 'rgba(245,158,11,0.55)';
+    ctx.fillRect(pad.l + pw - 52, pad.t + 5, 9, 9);
+    ctx.fillStyle = '#fbbf24';
+    ctx.fillText('FAT', pad.l + pw - 40, pad.t + 13);
+
+    if (!data || idx < 1) return;
+    const sl = data.slice(0, idx + 1);
+
+    // carbs area (bottom up to boundary)
+    ctx.beginPath();
+    ctx.moveTo(pad.l + (sl[0].dMi / maxDist) * pw, pad.t + ph);
+    for (const p of sl) {
+        const gx = pad.l + (p.dMi / maxDist) * pw;
+        ctx.lineTo(gx, pad.t + ph * (1 - p.cf));
+    }
+    ctx.lineTo(pad.l + (sl[sl.length - 1].dMi / maxDist) * pw, pad.t + ph);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(56,189,248,0.28)';
+    ctx.fill();
+
+    // fat area (boundary up to top)
+    ctx.beginPath();
+    ctx.moveTo(pad.l + (sl[0].dMi / maxDist) * pw, pad.t);
+    for (const p of sl) {
+        const gx = pad.l + (p.dMi / maxDist) * pw;
+        ctx.lineTo(gx, pad.t + ph * (1 - p.cf));
+    }
+    ctx.lineTo(pad.l + (sl[sl.length - 1].dMi / maxDist) * pw, pad.t);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(245,158,11,0.28)';
+    ctx.fill();
+
+    // boundary line
+    ctx.beginPath();
+    for (let i = 0; i < sl.length; i++) {
+        const gx = pad.l + (sl[i].dMi / maxDist) * pw;
+        const gy = pad.t + ph * (1 - sl[i].cf);
+        i === 0 ? ctx.moveTo(gx, gy) : ctx.lineTo(gx, gy);
+    }
+    ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+}
+
+// ─── heart rate chart ───
+
+function drawHRChart(canvas, data, idx, maxHR) {
+    const ctx = canvas.getContext('2d');
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    const w = canvas.width / DPR, h = canvas.height / DPR;
+    ctx.clearRect(0, 0, w, h);
+
+    const pad = { t: 8, r: 14, b: 28, l: 42 };
+    const pw = w - pad.l - pad.r, ph = h - pad.t - pad.b;
+
+    // Y range
+    let minY = Math.round(maxHR * 0.5);
+    if (data && idx > 0) {
+        let lo = maxHR;
+        for (let i = 0; i <= idx && i < data.length; i++) lo = Math.min(lo, data[i].hr);
+        minY = Math.floor(lo / 10) * 10 - 5;
+    }
+    const maxY = maxHR + 10;
+    const range = maxY - minY;
+
+    ctx.fillStyle = '#12141e';
+    ctx.fillRect(pad.l, pad.t, pw, ph);
+
+    // HR zone bands
+    const zones = [
+        { lo: 0.50, hi: 0.60, c: 'rgba(59,130,246,0.05)' },
+        { lo: 0.60, hi: 0.70, c: 'rgba(34,197,94,0.06)' },
+        { lo: 0.70, hi: 0.80, c: 'rgba(163,230,53,0.06)' },
+        { lo: 0.80, hi: 0.90, c: 'rgba(245,158,11,0.07)' },
+        { lo: 0.90, hi: 1.00, c: 'rgba(239,68,68,0.07)' },
+    ];
+    for (const z of zones) {
+        const zBot = Math.max(maxHR * z.lo, minY);
+        const zTop = Math.min(maxHR * z.hi, maxY);
+        if (zTop <= zBot) continue;
+        const y1 = pad.t + ph * (1 - (zTop - minY) / range);
+        const y2 = pad.t + ph * (1 - (zBot - minY) / range);
+        ctx.fillStyle = z.c;
+        ctx.fillRect(pad.l, y1, pw, y2 - y1);
+    }
+
+    // grid
+    ctx.strokeStyle = '#1e2030'; ctx.lineWidth = 0.8;
+    const yTicks = 5;
+    for (let i = 0; i <= yTicks; i++) {
+        const gy = pad.t + ph * (1 - i / yTicks);
+        ctx.beginPath(); ctx.moveTo(pad.l, gy); ctx.lineTo(pad.l + pw, gy); ctx.stroke();
+    }
+
+    // x axis
+    const maxDist = data && data.length ? data[data.length - 1].dMi : (+$('dist').value || 26.2);
+    ctx.fillStyle = '#555'; ctx.font = '10px system-ui'; ctx.textAlign = 'center';
+    const xt = Math.min(6, Math.ceil(maxDist / 5));
+    for (let i = 0; i <= xt; i++) {
+        const mi = (maxDist / xt) * i;
+        ctx.fillText(mi.toFixed(0), pad.l + (mi / maxDist) * pw, h - 6);
+    }
+    ctx.fillText('miles', pad.l + pw / 2, h);
+
+    // y axis
+    ctx.textAlign = 'right';
+    for (let i = 0; i <= yTicks; i++) {
+        ctx.fillText(Math.round(minY + (range / yTicks) * i), pad.l - 5,
+                     pad.t + ph * (1 - i / yTicks) + 3);
+    }
+
+    // maxHR reference line
+    const mhrY = pad.t + ph * (1 - (maxHR - minY) / range);
+    if (mhrY >= pad.t) {
+        ctx.strokeStyle = 'rgba(239,68,68,0.4)'; ctx.lineWidth = 1;
+        ctx.setLineDash([4, 4]);
+        ctx.beginPath(); ctx.moveTo(pad.l, mhrY); ctx.lineTo(pad.l + pw, mhrY); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = '#ef4444'; ctx.font = '8px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText('MAX HR', pad.l + pw - 2, mhrY - 3);
+    }
+
+    if (!data || idx < 1) return;
+    const sl = data.slice(0, idx + 1);
+
+    // fill under HR line
+    ctx.beginPath();
+    ctx.moveTo(pad.l + (sl[0].dMi / maxDist) * pw, pad.t + ph);
+    for (const p of sl) {
+        const gx = pad.l + (p.dMi / maxDist) * pw;
+        ctx.lineTo(gx, pad.t + ph * (1 - (p.hr - minY) / range));
+    }
+    ctx.lineTo(pad.l + (sl[sl.length - 1].dMi / maxDist) * pw, pad.t + ph);
+    ctx.closePath();
+    const gr = ctx.createLinearGradient(0, pad.t, 0, pad.t + ph);
+    gr.addColorStop(0, 'rgba(239,68,68,0.12)');
+    gr.addColorStop(1, 'rgba(239,68,68,0.01)');
+    ctx.fillStyle = gr;
+    ctx.fill();
+
+    // HR line
+    ctx.beginPath();
+    for (let i = 0; i < sl.length; i++) {
+        const gx = pad.l + (sl[i].dMi / maxDist) * pw;
+        const gy = pad.t + ph * (1 - (sl[i].hr - minY) / range);
+        i === 0 ? ctx.moveTo(gx, gy) : ctx.lineTo(gx, gy);
+    }
+    ctx.strokeStyle = '#ef4444';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+}
+
+// ─── animation ───
+
+let simD = null, aIdx = 0, aRun = false, aPh = 0, gelFlash = 0;
+
+function go() {
+    const p = {
+        sex: $('sex').value,
+        age: +$('age').value,
+        htFt: +$('htFt').value,
+        htIn: +$('htIn').value,
+        wt: +$('wt').value,
+        vo2: +$('vo2').value,
+        mhr: +$('mhr').value,
+        paceMin: +$('pMin').value,
+        paceSec: +$('pSec').value,
+        gel: +$('gel').value,
+        dist: +$('dist').value
+    };
+    resize();
+    const r = simulate(p);
+    simD = r.pts;
+    aIdx = 0;
+    aRun = true;
+    gelFlash = 0;
+    aPh = 0;
+    requestAnimationFrame(tick);
+}
+
+function tick() {
+    if (!aRun || !simD) return;
+    const step = Math.max(1, Math.floor(simD.length / (22 * 60)));
+    aIdx = Math.min(aIdx + step, simD.length - 1);
+    const d = simD[aIdx];
+    const totalDist = simD[simD.length - 1].dMi;
+    const prog = d.dMi / totalDist;
+
+    aPh += 0.16 * (d.spd / 12);
+    if (d.took) gelFlash = 1;
+    if (gelFlash > 0) gelFlash -= 0.03;
+
+    const rCtx = $('rc').getContext('2d');
+    rCtx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    drawScene(rCtx, RW, RH, prog, d.bonk, aPh,
+        gelFlash > 0 ? gelFlash : 0, d.pace, d.dMi, d.t, d.pct);
+
+    drawGraph($('gc'), simD, aIdx, {
+        maxY: 1, val: p => p.pct, yFmt: v => Math.round(v * 100) + '%',
+        lc: '#4ade80', ft: 'rgba(74,222,128,0.25)', fb: 'rgba(74,222,128,0.02)',
+        zone: true, gels: true
+    });
+    drawGraph($('bc'), simD, aIdx, {
+        maxY: 100, val: p => p.bonk, yFmt: v => Math.round(v) + '%',
+        lc: '#f87171', ft: 'rgba(248,113,113,0.28)', fb: 'rgba(248,113,113,0.02)',
+        zone: false, gels: false
+    });
+    drawFuelChart($('fc'), simD, aIdx);
+    drawHRChart($('hc'), simD, aIdx, +$('mhr').value);
+
+    if (aIdx < simD.length - 1) requestAnimationFrame(tick);
+    else { aRun = false; drawEnd(); }
+}
+
+function drawEnd() {
+    const d = simD[simD.length - 1];
+    const ctx = $('rc').getContext('2d');
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    ctx.fillStyle = 'rgba(0,0,0,0.45)';
+    ctx.fillRect(0, 0, RW, RH);
+    ctx.textAlign = 'center';
+    if (d.bonk > 55) {
+        ctx.fillStyle = '#ff6b6b';
+        ctx.font = 'bold 26px system-ui';
+        ctx.fillText('BONKED', RW / 2, RH / 2 - 14);
+    } else {
+        ctx.fillStyle = '#4ade80';
+        ctx.font = 'bold 26px system-ui';
+        ctx.fillText('FINISHED', RW / 2, RH / 2 - 14);
+    }
+    const th = Math.floor(d.t / 60), tm = Math.floor(d.t % 60);
+    ctx.fillStyle = '#bbb';
+    ctx.font = '15px ui-monospace, monospace';
+    ctx.fillText(`${d.dMi.toFixed(1)} mi  |  ${th}h ${tm}m  |  Glycogen ${Math.round(d.pct * 100)}%`, RW / 2, RH / 2 + 14);
+}
+
+function idle() {
+    resize();
+    const ctx = $('rc').getContext('2d');
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    drawScene(ctx, RW, RH, 0, 0, 0, 0, 10.5, 0, 0, 1);
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    ctx.fillRect(0, 0, RW, RH);
+    ctx.fillStyle = '#888';
+    ctx.font = '16px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Press RUN to start simulation', RW / 2, RH / 2);
+    drawGraph($('gc'), null, 0, {
+        maxY: 1, val: p => p.pct, yFmt: v => Math.round(v * 100) + '%',
+        lc: '#4ade80', ft: '', fb: '', zone: true, gels: false
+    });
+    drawGraph($('bc'), null, 0, {
+        maxY: 100, val: p => p.bonk, yFmt: v => Math.round(v) + '%',
+        lc: '#f87171', ft: '', fb: '', zone: false, gels: false
+    });
+    drawFuelChart($('fc'), null, 0);
+    drawHRChart($('hc'), null, 0, +$('mhr').value);
+}
+
+$('runBtn').addEventListener('click', go);
+window.addEventListener('resize', () => { if (!aRun) { if (simD) { drawEnd(); } else idle(); }});
+idle();
+</script>
+</body>
+</html>
