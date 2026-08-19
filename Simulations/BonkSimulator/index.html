@@ -242,7 +242,7 @@ function simulate(p) {
 
         // carb fraction (crossover)
         const inten = Math.min(spd / vVO2, 1);
-        let cf = 0.28 + inten * 0.68 - (p.vo2 - 30) * 0.003;
+        let cf = 0.28 + inten * 0.68 - (p.vo2 - 30) * 0.001;
         if (pct < 0.20) cf *= Math.max(0.18, pct / 0.20);
         cf = Math.max(0.12, Math.min(0.95, cf));
 
@@ -358,7 +358,7 @@ function drawScene(ctx, w, h, prog, bonk, phase, flash, pace, dMi, tMin, pct, se
     ctx.strokeStyle = '#58582e';
     ctx.lineWidth = 1.5;
     ctx.setLineDash([18, 28]);
-    ctx.lineDashOffset = -scroll * 0.7;
+    ctx.lineDashOffset = scroll * 0.7;
     ctx.beginPath();
     ctx.moveTo(0, rY + rH / 2);
     ctx.lineTo(w, rY + rH / 2);
