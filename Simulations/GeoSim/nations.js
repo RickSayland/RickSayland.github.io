@@ -1,20 +1,30 @@
 // ============ GEOPOLITICS SIMULATOR — NATIONS ============
 
+// Ten powers. Colours are a categorical palette chosen to stay distinguishable
+// from each other once alpha-blended over the green land — which rules out
+// green itself, since a nation tinted toward the terrain reads as unclaimed.
 const NATION_DEFS = [
     { id: 'aurelia', name: 'Aurelia', color: '#4a90c8', player: true },
-    { id: 'karth',   name: 'Karth',   color: '#c85a4a' },
-    { id: 'vesk',    name: 'Vesk',    color: '#c8a04a' },
-    { id: 'solane',  name: 'Solane',  color: '#9a7ac8' }
+    { id: 'karth',   name: 'Karth',   color: '#e15759' },
+    { id: 'vesk',    name: 'Vesk',    color: '#f28e2b' },
+    { id: 'solane',  name: 'Solane',  color: '#8c6bd8' },
+    { id: 'norva',   name: 'Norva',   color: '#76b7b2' },
+    { id: 'tessin',  name: 'Tessin',  color: '#edc948' },
+    { id: 'ordrin',  name: 'Ordrin',  color: '#ff9da7' },
+    { id: 'myrra',   name: 'Myrra',   color: '#b07aa1' },
+    { id: 'calen',   name: 'Calen',   color: '#9c755f' },
+    { id: 'draveth', name: 'Draveth', color: '#bab0ac' }
 ];
 
 // Great-circle degrees a rival capital must keep from the player's, and from
-// other rivals. Deliberately generous: early expansion needs somewhere to go.
-// 32 degrees is roughly 3,500km.
-const SEP_FROM_PLAYER = 32;
-const SEP_BETWEEN_AI  = 22;
+// other rivals. Ten capitals have to fit on ~29% of the sphere, so these are
+// tighter than they would be for a handful of powers — 26 degrees is roughly
+// 2,900km. pickAISite relaxes them if a given map leaves no room.
+const SEP_FROM_PLAYER = 26;
+const SEP_BETWEEN_AI  = 15;
 
 const MAX_SETTLE_LAT = 72;   // no polar capitals
-const AI_REVEAL_MS   = 420;  // rivals appear one at a time, not all at once
+const AI_REVEAL_MS   = 200;  // rivals appear one at a time, not all at once
 
 function toVec(lat, lon) {
     const phi = lat * DEG, lam = lon * DEG, cp = Math.cos(phi);

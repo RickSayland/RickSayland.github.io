@@ -120,6 +120,8 @@ const territory = {
         }
 
         this.nbuf = new Int32Array(4);
+        this.frontRow = new Uint8Array(GRID_W);
+        this.byId = [];
         globe.landOverlay = ctx => this.render(ctx);
     },
 
@@ -153,7 +155,9 @@ const territory = {
             capacity: 0,
             population: 0,
             income: 0,
-            vx: 0, vy: 0, vz: 0
+            vx: 0, vy: 0, vz: 0,
+            runs: [],       // reused each frame: row, colStart, colEnd triples
+            edges: []       // reused each frame: corner index pairs
         };
         const v = this.cx3;
         actor.vx = v[seed * 3];
@@ -167,6 +171,7 @@ const territory = {
         actor.heap.push(0, seed);
 
         this.actors.push(actor);
+        this.byId[id] = actor;
         nation.stats = actor;
         if (!this.timer) this.timer = setInterval(() => this.tick(), TICK_MS);
     },
@@ -229,94 +234,95 @@ const territory = {
         const f = globe.frame;
         const cx = globe.cx, cy = globe.cy, R = globe.radius;
         const W1 = GRID_W + 1;
+        const owner = this.owner, front = this.frontRow;
 
         // Pulled just inside the horizon so a cell straddling it cannot fold
         // over; at this angle the inset is a fraction of a pixel.
         const MARGIN = 0.03;
 
-        const front = i => {
-            const j = i * 3;
-            const z = this.cx3[j + 1] * f.cosRLon + this.cx3[j] * f.sinRLon;
-            return this.cx3[j + 2] * f.sinRLat + z * f.cosRLat > MARGIN;
-        };
-        const corner = (k, out) => {
-            const x = this.kx[k] * f.cosRLon - this.ky[k] * f.sinRLon;
-            const z = this.ky[k] * f.cosRLon + this.kx[k] * f.sinRLon;
-            out[0] = cx + x * R;
-            out[1] = cy - (this.kz[k] * f.cosRLat - z * f.sinRLat) * R;
-        };
-        const pt = [0, 0];
+        for (const a of this.actors) { a.runs.length = 0; a.edges.length = 0; }
 
-        for (const actor of this.actors) {
-            if (!actor.cells) continue;
+        // One pass over the grid for every nation at once, bucketing spans and
+        // border edges by owner. Scanning per nation instead would re-read the
+        // whole grid ten times a frame.
+        for (let row = 0; row < GRID_H; row++) {
+            const base = row * GRID_W, top = row * W1, bot = (row + 1) * W1;
 
-            // One path per nation: runs of adjacent cells in the same row
-            // share their edge vertices, which keeps the vertex count near the
-            // territory's perimeter rather than its area.
-            ctx.beginPath();
-            for (let row = 0; row < GRID_H; row++) {
-                const base = row * GRID_W;
-                let col = 0;
-                while (col < GRID_W) {
-                    if (this.owner[base + col] !== actor.id || !front(base + col)) {
-                        col++;
-                        continue;
-                    }
-                    let end = col;
-                    while (end < GRID_W &&
-                           this.owner[base + end] === actor.id &&
-                           front(base + end)) end++;
-
-                    const top = row * W1, bot = (row + 1) * W1;
-                    corner(top + col, pt);
-                    ctx.moveTo(pt[0], pt[1]);
-                    for (let c = col + 1; c <= end; c++) {
-                        corner(top + c, pt);
-                        ctx.lineTo(pt[0], pt[1]);
-                    }
-                    for (let c = end; c >= col; c--) {
-                        corner(bot + c, pt);
-                        ctx.lineTo(pt[0], pt[1]);
-                    }
-                    ctx.closePath();
-                    col = end;
-                }
+            for (let col = 0; col < GRID_W; col++) {
+                const j = (base + col) * 3;
+                const z = this.cx3[j + 1] * f.cosRLon + this.cx3[j] * f.sinRLon;
+                front[col] = this.cx3[j + 2] * f.sinRLat + z * f.cosRLat > MARGIN ? 1 : 0;
             }
-            ctx.fillStyle = actor.nation.color;
-            ctx.globalAlpha = 0.34;
+
+            let col = 0;
+            while (col < GRID_W) {
+                const o = owner[base + col];
+                if (!o || !front[col]) { col++; continue; }
+                let end = col;
+                while (end < GRID_W && owner[base + end] === o && front[end]) end++;
+                const a = this.byId[o];
+                if (a) a.runs.push(row, col, end);
+                col = end;
+            }
+
+            for (let c = 0; c < GRID_W; c++) {
+                const i = base + c, o = owner[i];
+                if (!o || !front[c]) continue;
+                const a = this.byId[o];
+                if (!a) continue;
+                if (owner[base + ((c + 1) % GRID_W)] !== o) a.edges.push(top + c + 1, bot + c + 1);
+                if (owner[base + ((c - 1 + GRID_W) % GRID_W)] !== o) a.edges.push(top + c, bot + c);
+                if (row === 0 || owner[i - GRID_W] !== o) a.edges.push(top + c, top + c + 1);
+                if (row === GRID_H - 1 || owner[i + GRID_W] !== o) a.edges.push(bot + c, bot + c + 1);
+            }
+        }
+
+        // Corner projection, inlined per use to avoid a call per vertex.
+        const kx = this.kx, ky = this.ky, kz = this.kz;
+
+        for (const a of this.actors) {
+            const runs = a.runs;
+            if (!runs.length) continue;
+
+            // Runs of adjacent cells share their edge vertices, keeping the
+            // vertex count near the territory's perimeter, not its area.
+            ctx.beginPath();
+            for (let k = 0; k < runs.length; k += 3) {
+                const row = runs[k], c0 = runs[k + 1], c1 = runs[k + 2];
+                const top = row * W1, bot = (row + 1) * W1;
+                for (let c = c0; c <= c1; c++) {
+                    const m = top + c;
+                    const x = kx[m] * f.cosRLon - ky[m] * f.sinRLon;
+                    const z = ky[m] * f.cosRLon + kx[m] * f.sinRLon;
+                    const sx = cx + x * R;
+                    const sy = cy - (kz[m] * f.cosRLat - z * f.sinRLat) * R;
+                    c === c0 ? ctx.moveTo(sx, sy) : ctx.lineTo(sx, sy);
+                }
+                for (let c = c1; c >= c0; c--) {
+                    const m = bot + c;
+                    const x = kx[m] * f.cosRLon - ky[m] * f.sinRLon;
+                    const z = ky[m] * f.cosRLon + kx[m] * f.sinRLon;
+                    ctx.lineTo(cx + x * R, cy - (kz[m] * f.cosRLat - z * f.sinRLat) * R);
+                }
+                ctx.closePath();
+            }
+            ctx.fillStyle = a.nation.color;
+            ctx.globalAlpha = 0.4;
             ctx.fill();
-            ctx.globalAlpha = 1;
 
-            // Border: every edge where this nation meets something else.
+            const edges = a.edges;
             ctx.beginPath();
-            for (let row = 0; row < GRID_H; row++) {
-                const base = row * GRID_W;
-                for (let col = 0; col < GRID_W; col++) {
-                    const i = base + col;
-                    if (this.owner[i] !== actor.id || !front(i)) continue;
-                    const top = row * W1, bot = (row + 1) * W1;
-
-                    const rightCol = (col + 1) % GRID_W;
-                    if (this.owner[base + rightCol] !== actor.id) {
-                        corner(top + col + 1, pt); ctx.moveTo(pt[0], pt[1]);
-                        corner(bot + col + 1, pt); ctx.lineTo(pt[0], pt[1]);
-                    }
-                    const leftCol = (col - 1 + GRID_W) % GRID_W;
-                    if (this.owner[base + leftCol] !== actor.id) {
-                        corner(top + col, pt); ctx.moveTo(pt[0], pt[1]);
-                        corner(bot + col, pt); ctx.lineTo(pt[0], pt[1]);
-                    }
-                    if (row === 0 || this.owner[i - GRID_W] !== actor.id) {
-                        corner(top + col, pt); ctx.moveTo(pt[0], pt[1]);
-                        corner(top + col + 1, pt); ctx.lineTo(pt[0], pt[1]);
-                    }
-                    if (row === GRID_H - 1 || this.owner[i + GRID_W] !== actor.id) {
-                        corner(bot + col, pt); ctx.moveTo(pt[0], pt[1]);
-                        corner(bot + col + 1, pt); ctx.lineTo(pt[0], pt[1]);
-                    }
+            for (let k = 0; k < edges.length; k += 2) {
+                for (let e = 0; e < 2; e++) {
+                    const m = edges[k + e];
+                    const x = kx[m] * f.cosRLon - ky[m] * f.sinRLon;
+                    const z = ky[m] * f.cosRLon + kx[m] * f.sinRLon;
+                    const sx = cx + x * R;
+                    const sy = cy - (kz[m] * f.cosRLat - z * f.sinRLat) * R;
+                    e ? ctx.lineTo(sx, sy) : ctx.moveTo(sx, sy);
                 }
             }
-            ctx.strokeStyle = actor.nation.color;
+            ctx.strokeStyle = a.nation.color;
             ctx.globalAlpha = 0.9;
             ctx.lineWidth = 1.1;
             ctx.stroke();
