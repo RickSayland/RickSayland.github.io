@@ -170,11 +170,18 @@ const nations = {
 
     // ---- Interaction ----
 
+    // The same habitability rule the rivals are held to. Without it the player
+    // can found on the ice cap, where cells are tiny and habitability is near
+    // zero, and start the game with an economy that cannot function.
+    settleable(c) {
+        return !!c && Math.abs(c.lat) <= MAX_SETTLE_LAT && globe.isLand(c.lat, c.lon);
+    },
+
     onMove(e) {
         if (this.phase !== 'placement') return;
         const rect = globe.canvas.getBoundingClientRect();
         const c = globe.unproject(e.clientX - rect.left, e.clientY - rect.top);
-        const next = c && globe.isLand(c.lat, c.lon) ? c : null;
+        const next = this.settleable(c) ? c : null;
 
         globe.canvas.classList.toggle('picking', !!next);
         globe.canvas.classList.toggle('over-water', !!c && !next);
@@ -189,7 +196,7 @@ const nations = {
         if (this.phase !== 'placement') return;
         const rect = globe.canvas.getBoundingClientRect();
         const c = globe.unproject(e.clientX - rect.left, e.clientY - rect.top);
-        if (!c || !globe.isLand(c.lat, c.lon)) return;
+        if (!this.settleable(c)) return;
         this.beginGame(c.lat, c.lon);
     },
 
@@ -201,6 +208,9 @@ const nations = {
         if (this.hover) {
             el.textContent = 'Habitable — ' + formatCoord(this.hover.lat, this.hover.lon);
             el.className = 'sidebar-hint ok';
+        } else if (coord && globe.isLand(coord.lat, coord.lon)) {
+            el.textContent = 'Polar ice — nothing will grow here.';
+            el.className = 'sidebar-hint bad';
         } else if (coord) {
             el.textContent = 'Open ocean — pick a landmass.';
             el.className = 'sidebar-hint bad';
