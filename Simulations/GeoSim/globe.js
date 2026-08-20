@@ -22,6 +22,9 @@ const globe = {
     autoRotate: true,
     autoRotateSpeed: 0.012,
     autoRotateTimer: null,
+    idleSpin: true,     // cleared once the game starts; the player owns the view
+    fly: null,
+    overlay: null,      // set by nations.js to draw on top of the sphere
 
     init(canvasId) {
         this.canvas = document.getElementById(canvasId);
@@ -166,13 +169,67 @@ const globe = {
             line(pts, lat !== 0);
         }
 
+        this.buildLandMask();
+
         // The source rings are fully baked into typed arrays above. Releasing
         // them drops ~48k short-lived JS arrays from the heap, which is what
         // was driving the periodic multi-hundred-millisecond GC pauses.
         LAND.length = 0;
     },
 
+    // Rasterises the rings once into an equirectangular bitmap, turning
+    // "is this coordinate on land?" into an array lookup. Must run before
+    // prepareGeometry releases LAND. Natural Earth splits rings at the
+    // antimeridian, so none of them smear across the map here.
+    buildLandMask() {
+        const W = 1440, H = 720;            // 0.25 degrees, ~28km at the equator
+        const off = document.createElement('canvas');
+        off.width = W;
+        off.height = H;
+        const octx = off.getContext('2d', { willReadFrequently: true });
+
+        octx.fillStyle = '#000';
+        octx.fillRect(0, 0, W, H);
+        octx.fillStyle = '#fff';
+        octx.beginPath();
+        for (const poly of LAND) {
+            for (let i = 0; i < poly.length; i++) {
+                const x = (poly[i][1] + 180) / 360 * W;
+                const y = (90 - poly[i][0]) / 180 * H;
+                i ? octx.lineTo(x, y) : octx.moveTo(x, y);
+            }
+            octx.closePath();
+        }
+        octx.fill();
+
+        const px = octx.getImageData(0, 0, W, H).data;
+        const mask = new Uint8Array(W * H);
+        for (let i = 0; i < mask.length; i++) mask[i] = px[i * 4] > 127 ? 1 : 0;
+        this.landMask = { W, H, mask };
+    },
+
+    isLand(lat, lon) {
+        const { W, H, mask } = this.landMask;
+        let y = Math.floor((90 - lat) / 180 * H);
+        if (y < 0) y = 0; else if (y >= H) y = H - 1;
+        const x = ((Math.floor((lon + 180) / 360 * W) % W) + W) % W;
+        return mask[y * W + x] === 1;
+    },
+
     // ---- Projection ----
+
+    projectPoint(lat, lon) {
+        const phi = lat * DEG, lam = lon * DEG, cp = Math.cos(phi);
+        const a = cp * Math.sin(lam), b = cp * Math.cos(lam), c = Math.sin(phi);
+        const f = this.frame;
+        const x  = a * f.cosRLon - b * f.sinRLon;
+        const z  = b * f.cosRLon + a * f.sinRLon;
+        return {
+            x: this.cx + x * this.radius,
+            y: this.cy - (c * f.cosRLat - z * f.sinRLat) * this.radius,
+            z: c * f.sinRLat + z * f.cosRLat
+        };
+    },
 
     unproject(sx, sy) {
         const x  = (sx - this.cx) / this.radius;
@@ -407,12 +464,37 @@ const globe = {
         ctx.beginPath();
         ctx.arc(this.cx, this.cy, R, 0, Math.PI * 2);
         ctx.stroke();
+
+        // Markers sit above the sphere and unclipped, so labels near the limb
+        // stay readable; they hide themselves by z instead.
+        if (this.overlay) this.overlay(ctx);
+    },
+
+    // Eases the view to a coordinate, taking the short way around in longitude.
+    flyTo(lat, lon, duration = 900) {
+        let dLon = lon - this.rotation.lon;
+        while (dLon > 180)  dLon -= 360;
+        while (dLon < -180) dLon += 360;
+        this.fly = {
+            lon0: this.rotation.lon, dLon,
+            lat0: this.rotation.lat, dLat: lat - this.rotation.lat,
+            t0: performance.now(), duration
+        };
+        this.autoRotate = false;
+        clearTimeout(this.autoRotateTimer);
     },
 
     // ---- Loop ----
 
     loop() {
-        if (this.autoRotate && !this.dragging) {
+        if (this.fly) {
+            const k = Math.min(1, (performance.now() - this.fly.t0) / this.fly.duration);
+            const e = k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2;
+            this.rotation.lon = this.fly.lon0 + this.fly.dLon * e;
+            this.rotation.lat = this.fly.lat0 + this.fly.dLat * e;
+            this.dirty = true;
+            if (k >= 1) this.fly = null;
+        } else if (this.autoRotate && !this.dragging) {
             this.rotation.lon += this.autoRotateSpeed;
             this.dirty = true;
         }
@@ -430,6 +512,7 @@ const globe = {
         this.lastPointer = { x: e.clientX, y: e.clientY };
         this.canvas.setPointerCapture(e.pointerId);
         this.autoRotate = false;
+        this.fly = null;
         clearTimeout(this.autoRotateTimer);
     },
 
@@ -448,7 +531,9 @@ const globe = {
 
     onPointerUp() {
         this.dragging = false;
-        this.autoRotateTimer = setTimeout(() => { this.autoRotate = true; }, 3000);
+        if (this.idleSpin) {
+            this.autoRotateTimer = setTimeout(() => { this.autoRotate = true; }, 3000);
+        }
     },
 
     onWheel(e) {
@@ -460,5 +545,3 @@ const globe = {
         this.dirty = true;
     }
 };
-
-globe.init('globeCanvas');

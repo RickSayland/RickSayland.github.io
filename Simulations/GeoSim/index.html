@@ -14,6 +14,19 @@
     </div>
     <div class="app">
         <aside class="sidebar">
+            <div id="placementPanel">
+                <div class="section-title">Founding</div>
+                <p class="sidebar-note">
+                    Choose where your people settle. Rival powers will found their
+                    own capitals well clear of yours, leaving room to expand into.
+                </p>
+                <p class="sidebar-hint" id="placementHint">Hover the globe to survey a site.</p>
+            </div>
+
+            <div id="gamePanel" hidden>
+            <div class="section-title">Nations</div>
+            <ul class="nation-list" id="nationList"></ul>
+
             <div class="budget-summary">
                 <div class="section-title">National Budget</div>
                 <div class="budget-stats">
@@ -132,13 +145,20 @@
                 <span>Unallocated</span>
                 <span class="total-value" id="unallocated">0%</span>
             </div>
+            </div>
         </aside>
         <main class="viewport">
-            <canvas id="globeCanvas"></canvas>
+            <canvas id="globeCanvas" class="picking"></canvas>
+            <div class="placement-banner" id="placementBanner">
+                <strong>Choose your homeland</strong>
+                <span>Click any landmass · drag to rotate · scroll to zoom</span>
+            </div>
         </main>
     </div>
     <script src="landData.js"></script>
     <script src="globe.js"></script>
+    <script src="nations.js"></script>
     <script src="budget.js"></script>
+    <script src="main.js"></script>
 </body>
 </html>

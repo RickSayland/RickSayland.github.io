@@ -68,6 +68,92 @@ body {
     margin-top: 0;
 }
 
+[hidden] { display: none !important; }
+
+/* ---- Founding panel ---- */
+
+.sidebar-note {
+    font-size: 13px;
+    color: #4a5568;
+    line-height: 1.6;
+}
+
+.sidebar-hint {
+    margin-top: 12px;
+    font-family: ui-monospace, 'Consolas', monospace;
+    font-size: 11px;
+    color: #3a4455;
+    line-height: 1.5;
+}
+
+.sidebar-hint.ok { color: #5a9fd4; }
+
+/* ---- Nation roster ---- */
+
+.nation-list {
+    list-style: none;
+    margin-bottom: 4px;
+}
+
+.nation-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 0;
+    font-size: 12px;
+    color: #8a94a6;
+}
+
+.nation-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.nation-name { flex: 1; }
+
+.nation-row.is-player .nation-name {
+    color: #c8ccd4;
+    font-weight: 600;
+}
+
+.nation-coord {
+    font-family: ui-monospace, 'Consolas', monospace;
+    font-size: 10px;
+    color: #3a4455;
+}
+
+/* ---- Placement banner ---- */
+
+.placement-banner {
+    position: absolute;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    text-align: center;
+    pointer-events: none;
+    background: rgba(12, 14, 22, 0.72);
+    border: 1px solid #1e2230;
+    border-radius: 8px;
+    padding: 10px 20px;
+}
+
+.placement-banner strong {
+    display: block;
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    color: #c8ccd4;
+}
+
+.placement-banner span {
+    display: block;
+    margin-top: 3px;
+    font-size: 11px;
+    color: #4a5a70;
+}
+
 /* ---- Budget summary ---- */
 
 .budget-stats {
@@ -329,6 +415,10 @@ body {
 #globeCanvas:active {
     cursor: grabbing;
 }
+
+/* During founding the pointer reports whether the site under it is settleable. */
+#globeCanvas.picking { cursor: crosshair; }
+#globeCanvas.over-water { cursor: not-allowed; }
 
 /* ---- Scrollbar ---- */
 

@@ -91,5 +91,3 @@ const budget = {
         el.classList.toggle('surplus', unallocated > 0);
     }
 };
-
-budget.init();
