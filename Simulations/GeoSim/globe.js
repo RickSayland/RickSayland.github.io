@@ -24,7 +24,8 @@ const globe = {
     autoRotateTimer: null,
     idleSpin: true,     // cleared once the game starts; the player owns the view
     fly: null,
-    overlay: null,      // set by nations.js to draw on top of the sphere
+    landOverlay: null,  // territory.js — drawn over the land, inside the sphere clip
+    overlay: null,      // nations.js — drawn last, unclipped, on top of everything
 
     init(canvasId) {
         this.canvas = document.getElementById(canvasId);
@@ -451,6 +452,8 @@ const globe = {
             ctx.fill();
             ctx.stroke();
         }
+
+        if (this.landOverlay) this.landOverlay(ctx);
 
         ctx.restore();
 

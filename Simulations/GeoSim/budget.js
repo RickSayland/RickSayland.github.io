@@ -81,6 +81,17 @@ const budget = {
         );
     },
 
+    // Income is not a dial the player sets — it falls out of how much land the
+    // nation controls and how many people that land supports.
+    updateEconomy() {
+        const player = nations.list.find(n => n.player);
+        if (!player || !player.stats) return;
+        const s = player.stats;
+        document.getElementById('statIncome').textContent =
+            '§' + Math.round(s.income).toLocaleString();
+        document.getElementById('statPopulation').textContent = formatPeople(s.population);
+    },
+
     updateTotal() {
         const total = this.categories
             .reduce((sum, cat) => sum + parseInt(cat.slider.value, 10), 0);

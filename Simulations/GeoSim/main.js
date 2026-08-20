@@ -4,5 +4,6 @@
 // register its overlay before the globe's first frame.
 
 globe.init('globeCanvas');
+territory.init();   // needs globe.isLand, so it must follow globe.init
 nations.init();
 budget.init();

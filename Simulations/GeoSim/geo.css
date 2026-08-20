@@ -157,25 +157,28 @@ body {
 /* ---- Budget summary ---- */
 
 .budget-stats {
-    display: flex;
-    gap: 12px;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
     margin-bottom: 4px;
 }
 
 .budget-stat {
-    flex: 1;
     background: #0f1220;
     border: 1px solid #1a1e2a;
     border-radius: 6px;
-    padding: 8px 10px;
+    padding: 8px 4px;
     text-align: center;
+    min-width: 0;
 }
 
 .stat-value {
     font-family: ui-monospace, 'Consolas', monospace;
-    font-size: 15px;
+    font-size: 13px;
     font-weight: 600;
     color: #c8ccd4;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .stat-label {

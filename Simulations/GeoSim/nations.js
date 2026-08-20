@@ -31,6 +31,19 @@ function formatCoord(lat, lon) {
            Math.abs(lon).toFixed(1) + '°' + (lon >= 0 ? 'E' : 'W');
 }
 
+function formatArea(km2) {
+    if (km2 >= 1e6) return (km2 / 1e6).toFixed(2) + 'M km²';
+    if (km2 >= 1e3) return Math.round(km2 / 1e3) + 'k km²';
+    return Math.round(km2) + ' km²';
+}
+
+function formatPeople(n) {
+    if (n >= 1e9) return (n / 1e9).toFixed(2) + 'B';
+    if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
+    if (n >= 1e3) return Math.round(n / 1e3) + 'k';
+    return Math.round(n).toString();
+}
+
 const nations = {
     list: [],
     phase: 'placement',
@@ -137,6 +150,7 @@ const nations = {
         globe.idleSpin = false;
         globe.flyTo(lat, lon, 1000);
         globe.dirty = true;
+        territory.activate(player, this.list.indexOf(player) + 1);
 
         document.getElementById('placementPanel').hidden = true;
         document.getElementById('gamePanel').hidden = false;
@@ -147,6 +161,7 @@ const nations = {
         rivals.forEach((n, i) => {
             setTimeout(() => {
                 n.revealed = true;
+                territory.activate(n, this.list.indexOf(n) + 1);
                 this.renderRoster();
                 globe.dirty = true;
             }, (i + 1) * AI_REVEAL_MS);
@@ -203,6 +218,7 @@ const nations = {
             if (!n.site || !n.revealed) continue;
             const li = document.createElement('li');
             li.className = 'nation-row' + (n.player ? ' is-player' : '');
+            li.title = n.name + ' — capital at ' + formatCoord(n.site.lat, n.site.lon);
 
             const dot = document.createElement('span');
             dot.className = 'nation-dot';
@@ -212,12 +228,20 @@ const nations = {
             name.className = 'nation-name';
             name.textContent = n.name + (n.player ? ' (you)' : '');
 
-            const coord = document.createElement('span');
-            coord.className = 'nation-coord';
-            coord.textContent = formatCoord(n.site.lat, n.site.lon);
+            const area = document.createElement('span');
+            area.className = 'nation-coord';
+            n.areaEl = area;
 
-            li.append(dot, name, coord);
+            li.append(dot, name, area);
             list.appendChild(li);
+        }
+        this.updateStats();
+    },
+
+    // Called every territory tick; only touches text, never rebuilds the list.
+    updateStats() {
+        for (const n of this.list) {
+            if (n.areaEl && n.stats) n.areaEl.textContent = formatArea(n.stats.area);
         }
     },
 
