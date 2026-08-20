@@ -41,8 +41,10 @@ body {
     height: calc(100vh - 48px);
 }
 
+/* ---- Sidebar ---- */
+
 .sidebar {
-    width: 220px;
+    width: 260px;
     border-right: 1px solid #1e2230;
     padding: 16px;
     flex-shrink: 0;
@@ -55,16 +57,260 @@ body {
     letter-spacing: 1.5px;
     text-transform: uppercase;
     color: #3a4455;
-    margin-bottom: 12px;
-    padding-bottom: 8px;
+    margin-bottom: 10px;
+    margin-top: 16px;
+    padding-bottom: 6px;
     border-bottom: 1px solid #1a1e2a;
 }
 
-.sidebar-note {
-    font-size: 13px;
-    color: #3a4455;
-    line-height: 1.6;
+.section-title:first-child,
+.budget-summary .section-title {
+    margin-top: 0;
 }
+
+/* ---- Budget summary ---- */
+
+.budget-stats {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 4px;
+}
+
+.budget-stat {
+    flex: 1;
+    background: #0f1220;
+    border: 1px solid #1a1e2a;
+    border-radius: 6px;
+    padding: 8px 10px;
+    text-align: center;
+}
+
+.stat-value {
+    font-family: ui-monospace, 'Consolas', monospace;
+    font-size: 15px;
+    font-weight: 600;
+    color: #c8ccd4;
+}
+
+.stat-label {
+    font-size: 10px;
+    color: #3a4455;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-top: 2px;
+}
+
+/* ---- Posture dial ---- */
+
+.posture-dial {
+    display: flex;
+    border-radius: 6px;
+    overflow: hidden;
+    border: 1px solid #1e2230;
+    margin-bottom: 4px;
+}
+
+.posture-opt {
+    flex: 1;
+    text-align: center;
+    padding: 7px 0;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.5px;
+    cursor: pointer;
+    background: #0f1118;
+    color: #4a5a70;
+    transition: background 0.15s, color 0.15s;
+    border-right: 1px solid #1e2230;
+}
+
+.posture-opt:last-child { border-right: none; }
+
+.posture-opt input { display: none; }
+
+.posture-opt:has(input:checked) {
+    background: #152240;
+    color: #5a9fd4;
+}
+
+.posture-opt:hover {
+    background: #131825;
+}
+
+/* ---- Budget categories ---- */
+
+.budget-cat {
+    margin-bottom: 12px;
+}
+
+.cat-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 4px;
+}
+
+.cat-name {
+    font-size: 12px;
+    color: #8a94a6;
+    font-weight: 500;
+}
+
+.auto-chk {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+    font-size: 10px;
+    color: #3a4a5a;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.auto-chk input {
+    accent-color: #4a90c8;
+    width: 12px;
+    height: 12px;
+    cursor: pointer;
+}
+
+.auto-chk:has(input:checked) {
+    color: #4a90c8;
+}
+
+/* ---- Slider ---- */
+
+.slider-wrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    position: relative;
+}
+
+.budget-slider {
+    -webkit-appearance: none;
+    appearance: none;
+    flex: 1;
+    height: 4px;
+    background: #1a2030;
+    border-radius: 2px;
+    outline: none;
+    cursor: pointer;
+}
+
+.budget-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px;
+    height: 14px;
+    background: #4a90c8;
+    border-radius: 50%;
+    cursor: pointer;
+    border: 2px solid #0c0e16;
+    transition: background 0.15s;
+}
+
+.budget-slider::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    background: #4a90c8;
+    border-radius: 50%;
+    border: 2px solid #0c0e16;
+    cursor: pointer;
+}
+
+.budget-slider::-webkit-slider-runnable-track {
+    height: 4px;
+    background: #1a2030;
+    border-radius: 2px;
+}
+
+.budget-slider::-moz-range-track {
+    height: 4px;
+    background: #1a2030;
+    border-radius: 2px;
+}
+
+.budget-slider:disabled {
+    cursor: default;
+    opacity: 0.75;
+}
+
+.budget-slider:disabled::-webkit-slider-thumb {
+    background: #3a5a78;
+    cursor: default;
+}
+
+.budget-slider:disabled::-moz-range-thumb {
+    background: #3a5a78;
+    cursor: default;
+}
+
+.pct-label {
+    font-family: ui-monospace, 'Consolas', monospace;
+    font-size: 11px;
+    color: #5a6a7a;
+    min-width: 30px;
+    text-align: right;
+}
+
+/* ---- Floor markers (mandatory categories) ---- */
+
+.floor-mark {
+    position: absolute;
+    top: -1px;
+    width: 2px;
+    height: 6px;
+    background: #c8a04a;
+    border-radius: 1px;
+    pointer-events: none;
+    z-index: 1;
+}
+
+.budget-cat.deficit .cat-name {
+    color: #c87a4a;
+}
+
+.budget-cat.deficit .budget-slider::-webkit-slider-thumb {
+    background: #c87a4a;
+}
+
+.budget-cat.deficit .budget-slider::-moz-range-thumb {
+    background: #c87a4a;
+}
+
+.budget-cat.deficit .pct-label {
+    color: #c87a4a;
+}
+
+/* ---- Totals ---- */
+
+.budget-total {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 0 0;
+    border-top: 1px solid #1a1e2a;
+    margin-top: 4px;
+    font-size: 12px;
+    color: #4a5a70;
+}
+
+.total-value {
+    font-family: ui-monospace, 'Consolas', monospace;
+    font-size: 13px;
+    font-weight: 600;
+    color: #5a9fd4;
+}
+
+.total-value.over {
+    color: #c84a4a;
+}
+
+.total-value.surplus {
+    color: #4ac870;
+}
+
+/* ---- Viewport ---- */
 
 .viewport {
     flex: 1;
@@ -83,6 +329,12 @@ body {
 #globeCanvas:active {
     cursor: grabbing;
 }
+
+/* ---- Scrollbar ---- */
+
+.sidebar::-webkit-scrollbar { width: 4px; }
+.sidebar::-webkit-scrollbar-track { background: transparent; }
+.sidebar::-webkit-scrollbar-thumb { background: #1e2230; border-radius: 2px; }
 
 @media (max-width: 700px) {
     .sidebar { display: none; }

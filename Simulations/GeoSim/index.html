@@ -14,13 +14,131 @@
     </div>
     <div class="app">
         <aside class="sidebar">
-            <div class="section-title">Tools</div>
-            <p class="sidebar-note">Drag to rotate. Scroll to zoom. Nation-state tools coming soon.</p>
+            <div class="budget-summary">
+                <div class="section-title">National Budget</div>
+                <div class="budget-stats">
+                    <div class="budget-stat">
+                        <div class="stat-value" id="statIncome">§1,200</div>
+                        <div class="stat-label">per tick</div>
+                    </div>
+                    <div class="budget-stat">
+                        <div class="stat-value" id="statDebt">0%</div>
+                        <div class="stat-label">debt / GDP</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="section-title">Posture</div>
+            <div class="posture-dial">
+                <label class="posture-opt">
+                    <input type="radio" name="posture" value="expansionist">
+                    <span>Expand</span>
+                </label>
+                <label class="posture-opt">
+                    <input type="radio" name="posture" value="defensive" checked>
+                    <span>Defend</span>
+                </label>
+                <label class="posture-opt">
+                    <input type="radio" name="posture" value="economic">
+                    <span>Econ</span>
+                </label>
+            </div>
+
+            <div class="section-title">Mandatory</div>
+
+            <div class="budget-cat" data-category="subsistence" data-type="mandatory" data-floor="20">
+                <div class="cat-row">
+                    <span class="cat-name">Subsistence</span>
+                    <label class="auto-chk"><input type="checkbox" checked><span>auto</span></label>
+                </div>
+                <div class="slider-wrap">
+                    <div class="floor-mark"></div>
+                    <input type="range" min="0" max="100" value="20" class="budget-slider">
+                    <span class="pct-label">20%</span>
+                </div>
+            </div>
+
+            <div class="budget-cat" data-category="health" data-type="mandatory" data-floor="15">
+                <div class="cat-row">
+                    <span class="cat-name">Health & Welfare</span>
+                    <label class="auto-chk"><input type="checkbox" checked><span>auto</span></label>
+                </div>
+                <div class="slider-wrap">
+                    <div class="floor-mark"></div>
+                    <input type="range" min="0" max="100" value="15" class="budget-slider">
+                    <span class="pct-label">15%</span>
+                </div>
+            </div>
+
+            <div class="budget-cat" data-category="debt" data-type="mandatory" data-floor="5">
+                <div class="cat-row">
+                    <span class="cat-name">Debt Service</span>
+                    <label class="auto-chk"><input type="checkbox" checked><span>auto</span></label>
+                </div>
+                <div class="slider-wrap">
+                    <div class="floor-mark"></div>
+                    <input type="range" min="0" max="100" value="5" class="budget-slider">
+                    <span class="pct-label">5%</span>
+                </div>
+            </div>
+
+            <div class="section-title">Discretionary</div>
+
+            <div class="budget-cat" data-category="military" data-type="discretionary">
+                <div class="cat-row">
+                    <span class="cat-name">Military</span>
+                    <label class="auto-chk"><input type="checkbox"><span>auto</span></label>
+                </div>
+                <div class="slider-wrap">
+                    <input type="range" min="0" max="100" value="22" class="budget-slider">
+                    <span class="pct-label">22%</span>
+                </div>
+            </div>
+
+            <div class="budget-cat" data-category="infrastructure" data-type="discretionary">
+                <div class="cat-row">
+                    <span class="cat-name">Infrastructure</span>
+                    <label class="auto-chk"><input type="checkbox"><span>auto</span></label>
+                </div>
+                <div class="slider-wrap">
+                    <input type="range" min="0" max="100" value="12" class="budget-slider">
+                    <span class="pct-label">12%</span>
+                </div>
+            </div>
+
+            <div class="budget-cat" data-category="research" data-type="discretionary">
+                <div class="cat-row">
+                    <span class="cat-name">Research</span>
+                    <label class="auto-chk"><input type="checkbox"><span>auto</span></label>
+                </div>
+                <div class="slider-wrap">
+                    <input type="range" min="0" max="100" value="10" class="budget-slider">
+                    <span class="pct-label">10%</span>
+                </div>
+            </div>
+
+            <div class="budget-cat" data-category="diplomacy" data-type="discretionary">
+                <div class="cat-row">
+                    <span class="cat-name">Diplomacy</span>
+                    <label class="auto-chk"><input type="checkbox"><span>auto</span></label>
+                </div>
+                <div class="slider-wrap">
+                    <input type="range" min="0" max="100" value="5" class="budget-slider">
+                    <span class="pct-label">5%</span>
+                </div>
+            </div>
+
+            <div class="budget-total">
+                <span>Unallocated</span>
+                <span class="total-value" id="unallocated">0%</span>
+            </div>
         </aside>
         <main class="viewport">
             <canvas id="globeCanvas"></canvas>
         </main>
     </div>
+    <script src="landData.js"></script>
     <script src="globe.js"></script>
+    <script src="budget.js"></script>
 </body>
 </html>
