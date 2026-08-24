@@ -1,0 +1,40 @@
+<svg viewBox="0 0 570 214" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="gutGlow" cx="45%" cy="38%">
+      <stop offset="0%" stop-color="#d4736a" stop-opacity="0.18"/>
+      <stop offset="100%" stop-color="#d4736a" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="570" height="214" rx="15" fill="#0d090b"/>
+  <circle cx="104" cy="107" r="78" fill="url(#gutGlow)"/>
+
+  <!-- oesophagus -->
+  <path d="M96 26 L96 58" stroke="#8a4152" stroke-width="17" stroke-linecap="round"/>
+  <path d="M96 28 L96 56" stroke="#1e1216" stroke-width="8" stroke-linecap="round"/>
+
+  <!-- stomach -->
+  <path d="M96 56 C56 58 48 118 82 134 C112 148 146 132 148 106"
+        fill="none" stroke="#8a4152" stroke-width="34" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M96 56 C58 58 51 116 83 131 C111 144 143 129 145 106"
+        fill="none" stroke="#1e1216" stroke-width="24" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M74 108 C82 122 106 128 126 118"
+        fill="none" stroke="#c2e04a" stroke-width="9" stroke-linecap="round" opacity="0.8"/>
+
+  <!-- intestine -->
+  <path d="M148 106 C160 152 92 150 96 168 C100 184 150 178 158 170"
+        fill="none" stroke="#b0596a" stroke-width="15" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M148 106 C158 150 94 148 98 168 C102 181 148 176 156 169"
+        fill="none" stroke="#1e1216" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- macro particles -->
+  <circle cx="86" cy="96" r="6" fill="#e15759"/>
+  <circle cx="104" cy="112" r="5" fill="#edc948"/>
+  <circle cx="120" cy="98" r="5" fill="#f2e6cf"/>
+  <circle cx="112" cy="126" r="4.5" fill="#a06bd8"/>
+  <circle cx="92" cy="120" r="4" fill="#6f9a4a"/>
+  <circle cx="130" cy="114" r="3.5" fill="#edc948"/>
+
+  <text x="205" y="98" font-family="system-ui,-apple-system,sans-serif" font-size="42" font-weight="700" fill="#c8bcbe" letter-spacing="1">GutSim</text>
+  <text x="205" y="128" font-family="ui-monospace,monospace" font-size="14" fill="#6b545a" letter-spacing="2">DIGESTION SIMULATOR</text>
+</svg>

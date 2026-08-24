@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GutSim — Digestion Simulator</title>
+    <link rel="icon" type="image/svg+xml" href="content/favicon.svg">
+    <link rel="stylesheet" href="gut.css?v=0.1.0">
+</head>
+<body>
+    <div class="topbar">
+        <h1><span>Gut</span>Sim</h1>
+        <p class="tagline">Drop food in the mouth. Watch it become four macros.</p>
+        <div class="controls">
+            <button id="playBtn" class="ctl">Pause</button>
+            <div class="speed" id="speedGroup">
+                <button class="ctl spd" data-speed="1">×1</button>
+                <button class="ctl spd is-on" data-speed="2">×2</button>
+                <button class="ctl spd" data-speed="4">×4</button>
+                <button class="ctl spd" data-speed="8">×8</button>
+            </div>
+            <button id="flushBtn" class="ctl">Flush</button>
+        </div>
+    </div>
+
+    <div class="app">
+        <aside class="tray">
+            <div class="section-title">Tray</div>
+            <div class="tray-list" id="trayList"></div>
+            <p class="tray-foot">
+                Numbers on each card are the real nutrition label. The sim decides
+                <em>when</em> each macro arrives; the label decides how much.
+            </p>
+        </aside>
+
+        <main class="viewport">
+            <canvas id="gutCanvas" width="1120" height="800"></canvas>
+            <div class="probe" id="probe" hidden></div>
+        </main>
+
+        <aside class="panel">
+            <div class="section-title">Absorbed</div>
+            <div class="macro-list" id="macroList"></div>
+
+            <div class="kcal-row">
+                <span class="kcal-label">Energy absorbed</span>
+                <span class="kcal-value" id="kcalValue">0</span>
+                <span class="kcal-of" id="kcalOf">of 0 kcal</span>
+            </div>
+
+            <div class="section-title">In the tract</div>
+            <div class="stat-grid">
+                <div class="stat"><div class="stat-value" id="statContents">0</div><div class="stat-label">particles</div></div>
+                <div class="stat"><div class="stat-value" id="statAcid">0</div><div class="stat-label">acid</div></div>
+                <div class="stat"><div class="stat-value" id="statBile">0</div><div class="stat-label">bile</div></div>
+            </div>
+            <div class="passed-row">
+                <span>Passed through</span>
+                <span class="passed-value" id="statPassed">0</span>
+            </div>
+            <p class="panel-note" id="passedNote">
+                Fibre is never absorbed — it rides the whole tract and leaves.
+            </p>
+
+            <div class="section-title">Particles</div>
+            <div class="legend" id="legend"></div>
+        </aside>
+    </div>
+
+    <script src="elements.js?v=0.1.0"></script>
+    <script src="grid.js?v=0.1.0"></script>
+    <script src="anatomy.js?v=0.1.0"></script>
+    <script src="foods.js?v=0.1.0"></script>
+    <script src="digestion.js?v=0.1.0"></script>
+    <script src="main.js?v=0.1.0"></script>
+</body>
+</html>
