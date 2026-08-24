@@ -52,26 +52,36 @@ for (const key of Object.keys(ZONES)) {
 // not mix, and a stomach that churned everywhere would refluxes up the
 // oesophagus.
 const TRACT = [
-    { zone: 'mouth',     x1: 58,  y1: 4,   x2: 58,  y2: 20,  r: 20, flow: 'none' },
-    { zone: 'esophagus', x1: 58,  y1: 22,  x2: 56,  y2: 66,  r: 10, flow: 'along', str: 210 },
+    { zone: 'mouth',     x1: 58,  y1: 4,   x2: 58,  y2: 22,  r: 20, flow: 'none' },
+    { zone: 'esophagus', x1: 58,  y1: 20,  x2: 56,  y2: 54,  r: 10, flow: 'along', str: 210 },
 
     // Fundus, body, antrum. The fundus bulges left of where the oesophagus
-    // enters, which is what gives a stomach its shoulder instead of reading
-    // as a tube that simply got fatter.
-    { zone: 'stomach',   x1: 42,  y1: 78,  x2: 44,  y2: 84,  r: 22, flow: 'none' },
-    { zone: 'stomach',   x1: 46,  y1: 92,  x2: 58,  y2: 108, r: 17, flow: 'none' },
-    { zone: 'stomach',   x1: 58,  y1: 110, x2: 84,  y2: 116, r: 11, flow: 'churn', str: 110 },
+    // enters, which is what gives a stomach its shoulder instead of reading as
+    // a tube that simply got fatter. The antrum then tapers over two shrinking
+    // capsules into the pylorus, and the pylorus SLOPES DOWN as it goes right:
+    // its far lip has to be the lowest point of the whole stomach, or chyme
+    // settles into a sump below the opening and gravity will never empty it.
+    // The fundus is a reservoir and stays still — its round floor drains itself.
+    // Everything below it needs a push, though: the body floor is nearly level
+    // where it meets the antrum, and gravity cannot move anything sideways, so
+    // without a flow here chyme settles on that floor and simply stops. Real
+    // gastric peristalsis starts in the body and sweeps toward the pylorus,
+    // which is exactly the fix.
+    { zone: 'stomach',   x1: 42,  y1: 64,  x2: 44,  y2: 70,  r: 21, flow: 'none' },
+    { zone: 'stomach',   x1: 46,  y1: 78,  x2: 54,  y2: 92,  r: 16, flow: 'along', str: 95 },
+    { zone: 'stomach',   x1: 56,  y1: 94,  x2: 72,  y2: 104, r: 11, flow: 'churn', str: 110 },
+    { zone: 'stomach',   x1: 72,  y1: 104, x2: 86,  y2: 112, r: 9,  flow: 'along', str: 150 },
 
-    { zone: 'pylorus',   x1: 88,  y1: 116, x2: 104, y2: 118, r: 6,  flow: 'along', str: 200 },
-    { zone: 'duodenum',  x1: 104, y1: 118, x2: 134, y2: 128, r: 7,  flow: 'along', str: 190 },
+    { zone: 'pylorus',   x1: 86,  y1: 116, x2: 104, y2: 122, r: 5,  flow: 'along', str: 200 },
+    { zone: 'duodenum',  x1: 104, y1: 122, x2: 134, y2: 128, r: 7,  flow: 'along', str: 190 },
     { zone: 'intestine', x1: 134, y1: 128, x2: 256, y2: 128, r: 7,  flow: 'along', str: 190 },
-    { zone: 'intestine', x1: 256, y1: 128, x2: 256, y2: 148, r: 7,  flow: 'along', str: 190 },
-    { zone: 'intestine', x1: 256, y1: 148, x2: 90,  y2: 148, r: 7,  flow: 'along', str: 190 },
-    { zone: 'intestine', x1: 90,  y1: 148, x2: 90,  y2: 168, r: 7,  flow: 'along', str: 190 },
-    { zone: 'intestine', x1: 90,  y1: 168, x2: 258, y2: 168, r: 7,  flow: 'along', str: 190 },
-    { zone: 'colon',     x1: 258, y1: 168, x2: 262, y2: 188, r: 8,  flow: 'along', str: 165 },
-    { zone: 'colon',     x1: 262, y1: 188, x2: 34,  y2: 188, r: 8,  flow: 'along', str: 165 },
-    { zone: 'exit',      x1: 34,  y1: 188, x2: 14,  y2: 188, r: 8,  flow: 'along', str: 255 }
+    { zone: 'intestine', x1: 256, y1: 128, x2: 256, y2: 146, r: 7,  flow: 'along', str: 190 },
+    { zone: 'intestine', x1: 256, y1: 146, x2: 90,  y2: 146, r: 7,  flow: 'along', str: 190 },
+    { zone: 'intestine', x1: 90,  y1: 146, x2: 90,  y2: 166, r: 7,  flow: 'along', str: 190 },
+    { zone: 'intestine', x1: 90,  y1: 166, x2: 258, y2: 166, r: 7,  flow: 'along', str: 190 },
+    { zone: 'colon',     x1: 258, y1: 166, x2: 262, y2: 186, r: 8,  flow: 'along', str: 165 },
+    { zone: 'colon',     x1: 262, y1: 186, x2: 34,  y2: 186, r: 8,  flow: 'along', str: 165 },
+    { zone: 'exit',      x1: 34,  y1: 186, x2: 14,  y2: 186, r: 8,  flow: 'along', str: 255 }
 ];
 
 // The sieve is one column of cells in the gap between the antrum's right edge

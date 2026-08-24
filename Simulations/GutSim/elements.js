@@ -84,12 +84,26 @@ defineElement('SIEVE', {
 
 // ---- Agents ----
 
-// Acid is deliberately NOT `fine`: real gastric acid does empty into the
-// duodenum, but modelling that drains the pool that makes the stomach legible.
-// Secretion is capped instead (see digestion.secrete).
+// DENSITY IS LOAD-BEARING, and the ladder below is the whole of it. Acid is the
+// heaviest thing that cannot leave the stomach, so it MUST be lighter than
+// everything food breaks into — otherwise the pool that collects over the
+// pylorus is a plug no macro can sink through, chyme never reaches the sieve,
+// and absorption sits at zero forever while the stomach looks like it is
+// working. Order, lightest first:
+//
+//   GAS 0.05 · ETHANOL 0.98 · ACID 1.00 · BILE 1.02 · WATER 1.04
+//   · FATBLOB/FAT 1.10 · FIBER 1.16 · GLUCOSE 1.18 · AMINO 1.20 · chunks 1.30
+//
+// Fat sits above the other macros but below the acid, so it layers on top of
+// the chyme and empties last — which is what fat actually does to a stomach.
+// tryMove needs a 0.03 gap to swap, so neighbouring rungs are kept clear of it.
+
+// Not `fine`: real gastric acid does empty into the duodenum, but modelling
+// that drains the pool that makes the stomach legible. Secretion is capped
+// instead (see digestion.secrete).
 defineElement('ACID', {
     name: 'Gastric acid (HCl)', form: FORM.LIQUID,
-    color: '#c2e04a', jitter: 14, density: 1.06, spread: 4, agent: 'acid'
+    color: '#c2e04a', jitter: 14, density: 1.00, spread: 4, agent: 'acid'
 });
 
 defineElement('BILE', {
@@ -99,7 +113,7 @@ defineElement('BILE', {
 
 defineElement('WATER', {
     name: 'Water', form: FORM.LIQUID,
-    color: '#3f7fb5', jitter: 10, density: 1.00, spread: 5,
+    color: '#3f7fb5', jitter: 10, density: 1.04, spread: 5,
     fine: true, macro: 'water', absorbable: true
 });
 
@@ -112,24 +126,25 @@ defineElement('GAS', {
 
 defineElement('AMINO', {
     name: 'Amino acids', form: FORM.GRAIN,
-    color: '#e15759', jitter: 16, density: 1.10, slip: 0.90,
+    color: '#e15759', jitter: 16, density: 1.20, slip: 0.90,
     fine: true, macro: 'protein', absorbable: true
 });
 
 defineElement('GLUCOSE', {
     name: 'Glucose', form: FORM.GRAIN,
-    color: '#edc948', jitter: 16, density: 1.08, slip: 0.92,
+    color: '#edc948', jitter: 16, density: 1.18, slip: 0.92,
     fine: true, macro: 'carb', absorbable: true
 });
 
 defineElement('FAT', {
     name: 'Fatty acids', form: FORM.LIQUID,
-    color: '#f2e6cf', jitter: 10, density: 0.90, spread: 3,
+    color: '#f2e6cf', jitter: 10, density: 1.10, spread: 3,
     fine: true, macro: 'fat', absorbable: true
 });
 
 // Ethanol needs no digestion at all, which is exactly why it hits so fast —
-// the stomach lining absorbs it directly (see ZONES.stomach.absorbs).
+// the stomach lining absorbs it directly (see ZONES.stomach.absorbs). Lighter
+// than acid too, so it rises to the surface of the pool where that lining is.
 defineElement('ETHANOL', {
     name: 'Ethanol', form: FORM.LIQUID,
     color: '#a06bd8', jitter: 14, density: 0.98, spread: 5,
@@ -140,16 +155,17 @@ defineElement('ETHANOL', {
 // the whole tract and is tallied at the exit instead.
 defineElement('FIBER', {
     name: 'Fibre', form: FORM.GRAIN,
-    color: '#6f9a4a', jitter: 14, density: 1.05, slip: 0.60,
+    color: '#6f9a4a', jitter: 14, density: 1.16, slip: 0.60,
     fine: true, macro: 'fiber', absorbable: false
 });
 
-// Undigested fat leaves the stomach as coarse globules — floating on the acid
-// the whole way, because density 0.88 is lighter than everything around it.
-// Bile in the duodenum is the only thing that splits it into absorbable FAT.
+// Undigested fat leaves the stomach as coarse globules, layered above the other
+// macros so it empties last. Bile in the duodenum is the only thing that splits
+// it into absorbable FAT — until then it is `fine` enough to travel but not
+// absorbable, which is the whole reason bile exists.
 defineElement('FATBLOB', {
     name: 'Fat globule', form: FORM.LIQUID,
-    color: '#e8c98a', jitter: 12, density: 0.88, spread: 2, fine: true,
+    color: '#e8c98a', jitter: 12, density: 1.10, spread: 2, fine: true,
     digest: { zone: ['duodenum', 'intestine'], needs: 'bile', time: 60, into: { FAT: 1 } }
 });
 
@@ -160,7 +176,7 @@ defineElement('FATBLOB', {
 // secretes pancreatic enzymes (duodenum, intestine) — see digestion.canDigest.
 
 function defineFood(key, spec) {
-    return defineElement(key, { form: FORM.CHUNK, density: 1.25, slip: 0.22, ...spec });
+    return defineElement(key, { form: FORM.CHUNK, density: 1.30, slip: 0.22, ...spec });
 }
 
 defineFood('BUN', {
@@ -188,7 +204,7 @@ defineFood('LETTUCE', {
 });
 
 defineFood('SAUCE', {
-    name: 'Special sauce', form: FORM.LIQUID, color: '#d8804a', density: 1.10, spread: 2,
+    name: 'Special sauce', form: FORM.LIQUID, color: '#d8804a', density: 1.28, spread: 2,
     digest: { zone: ['stomach', 'duodenum', 'intestine'], needs: 'acid', time: 40,
               into: { FATBLOB: 0.42, GLUCOSE: 0.38, WATER: 0.20 } }
 });
@@ -236,7 +252,7 @@ defineFood('PEPPERONI', {
 });
 
 defineFood('TOMATO', {
-    name: 'Tomato sauce', form: FORM.LIQUID, color: '#c8402a', density: 1.08, spread: 3,
+    name: 'Tomato sauce', form: FORM.LIQUID, color: '#c8402a', density: 1.28, spread: 3,
     digest: { zone: ['stomach', 'duodenum', 'intestine'], needs: 'acid', time: 35,
               into: { GLUCOSE: 0.34, WATER: 0.50, FIBER: 0.16 } }
 });
@@ -256,7 +272,7 @@ defineFood('CONE', {
 // A shake is already liquid, so it needs no grinding — it digests in a third
 // the time of a patty and empties the stomach fast. That contrast is the point.
 defineFood('WHEY', {
-    name: 'Protein shake', form: FORM.LIQUID, color: '#e0d8ee', density: 1.03, spread: 4,
+    name: 'Protein shake', form: FORM.LIQUID, color: '#e0d8ee', density: 1.28, spread: 4,
     digest: { zone: ['stomach', 'duodenum', 'intestine'], needs: 'acid', time: 45,
               into: { AMINO: 0.74, GLUCOSE: 0.10, WATER: 0.16 } }
 });
@@ -265,7 +281,7 @@ defineFood('WHEY', {
 // releases is absorbable on contact, so it starts crossing the stomach lining
 // while a burger dropped at the same moment is still a lump of patty.
 defineFood('BEERLIQ', {
-    name: 'Beer', form: FORM.LIQUID, color: '#d8a838', density: 1.00, spread: 5,
+    name: 'Beer', form: FORM.LIQUID, color: '#d8a838', density: 1.26, spread: 5,
     digest: { zone: ['stomach', 'duodenum', 'intestine'], needs: null, time: 18,
               into: { ETHANOL: 0.26, GLUCOSE: 0.16, WATER: 0.52, GAS: 0.06 } }
 });

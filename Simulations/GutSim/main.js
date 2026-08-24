@@ -13,13 +13,13 @@ const BG_LUMEN   = [30, 18, 22];
 
 const LABELS = [
     { t: 'MOUTH',            x: 84,  y: 10 },
-    { t: 'OESOPHAGUS',       x: 76,  y: 46 },
-    { t: 'STOMACH',          x: 80,  y: 62 },
-    { t: 'PYLORIC SIEVE',    x: 100, y: 96 },
-    { t: 'DUODENUM',         x: 146, y: 100 },
+    { t: 'OESOPHAGUS',       x: 76,  y: 40 },
+    { t: 'STOMACH',          x: 74,  y: 58 },
+    { t: 'PYLORIC SIEVE',    x: 100, y: 98 },
+    { t: 'DUODENUM',         x: 146, y: 104 },
     { t: 'SMALL INTESTINE',  x: 196, y: 110 },
-    { t: 'COLON',            x: 150, y: 190 },
-    { t: 'OUT',              x: 14,  y: 172 }
+    { t: 'COLON',            x: 150, y: 186 },
+    { t: 'OUT',              x: 14,  y: 170 }
 ];
 
 const LEGEND_KEYS = [

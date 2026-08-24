@@ -187,8 +187,12 @@ const digestion = {
     },
 
     drain(i, el) {
-        if (el.macro) this.passed[el.macro]++;
-        else this.passed.other++;
+        // Bile washing out at the far end is not food that "passed through" —
+        // counting secreted agents makes the tally climb on an empty gut.
+        if (!el.agent) {
+            if (el.macro) this.passed[el.macro]++;
+            else this.passed.other++;
+        }
         grid.clear(i);
     },
 
