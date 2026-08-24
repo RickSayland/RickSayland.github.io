@@ -124,15 +124,21 @@ defineElement('GAS', {
 
 // ---- Macros: what the villi actually take up ----
 
+// Amino acids and glucose are DISSOLVED in chyme, so they are liquids, not
+// grains — and the distinction is load-bearing, not pedantic. Grains only ever
+// attempt downward moves, and neighbouring rungs of the density ladder are
+// inside tryMove's swap epsilon, so a mixed bed of grains is mutually
+// impenetrable: it packs onto the stomach floor and only its top layer ever
+// moves. As grains, carbs stalled at 10g of 45 while fat drained out normally.
 defineElement('AMINO', {
-    name: 'Amino acids', form: FORM.GRAIN,
-    color: '#e15759', jitter: 16, density: 1.20, slip: 0.90,
+    name: 'Amino acids', form: FORM.LIQUID,
+    color: '#e15759', jitter: 16, density: 1.20, spread: 3,
     fine: true, macro: 'protein', absorbable: true
 });
 
 defineElement('GLUCOSE', {
-    name: 'Glucose', form: FORM.GRAIN,
-    color: '#edc948', jitter: 16, density: 1.18, slip: 0.92,
+    name: 'Glucose', form: FORM.LIQUID,
+    color: '#edc948', jitter: 16, density: 1.18, spread: 3,
     fine: true, macro: 'carb', absorbable: true
 });
 
@@ -152,10 +158,13 @@ defineElement('ETHANOL', {
 });
 
 // Fibre is `fine` so it clears the pylorus, but never absorbable — it rides
-// the whole tract and is tallied at the exit instead.
+// the whole tract and is tallied at the exit instead. The one thing that does
+// NOT dissolve, so it stays a grain; high slip keeps a pile of it eroding
+// rather than beaching on the stomach floor, since equal-density grains can
+// never swap with each other and only a free surface ever moves.
 defineElement('FIBER', {
     name: 'Fibre', form: FORM.GRAIN,
-    color: '#6f9a4a', jitter: 14, density: 1.16, slip: 0.60,
+    color: '#6f9a4a', jitter: 14, density: 1.16, slip: 0.92,
     fine: true, macro: 'fiber', absorbable: false
 });
 

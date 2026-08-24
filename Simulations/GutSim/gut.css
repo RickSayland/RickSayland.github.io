@@ -32,6 +32,16 @@ body {
 
 .topbar h1 span { color: #d4736a; }
 
+.version {
+    font-family: ui-monospace, 'Consolas', monospace;
+    font-size: 10px;
+    color: #6b4a52;
+    border: 1px solid #2f2126;
+    border-radius: 4px;
+    padding: 2px 5px;
+    flex-shrink: 0;
+}
+
 .tagline {
     font-size: 12px;
     color: #6b545a;

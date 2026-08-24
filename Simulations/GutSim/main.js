@@ -4,7 +4,7 @@
 // except this file, because anatomy.init() has to carve the tract into the grid
 // before the first particle can be placed in it.
 
-const GUT_VERSION = '0.1.0';
+const GUT_VERSION = '0.5';
 
 // Empty cells are painted two different darks so the hollow organ reads as a
 // hollow organ: lumen you can drop things into, and solid body around it.

@@ -125,6 +125,16 @@ const grid = {
             if (Math.random() * 65025 < str * wave) {
                 const d = DIRS[dir];
                 if (this.tryMove(i, x, y, x + d[0], y + d[1], el) >= 0) return;
+
+                // A diagonal push that hits the floor still has to slide the
+                // particle along it. Liquids spread sideways on their own, but
+                // grains only ever try downward moves, so without this they
+                // beach on any flat surface and peristalsis does nothing for
+                // them — glucose piles up in the stomach while fat drains out.
+                if (d[0] !== 0 && d[1] !== 0) {
+                    if (this.tryMove(i, x, y, x + d[0], y, el) >= 0) return;
+                    if (this.tryMove(i, x, y, x, y + d[1], el) >= 0) return;
+                }
             }
         }
 
@@ -183,8 +193,20 @@ const grid = {
         if (oel.form === FORM.TISSUE) return -1;
         if (this.moved[j]) return -1;
 
-        // Density sorting is the whole reason fat floats on gastric acid and gas
-        // bubbles up through it. The epsilon stops near-equal pairs churning.
+        // Chyme percolates through a bolus. Without this a mass of solid food
+        // behaves like a single watertight rock: it sinks to the lowest point of
+        // the stomach — which is the pylorus — and dams every macro behind it,
+        // while acid can only ever reach its outer surface. Letting liquids and
+        // fine particles work through the gaps drains the pile from inside and
+        // floats the undigested chunks back up off the opening.
+        if ((el.fine || el.form === FORM.LIQUID) && oel.form === FORM.CHUNK) {
+            this.swap(i, j);
+            return j;
+        }
+
+        // Density sorting is the whole reason fat layers over the other macros
+        // and gas bubbles up through the pool. The epsilon stops near-equal
+        // pairs churning against each other forever.
         if (oel.density + 0.03 < el.density) { this.swap(i, j); return j; }
         return -1;
     },
