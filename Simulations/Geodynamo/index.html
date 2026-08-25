@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Geodynamo — Earth's Magnetic Field</title>
+    <link rel="icon" type="image/svg+xml" href="content/favicon.svg">
+    <link rel="stylesheet" href="dynamo.css?v=0.1">
+</head>
+<body>
+    <div class="topbar">
+        <h1><span>Geo</span>dynamo</h1>
+        <span class="version">v0.1</span>
+        <p class="tagline">A planet makes its own magnetic field — and now and then loses track of which way is north.</p>
+        <div class="controls">
+            <button id="playBtn" class="ctl">Pause</button>
+            <div class="speed" id="speedGroup">
+                <button class="ctl spd" data-speed="6">×1</button>
+                <button class="ctl spd is-on" data-speed="20">×3</button>
+                <button class="ctl spd" data-speed="60">×10</button>
+            </div>
+            <button id="kickBtn" class="ctl">Perturb</button>
+            <button id="resetBtn" class="ctl">Restart</button>
+        </div>
+    </div>
+
+    <div class="app">
+        <aside class="rail rail-left">
+            <div class="section-title">Core conditions</div>
+            <div class="presets" id="presets">
+                <button class="preset is-on" data-preset="earth">Earth</button>
+                <button class="preset" data-preset="superchron">Superchron</button>
+                <button class="preset" data-preset="mars">Mars</button>
+                <button class="preset" data-preset="slow">Slow rotator</button>
+                <button class="preset" data-preset="sun">Sun</button>
+            </div>
+            <p class="preset-note" id="presetNote">
+                Earth today: vigorous convection, rapid rotation, a whisper of
+                differential rotation, and turbulence enough to knock the dipole
+                over every few hundred thousand years.
+            </p>
+
+            <div class="knobs">
+                <div class="knob" data-key="vigour" data-min="0" data-max="2" data-step="0.02">
+                    <div class="knob-head"><span class="knob-name">Convective vigour</span><span class="knob-val">—</span></div>
+                    <input type="range" class="slider">
+                    <p class="knob-note">Heat escaping the core stirs the liquid iron. No stirring, no dynamo.</p>
+                </div>
+                <div class="knob" data-key="rotation" data-min="0" data-max="2.5" data-step="0.02">
+                    <div class="knob-head"><span class="knob-name">Rotation rate</span><span class="knob-val">—</span></div>
+                    <input type="range" class="slider">
+                    <p class="knob-note">Coriolis gives the convection a handedness. Without it the twists cancel and the field never adds up.</p>
+                </div>
+                <div class="knob" data-key="shear" data-min="0" data-max="1" data-step="0.01">
+                    <div class="knob-head"><span class="knob-name">Differential rotation</span><span class="knob-val">—</span></div>
+                    <input type="range" class="slider">
+                    <p class="knob-note">Winds the poloidal field into a toroidal one. At zero the dipole locks; wind it up and the field becomes a metronome.</p>
+                </div>
+                <div class="knob" data-key="turbulence" data-min="0" data-max="2.2" data-step="0.02">
+                    <div class="knob-head"><span class="knob-name">Turbulence</span><span class="knob-val">—</span></div>
+                    <input type="range" class="slider">
+                    <p class="knob-note">The convection is not smooth. These fluctuations are what actually trigger a reversal.</p>
+                </div>
+            </div>
+
+            <div class="section-title">Dynamo number</div>
+            <div class="dnum">
+                <div class="dnum-row">
+                    <span class="dnum-value" id="dnumValue">—</span>
+                    <span class="dnum-crit">critical <b id="dnumCrit">—</b></span>
+                </div>
+                <div class="dnum-track"><div class="dnum-fill" id="dnumFill"></div><div class="dnum-mark" id="dnumMark"></div></div>
+                <div class="regime" id="regime">—</div>
+                <p class="knob-note" id="regimeNote">Field generation versus ohmic decay. Below critical the field cannot pay its own bills and dies away.</p>
+            </div>
+        </aside>
+
+        <main class="viewport">
+            <canvas id="coreCanvas"></canvas>
+            <div class="legend">
+                <span class="lg"><i class="sw sw-east"></i>toroidal east</span>
+                <span class="lg"><i class="sw sw-west"></i>toroidal west</span>
+                <span class="lg"><i class="sw sw-line"></i>poloidal field lines</span>
+            </div>
+            <div class="footnote">
+                Convection is parameterised, not resolved — the drifting streaks mark the
+                axial columns rotation organises the flow into, they are not solved motion.
+            </div>
+        </main>
+
+        <aside class="rail rail-right">
+            <div class="section-title">At the surface</div>
+            <div class="headline">
+                <div class="headline-val" id="momentValue">—</div>
+                <div class="headline-unit">10²² A m² · axial dipole</div>
+                <div class="polarity" id="polarity">—</div>
+            </div>
+
+            <div class="stat-grid">
+                <div class="stat"><div class="stat-value" id="statIntensity">—</div><div class="stat-label">µT at site</div></div>
+                <div class="stat"><div class="stat-value" id="statInc">—</div><div class="stat-label">inclination</div></div>
+                <div class="stat"><div class="stat-value" id="statVgp">—</div><div class="stat-label">VGP lat</div></div>
+            </div>
+
+            <div class="dip-wrap">
+                <canvas id="dipCanvas"></canvas>
+                <div class="site">
+                    <label for="siteLat">Site latitude</label>
+                    <input type="range" id="siteLat" min="-80" max="80" step="1" value="52" class="slider">
+                    <p class="knob-note" id="siteNote">A dip circle here reads —.</p>
+                </div>
+            </div>
+
+            <div class="section-title">The record</div>
+            <canvas id="recordCanvas"></canvas>
+            <div class="chron-grid">
+                <div class="stat"><div class="stat-value" id="statChron">—</div><div class="stat-label">current chron</div></div>
+                <div class="stat"><div class="stat-value" id="statRev">0</div><div class="stat-label">reversals</div></div>
+                <div class="stat"><div class="stat-value" id="statMean">—</div><div class="stat-label">mean chron</div></div>
+            </div>
+            <p class="knob-note" id="recordNote">
+                Amber is normal polarity, dark is reversed — the same barcode the
+                sea floor carries outward from a spreading ridge.
+            </p>
+
+            <div class="section-title">Inside the core</div>
+            <div class="hidden-row">
+                <span class="hidden-label">Toroidal field (never measured)</span>
+                <span class="hidden-value" id="statTor">—</span>
+            </div>
+            <div class="hidden-row">
+                <span class="hidden-label">Dipole at the core-mantle boundary</span>
+                <span class="hidden-value" id="statCmb">—</span>
+            </div>
+            <div class="hidden-row">
+                <span class="hidden-label">Non-dipole share at surface</span>
+                <span class="hidden-value" id="statNd">—</span>
+            </div>
+            <div class="nd-track"><div class="nd-fill" id="ndFill"></div></div>
+            <p class="knob-note">
+                The toroidal field is stronger than anything at the surface and
+                cannot leave the core. Watch the non-dipole share spike as a
+                reversal starts: that is the dipole handing over to the rest.
+            </p>
+
+            <div class="section-title">Clock</div>
+            <div class="clock-row"><span>Model time</span><b id="statTime">0 kyr</b></div>
+            <div class="clock-row"><span>Dipole free-decay</span><b>19 kyr</b></div>
+            <p class="knob-note">
+                Without a dynamo the field would be gone in a geological instant.
+                That it is 3.5 billion years old is the whole puzzle.
+            </p>
+        </aside>
+    </div>
+
+    <script src="field.js?v=0.1"></script>
+    <script src="render.js?v=0.1"></script>
+    <script src="instruments.js?v=0.1"></script>
+    <script src="main.js?v=0.1"></script>
+</body>
+</html>
