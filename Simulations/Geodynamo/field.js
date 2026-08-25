@@ -262,7 +262,6 @@ const dynamo = {
     // (the ghost value above the CMB) and every number the panel displays.
     project() {
         const NR = this.NR, NTH = this.NTH, dth = this.dth;
-        const base = (NR - 1) * 1;
         const g = this.gauss;
         g.fill(0);
 
@@ -289,7 +288,6 @@ const dynamo = {
             const resid = this.A[j * NR + NR - 1] - rec;
             this.ghost[j] = ext + resid * fall[LMAX];
         }
-        void base;
     },
 
     // Field at a point outside the core, in model units. r is in core radii.
@@ -349,10 +347,16 @@ const dynamo = {
     // Fraction of the surface field energy that is NOT the axial dipole. Near
     // zero on a healthy dynamo; it is what climbs during a reversal, when the
     // dipole collapses and the higher harmonics are all that is left.
+    // This is the Lowes spectrum, sum (l+1) * g_l^2, and the conversion from the
+    // model's a_l to the Gauss coefficient an observatory quotes carries a factor
+    // of l: g_l = l * a_l * r^-(l+2). Dropping it makes every higher harmonic
+    // look four to nine times smaller than it is, and the reported non-dipole
+    // share then disagrees with the inclination the same model prints next to it.
     nonDipole() {
         let d = 0, tot = 0;
         for (let l = 1; l <= LMAX; l++) {
-            const e = (l + 1) * this.gauss[l] * this.gauss[l] * Math.pow(R_SURF, -(2 * l + 4));
+            const g = l * this.gauss[l] * Math.pow(R_SURF, -(l + 2));
+            const e = (l + 1) * g * g;
             tot += e;
             if (l === 1) d = e;
         }

@@ -18,7 +18,7 @@
 // left half is the right half, not a second independent solution.
 
 const meridian = {
-    R_MAX: 2.42,          // core radii shown; the surface is at 1.83
+    R_MAX: 2.12,          // core radii shown; the surface is at 1.83
     N_EXT: 26,            // exterior rings used for the field-line continuation
     N_LEVELS: 9,          // contour levels per polarity at reference strength
 
