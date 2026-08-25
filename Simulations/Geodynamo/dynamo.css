@@ -375,7 +375,7 @@ body {
 
 /* ---- Record ---- */
 
-#recordCanvas { display: block; width: 100%; height: 140px; }
+#recordCanvas { display: block; width: 100%; height: 152px; }
 
 /* ---- Inside the core ---- */
 
@@ -455,10 +455,14 @@ body {
 
     .app { flex-direction: column; height: auto; }
 
+    /* flex: none is load-bearing. As a flex item the viewport carries
+       flex-basis: 0%, which beats the height property outright, and the core
+       view silently collapses to its min-height however tall the phone is. */
     .viewport {
         order: 1;
-        height: 56vh;
-        min-height: 300px;
+        flex: none;
+        height: 60vh;
+        min-height: 320px;
     }
 
     .rail {

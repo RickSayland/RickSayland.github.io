@@ -388,17 +388,25 @@ const dynamo = {
         return this.CO_REF * this.p.shear;
     },
 
-    // Dynamo number: the ratio of field generation to ohmic decay. Below the
-    // critical value the field cannot pay its own diffusion bill and dies.
+    // Dynamo number: field generation measured against ohmic decay. Below the
+    // critical value the field cannot pay its own diffusion bill and dies. This
+    // is the alpha-effect strength with the noise term left out, so the readout
+    // reflects the settings rather than jittering with every fluctuation.
     dynamoNumber() {
-        const ca = Math.abs(this.CA_REF * this.p.vigour * Math.SQRT2 * this.p.rotation /
-                            Math.sqrt(1 + this.p.rotation * this.p.rotation));
-        const co = Math.abs(this.Co());
-        return co > 0 ? Math.sqrt(ca * co * 0.5) : ca;
+        const rot = this.p.rotation;
+        const helical = Math.SQRT2 * rot / Math.sqrt(1 + rot * rot);
+        return Math.abs(this.CA_REF * this.p.vigour * helical);
     },
 
+    // MEASURED, not derived. The threshold was found by bisecting on convective
+    // vigour at each shear setting until the field stopped sustaining itself:
+    // 10.6 with no shear, rising to about 14 at 0.75. Shear RAISES the bar,
+    // which is not the intuitive direction — it drains poloidal field into
+    // toroidal, where it is dissipated rather than fed back. An earlier guess
+    // that shear helped reported Mars as supercritical while its field visibly
+    // died on screen.
     critical() {
-        return this.Co() > 0 ? Math.sqrt(11 * this.CO_REF * this.p.shear * 0.5) * 0.62 : 11;
+        return 10.6 + 4.6 * this.p.shear;
     },
 
     // ---- The step ----

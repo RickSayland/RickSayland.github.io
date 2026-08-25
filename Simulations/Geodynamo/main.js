@@ -20,7 +20,7 @@ const PRESETS = {
               'over every few hundred thousand years.'
     },
     superchron: {
-        p: { vigour: 1.0, rotation: 1.0, shear: 0.10, turbulence: 0.25 },
+        p: { vigour: 1.0, rotation: 1.0, shear: 0.14, turbulence: 0.25 },
         note: 'A quiet core. The dynamo runs just as hard but nothing perturbs it, ' +
               'so the dipole holds one polarity indefinitely. Earth did this for ' +
               '40 million years in the Cretaceous.'
@@ -52,7 +52,7 @@ const sim = {
     hudAt: 0,
     siteLat: 52,
 
-    polarity: 1,
+    polarity: 0,             // 0 = not yet established
     transitional: false,
     chronStart: 0,
     reversals: 0,
@@ -109,7 +109,14 @@ const sim = {
             this.transitional = true;
         } else {
             const p = m > 0 ? 1 : -1;
-            if (p !== this.polarity) {
+            // The seed field grows into whichever polarity it likes. Adopting
+            // the first one it settles into — rather than comparing it against
+            // an assumed starting polarity — stops every fresh run from opening
+            // with a reversal that never happened.
+            if (this.polarity === 0) {
+                this.polarity = p;
+                this.chronStart = t;
+            } else if (p !== this.polarity) {
                 this.polarity = p;
                 this.reversals++;
                 const len = t - this.chronStart;
@@ -178,7 +185,9 @@ const sim = {
     restart() {
         dynamo.reset();
         instruments.clear();
-        this.polarity = 1;
+        meridian.psiRef = 0;
+        meridian.torRef = 0;
+        this.polarity = 0;
         this.transitional = false;
         this.chronStart = 0;
         this.reversals = 0;
@@ -248,11 +257,23 @@ const sim = {
                   'alone. This has two stable polarities and sits in one of them. It will ' +
                   'not reverse on its own.';
         } else if (dynamo.p.shear < 0.55) {
-            text = 'α²Ω — reversing';
-            cls = 'live';
-            why = 'Near the threshold where the solution wants to oscillate but has not ' +
-                  'committed. Turbulence pushes it over at random intervals — irregular ' +
-                  'reversals, long chrons, no schedule. This is the Earth-like regime.';
+            // Sitting near the oscillatory threshold is only half of it — with
+            // nothing to push it across, the dynamo stays where it is. Reporting
+            // "reversing" for a core this quiet would contradict the barcode
+            // sitting a few centimetres below, which shows one unbroken chron.
+            if (dynamo.p.turbulence < 0.45) {
+                text = 'α²Ω — quiet';
+                cls = 'locked';
+                why = 'Near the threshold where the solution wants to oscillate, but nothing ' +
+                      'is disturbing it. The dynamo runs at full strength and simply never ' +
+                      'gets knocked over. Chrons run on and on — a superchron.';
+            } else {
+                text = 'α²Ω — reversing';
+                cls = 'live';
+                why = 'Near the threshold where the solution wants to oscillate but has not ' +
+                      'committed. Turbulence pushes it over at random intervals — irregular ' +
+                      'reversals, long chrons, no schedule. This is the Earth-like regime.';
+            }
         } else {
             text = 'αΩ — oscillating';
             cls = 'wave';
@@ -287,7 +308,7 @@ const sim = {
         document.getElementById('statInc').textContent = st.inc.toFixed(0) + '°';
         document.getElementById('statVgp').textContent = st.vgp.toFixed(0) + '°';
 
-        instruments.drawDip(st.inc, st.F, this.siteLat);
+        instruments.drawDip(st.inc, st.F);
 
         const north = st.X >= 0;
         document.getElementById('siteNote').textContent =

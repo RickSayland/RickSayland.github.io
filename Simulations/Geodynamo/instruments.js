@@ -63,8 +63,8 @@ const instruments = {
 
     drawRecord() {
         const ctx = this.recCtx, w = this.rw, h = this.rh;
-        const barH = 20, gap = 6;
-        const chartH = h - barH - gap;
+        const barH = 20, gap = 6, footer = 13;
+        const chartH = h - barH - gap - footer;
 
         ctx.clearRect(0, 0, w, h);
         ctx.fillStyle = '#0a0d16';
@@ -83,7 +83,10 @@ const instruments = {
         mx *= 1.12;
         const mid = chartH / 2;
         const sy = v => mid - v / mx * (mid - 3);
-        const sx = k => k / (this.CAP - 1) * w;
+        // Always spans the full width. The record stretches as it accumulates
+        // and then scrolls once it is at capacity, rather than sitting as a
+        // sliver against the left edge for the first minute of the run.
+        const sx = k => k / Math.max(1, this.n - 1) * w;
 
         // Zero line, and a marker at Earth's present dipole moment so the trace
         // has something real to be compared against.
@@ -155,7 +158,7 @@ const instruments = {
 
     // ---- The dip circle ----
 
-    drawDip(inc, intensity, lat) {
+    drawDip(inc, intensity) {
         const ctx = this.dipCtx, w = this.dw, h = this.dh;
         const cx = w / 2, cy = h / 2;
         const R = Math.min(w, h) / 2 - 13;
@@ -218,8 +221,5 @@ const instruments = {
         ctx.fillText('N', cx + R + 7, cy);
         ctx.fillText('S', cx - R - 7, cy);
         ctx.fillText('DOWN', cx, cy + R + 7);
-        ctx.textAlign = 'left';
-        ctx.fillStyle = 'rgba(150, 175, 205, 0.45)';
-        ctx.fillText((lat >= 0 ? lat.toFixed(0) + '°N' : (-lat).toFixed(0) + '°S'), 2, 8);
     }
 };

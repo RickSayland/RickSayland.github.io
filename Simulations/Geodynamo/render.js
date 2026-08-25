@@ -20,12 +20,17 @@
 const meridian = {
     R_MAX: 2.12,          // core radii shown; the surface is at 1.83
     N_EXT: 26,            // exterior rings used for the field-line continuation
-    N_LEVELS: 9,          // contour levels per polarity at reference strength
+    N_LEVELS: 6,          // contour levels per polarity at reference strength
+    MAX_LEVELS: 16,
 
     canvas: null, ctx: null,
     buf: null, bufCtx: null, img: null, data: null,
     psi: null, aExt: null,
-    psiRef: 0.02, torRef: 0.4,
+    // Both references start at zero and snap to the first frame they see, then
+    // crawl. They have to be SLOW — several seconds — or they track the field
+    // they are supposed to be measuring it against, and a reversal stops looking
+    // like anything at all.
+    psiRef: 0, torRef: 0,
     hover: null,
 
     init(canvas) {
@@ -157,12 +162,14 @@ const meridian = {
         ctx.fillRect(0, 0, this.w, this.h);
     },
 
+    // The mantle is 2,900 km of silicate rock and the reason none of the
+    // interesting field is observable. It is drawn dark on purpose: it is the
+    // lid, not the subject.
     drawBody(ctx) {
         const S = this.S;
-        // Mantle, then a thin crust line at the surface.
         const g = ctx.createRadialGradient(this.cx, this.cy, S, this.cx, this.cy, R_SURF * S);
-        g.addColorStop(0, '#2a1c17');
-        g.addColorStop(1, '#171012');
+        g.addColorStop(0, '#191113');
+        g.addColorStop(1, '#0b0c13');
         ctx.beginPath();
         ctx.arc(this.cx, this.cy, R_SURF * S, 0, Math.PI * 2);
         ctx.fillStyle = g;
@@ -178,7 +185,8 @@ const meridian = {
         // draining out rather than the palette silently rescaling to hide it.
         let mx = 0;
         for (let k = 0; k < dynamo.N; k++) { const v = Math.abs(B[k]); if (v > mx) mx = v; }
-        this.torRef += (Math.max(mx, 0.05) - this.torRef) * 0.02;
+        mx = Math.max(mx, 0.05);
+        this.torRef = this.torRef === 0 ? mx : this.torRef + (mx - this.torRef) * 0.004;
         const inv = 1 / Math.max(this.torRef, 1e-6);
 
         for (let k = 0, p = 0; k < n; k++, p += 4) {
@@ -211,7 +219,7 @@ const meridian = {
         const speed = 0.00006 * dynamo.p.vigour * (0.4 + dynamo.p.rotation);
         ctx.save();
         ctx.lineWidth = 1;
-        ctx.strokeStyle = 'rgba(255, 236, 210, ' + (0.09 * amp).toFixed(3) + ')';
+        ctx.strokeStyle = 'rgba(255, 240, 220, ' + (0.20 * amp).toFixed(3) + ')';
         ctx.beginPath();
         for (const st of this.streaks) {
             const half = Math.sqrt(Math.max(0, 1 - st.s * st.s));
@@ -279,17 +287,21 @@ const meridian = {
         // float, so a strong field is drawn as a dense bundle and a collapsing
         // one visibly thins out. Pegging the levels to the current maximum
         // instead would draw the same picture at every field strength.
-        this.psiRef += (Math.max(mx, 1e-4) - this.psiRef) * 0.008;
+        mx = Math.max(mx, 1e-4);
+        this.psiRef = this.psiRef === 0 ? mx : this.psiRef + (mx - this.psiRef) * 0.0015;
         const spacing = Math.max(this.psiRef, 1e-4) / this.N_LEVELS;
-        const nLev = Math.min(30, Math.ceil(mx / spacing));
+        const nLev = Math.min(this.MAX_LEVELS, Math.ceil(mx / spacing));
         if (nLev < 1) return;
 
         // Polarity colours the whole poloidal system, so a reversal is a change
         // of colour across the entire picture rather than a detail to hunt for.
         const warm = dynamo.gauss[1] < 0;
         const inCol = warm ? 'rgba(255, 209, 128, 0.92)' : 'rgba(126, 212, 255, 0.92)';
-        const outCol = warm ? 'rgba(255, 196, 110, 0.40)' : 'rgba(120, 198, 255, 0.40)';
+        const outCol = warm ? 'rgba(255, 196, 110, 0.55)' : 'rgba(120, 198, 255, 0.55)';
 
+        // Every level is drawn on both sides of the core-mantle boundary. A line
+        // that stops at the CMB would be a lie: the flux leaving the core is the
+        // same flux that reaches the surface, and the continuity is the point.
         const inner = new Path2D(), outer = new Path2D();
         for (let n = 0; n < nLev; n++) {
             const lv = (n + 0.5) * spacing;
@@ -297,10 +309,19 @@ const meridian = {
             this.contour(-lv, inner, outer);
         }
 
+        // Outside the core the lines are faded with radius. A dipole's loops
+        // close far beyond this frame, so what is visible out there is the inner
+        // part of very large arcs; letting them dissolve into space reads as
+        // "this continues" rather than as arcs chopped off at the canvas edge.
+        const fade = ctx.createRadialGradient(this.cx, this.cy, this.S * 0.98,
+                                              this.cx, this.cy, this.R_MAX * this.S);
+        fade.addColorStop(0, outCol);
+        fade.addColorStop(1, warm ? 'rgba(255, 196, 110, 0.03)' : 'rgba(120, 198, 255, 0.03)');
+
         ctx.save();
         ctx.lineWidth = 1.15;
         ctx.lineCap = 'round';
-        ctx.strokeStyle = outCol;
+        ctx.strokeStyle = fade;
         ctx.stroke(outer);
         ctx.strokeStyle = inCol;
         ctx.lineWidth = 1.35;
@@ -333,29 +354,31 @@ const meridian = {
                 if (!edges.length) continue;
 
                 const path = R[i] < 1 ? inner : outer;
+                if (!path) continue;
+
                 for (let e = 0; e < edges.length; e += 2) {
+                    let ax = 0, ay = 0, bx = 0, by = 0;
                     for (let s = 0; s < 2; s++) {
                         const ed = edges[e + s];
                         let rr, th, t;
-                        if (ed === 0) { t = (level - v00) / (v10 - v00); rr = R[i] + t * (R[i + 1] - R[i]); th = TH[j]; }
-                        else if (ed === 1) { t = (level - v10) / (v11 - v10); rr = R[i + 1]; th = TH[j] + t * (TH[j + 1] - TH[j]); }
-                        else if (ed === 2) { t = (level - v11) / (v01 - v11); rr = R[i + 1] + t * (R[i] - R[i + 1]); th = TH[j + 1]; }
-                        else { t = (level - v01) / (v00 - v01); rr = R[i]; th = TH[j + 1] + t * (TH[j] - TH[j + 1]); }
+                        // t is clamped because the two corner values can be
+                        // arbitrarily close — routine in the smooth exterior
+                        // field — and an unclamped ratio then places the vertex
+                        // far outside its own cell, drawing a straight line off
+                        // to the edge of the canvas.
+                        if (ed === 0) { t = (level - v00) / (v10 - v00); t = t < 0 ? 0 : t > 1 ? 1 : t; rr = R[i] + t * (R[i + 1] - R[i]); th = TH[j]; }
+                        else if (ed === 1) { t = (level - v10) / (v11 - v10); t = t < 0 ? 0 : t > 1 ? 1 : t; rr = R[i + 1]; th = TH[j] + t * (TH[j + 1] - TH[j]); }
+                        else if (ed === 2) { t = (level - v11) / (v01 - v11); t = t < 0 ? 0 : t > 1 ? 1 : t; rr = R[i + 1] + t * (R[i] - R[i + 1]); th = TH[j + 1]; }
+                        else { t = (level - v01) / (v00 - v01); t = t < 0 ? 0 : t > 1 ? 1 : t; rr = R[i]; th = TH[j + 1] + t * (TH[j] - TH[j + 1]); }
                         const dx = rr * Math.sin(th) * S, dy = cy - rr * Math.cos(th) * S;
-                        if (s === 0) { path.moveTo(cx + dx, dy); } else { path.lineTo(cx + dx, dy); }
+                        if (s === 0) { ax = dx; ay = dy; } else { bx = dx; by = dy; }
                     }
+                    path.moveTo(cx + ax, ay);
+                    path.lineTo(cx + bx, by);
                     // The mirrored half. Axisymmetry means the left side is the
                     // same solution, not a second one.
-                    for (let s = 0; s < 2; s++) {
-                        const ed = edges[e + s];
-                        let rr, th, t;
-                        if (ed === 0) { t = (level - v00) / (v10 - v00); rr = R[i] + t * (R[i + 1] - R[i]); th = TH[j]; }
-                        else if (ed === 1) { t = (level - v10) / (v11 - v10); rr = R[i + 1]; th = TH[j] + t * (TH[j + 1] - TH[j]); }
-                        else if (ed === 2) { t = (level - v11) / (v01 - v11); rr = R[i + 1] + t * (R[i] - R[i + 1]); th = TH[j + 1]; }
-                        else { t = (level - v01) / (v00 - v01); rr = R[i]; th = TH[j + 1] + t * (TH[j] - TH[j + 1]); }
-                        const dx = rr * Math.sin(th) * S, dy = cy - rr * Math.cos(th) * S;
-                        if (s === 0) { path.moveTo(cx - dx, dy); } else { path.lineTo(cx - dx, dy); }
-                    }
+                    path.moveTo(cx - ax, ay);
+                    path.lineTo(cx - bx, by);
                 }
             }
         }
@@ -388,7 +411,7 @@ const meridian = {
         // so the flow inside it is largely walled off from the flow outside —
         // a real and consequential piece of core geography.
         ctx.setLineDash([3, 4]);
-        ctx.strokeStyle = 'rgba(190, 210, 255, 0.26)';
+        ctx.strokeStyle = 'rgba(190, 214, 255, 0.42)';
         ctx.beginPath();
         const s = dynamo.R_IN * S, top = Math.sqrt(1 - dynamo.R_IN * dynamo.R_IN) * S;
         ctx.moveTo(this.cx - s, this.cy - top); ctx.lineTo(this.cx - s, this.cy + top);
@@ -431,10 +454,10 @@ const meridian = {
         this.label(ctx, 'INNER CORE', this.cx, this.cy + dynamo.R_IN * S * 0.55, 'center', 0.85);
         this.label(ctx, 'OUTER CORE', this.cx, this.cy + (dynamo.R_IN + 1) / 2 * S, 'center', 0.8);
         this.label(ctx, 'MANTLE', this.cx, this.cy + (1 + R_SURF) / 2 * S, 'center', 0.62);
-        this.label(ctx, 'TANGENT CYLINDER', this.cx + dynamo.R_IN * S + 5,
-                   this.cy - Math.sqrt(1 - dynamo.R_IN * dynamo.R_IN) * S + 9, 'left', 0.42);
-        this.label(ctx, 'CMB', this.cx + S * 0.70, this.cy - S * 0.70, 'left', 0.5);
-        this.label(ctx, 'SURFACE', this.cx + R_SURF * S * 0.70, this.cy - R_SURF * S * 0.70, 'left', 0.45);
+        this.label(ctx, 'TANGENT CYLINDER', this.cx - dynamo.R_IN * S - 6,
+                   this.cy + Math.sqrt(1 - dynamo.R_IN * dynamo.R_IN) * S - 10, 'right', 0.42);
+        this.label(ctx, 'CMB', this.cx + S * 0.73, this.cy - S * 0.73, 'left', 0.5);
+        this.label(ctx, 'SURFACE', this.cx + R_SURF * S * 0.74, this.cy - R_SURF * S * 0.74, 'left', 0.45);
         ctx.restore();
     },
 
