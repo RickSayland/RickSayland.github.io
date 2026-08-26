@@ -43,6 +43,21 @@ const render = {
         [58, 112, 124], [116, 58, 74], [82, 70, 136], [124, 132, 68], [68, 124, 94]
     ],
 
+    /* Bare-ground colour per terrain: water, plain, forest, desert, mountain. */
+    _terrainPal: [
+        [26, 58, 82],    // water — deepens with depth
+        [34, 44, 36],    // plain
+        [24, 42, 30],    // forest
+        [78, 66, 44],    // desert
+        [64, 64, 68]     // mountain
+    ],
+
+    /* Deposit colours, in RES order: minerals, oil, energy, fertiliser. */
+    _resPal: [
+        [176, 190, 204], [168, 108, 220], [242, 193, 78], [122, 208, 108]
+    ],
+    showDeposits: false,
+
     /* -------------------------------------------------------------- init -- */
 
     init(canvas, s) {
@@ -63,6 +78,8 @@ const render = {
         this._segInner = new Float32Array(s.NCELL * 4);
         this._nSeg = 0;
         this._nInner = 0;
+        this._borderVersion = -1;
+        this._estTint = new Int8Array(s.MAX_ESTATES);
 
         const CL = metrics.CLASSES;
         this._nb = CL.length + 3;
@@ -81,9 +98,20 @@ const render = {
         }
 
         this.resize();
+        this.worldChanged(s);
         this.fit(s);
         this._attach(s);
         return this;
+    },
+
+    /* Called after any sim.reset(): the terrain the soil cache was baked from
+       no longer exists, and every border on the map belongs to a dead world. */
+    worldChanged(s) {
+        this._bakeSoil(s);
+        this._borderVersion = -1;
+        this._nSeg = 0;
+        this._nInner = 0;
+        this.selected = -1;
     },
 
     resize() {
@@ -135,7 +163,10 @@ const render = {
         ctx.lineWidth = 1;
         ctx.strokeRect(ox + 0.5, oy + 0.5, s.W * z, s.H * z);
 
-        if (this.showEstates) this._paintBorders(s, ox, oy, z);
+        if (this.showEstates) {
+            if (this._borderVersion !== s.ownerVersion) this._traceBorders(s);
+            this._paintBorders(s, ox, oy, z);
+        }
         this._paintAgents(s, ox, oy, z);
         if (this.showEstates) this._paintSeats(s, ox, oy, z);
         this._paintSelection(s, ox, oy, z);
@@ -147,53 +178,133 @@ const render = {
        as a thin seam, which is the whole picture of a federation in one glance.
        Segments come out in grid units, independent of the camera, and are
        transformed at stroke time. */
+    /* Bare-ground colour depends only on terrain and soil, neither of which
+       ever changes, so it is baked once and the per-frame loop is reduced to
+       lerping towards the crop colour and blending the owner's tint. */
+    _bakeSoil(s) {
+        const n = s.NCELL;
+        this._soil = new Float32Array(n * 3);
+        this._soilD = new Float32Array(n * 3);
+        const soil = this._soil, d = this._soilD;
+        const PAL = this._terrainPal;
+        for (let i = 0; i < n; i++) {
+            const t = s.terrain[i], f = s.fert[i];
+            const c = PAL[t];
+            let r, g, b;
+            if (t === 0) {
+                /* deep water darkens with depth */
+                const dp = s.depth[i];
+                r = c[0] * (1 - dp * 0.55);
+                g = c[1] * (1 - dp * 0.5);
+                b = c[2] * (1 - dp * 0.35);
+            } else {
+                /* richer soil reads darker and warmer than thin ground */
+                r = c[0] - f * 8; g = c[1] + f * 6; b = c[2] - f * 2;
+            }
+            const p = i * 3;
+            soil[p] = r; soil[p + 1] = g; soil[p + 2] = b;
+            /* how far this cell travels towards full standing crop */
+            const grows = (t === 1 || t === 2) ? 1 : t === 0 ? 0 : 0.35;
+            d[p] = (78 - r) * grows;
+            d[p + 1] = (196 - g) * grows;
+            d[p + 2] = (152 - b) * grows;
+        }
+    },
+
     _paintLand(s) {
-        const buf = this.tbuf, fert = s.fert, crop = s.crop, own = s.owner;
-        const est = s.eState, tint = this._tint, showE = this.showEstates;
+        const buf = this.tbuf, crop = s.crop, own = s.owner;
+        const soil = this._soil, d = this._soilD;
+        const showE = this.showEstates;
+        const n = s.NCELL;
+
+        /* Resolve each estate's tint once rather than per cell. */
+        const est = s.eState, tint = this._tint, et = this._estTint;
+        if (showE) {
+            for (let e = 0; e < s.MAX_ESTATES; e++) {
+                if (s.eAlive[e] === 0) { et[e] = -1; continue; }
+                const st = est[e];
+                et[e] = (st >= 0 ? st : e) % 10;
+            }
+        }
+
+        for (let i = 0, p = 0, q = 0; i < n; i++, p += 4, q += 3) {
+            const t = crop[i];
+            let r = soil[q] + d[q] * t;
+            let g = soil[q + 1] + d[q + 1] * t;
+            let b = soil[q + 2] + d[q + 2] * t;
+
+            if (showE) {
+                const o = own[i];
+                if (o >= 0) {
+                    const ti = et[o];
+                    if (ti >= 0) {
+                        const c = tint[ti];
+                        r += (c[0] - r) * 0.26;
+                        g += (c[1] - g) * 0.26;
+                        b += (c[2] - b) * 0.26;
+                    }
+                }
+            }
+            buf[p] = r; buf[p + 1] = g; buf[p + 2] = b;
+        }
+
+        if (this.showDeposits) this._paintDeposits(s, buf);
+        this.tctx.putImageData(this.timg, 0, 0);
+    },
+
+    /* Each cell is washed towards whichever deposit is richest under it, by how
+       rich it is. Showing all four at once would just average to grey; showing
+       the dominant one keeps the ore country, the oil country and the good
+       farmland reading as distinct regions, which is the thing worth seeing. */
+    _paintDeposits(s, buf) {
+        const res = s.res, pal = this._resPal, n = s.NCELL;
+        for (let i = 0, p = 0; i < n; i++, p += 4) {
+            let best = -1, bv = 0.08;
+            for (let k = 0; k < 4; k++) {
+                const v = res[k][i];
+                if (v > bv) { bv = v; best = k; }
+            }
+            if (best < 0) {
+                /* fade the barren ground back so deposits stand out */
+                buf[p] *= 0.45; buf[p + 1] *= 0.45; buf[p + 2] *= 0.45;
+                continue;
+            }
+            const c = pal[best];
+            const a = 0.25 + bv * 0.7;
+            buf[p] = buf[p] * (1 - a) + c[0] * a;
+            buf[p + 1] = buf[p + 1] * (1 - a) + c[1] * a;
+            buf[p + 2] = buf[p + 2] * (1 - a) + c[2] * a;
+        }
+    },
+
+    /* Borders are traced only when the ownership map or a state assignment has
+       actually changed. Territory moves a few times a century; tracing it every
+       frame was scanning thirty thousand cells sixty times a second to redraw
+       an identical outline. */
+    _traceBorders(s) {
+        const own = s.owner, est = s.eState;
         const GW = s.GW, GH = s.GH;
         const sb_ = this._segState, si_ = this._segInner;
         let ns = 0, ni = 0;
 
         for (let gy = 0, i = 0; gy < GH; gy++) {
             for (let gx = 0; gx < GW; gx++, i++) {
-                const f = fert[i];
-                /* bare soil darkens toward barren, standing crop pulls it green */
-                const sr = 16 + 20 * f, sg = 22 + 28 * f, sbb = 25 + 21 * f;
-                const t = crop[i];
-                let r = sr + (78 - sr) * t;
-                let g = sg + (192 - sg) * t;
-                let b = sbb + (158 - sbb) * t;
-
                 const o = own[i];
-                if (o >= 0 && showE) {
-                    const st = est[o];
-                    const c = tint[(st >= 0 ? st : o) % 10];
-                    r += (c[0] - r) * 0.26;
-                    g += (c[1] - g) * 0.26;
-                    b += (c[2] - b) * 0.26;
-                }
-                const p = i << 2;
-                buf[p] = r; buf[p + 1] = g; buf[p + 2] = b;
-
-                if (o < 0 || !showE) continue;
+                if (o < 0) continue;
                 const st = est[o];
 
                 /* Right and bottom edges are emitted whenever the neighbour
                    differs; left and top only against unowned ground. That way
                    an edge shared by two owned cells is emitted exactly once. */
                 const ro = gx + 1 < GW ? own[i + 1] : -1;
-                if (ro < 0) {
-                    sb_[ns++] = gx + 1; sb_[ns++] = gy; sb_[ns++] = gx + 1; sb_[ns++] = gy + 1;
-                } else if (est[ro] !== st) {
+                if (ro < 0 || est[ro] !== st) {
                     sb_[ns++] = gx + 1; sb_[ns++] = gy; sb_[ns++] = gx + 1; sb_[ns++] = gy + 1;
                 } else if (ro !== o) {
                     si_[ni++] = gx + 1; si_[ni++] = gy; si_[ni++] = gx + 1; si_[ni++] = gy + 1;
                 }
 
                 const bo = gy + 1 < GH ? own[i + GW] : -1;
-                if (bo < 0) {
-                    sb_[ns++] = gx; sb_[ns++] = gy + 1; sb_[ns++] = gx + 1; sb_[ns++] = gy + 1;
-                } else if (est[bo] !== st) {
+                if (bo < 0 || est[bo] !== st) {
                     sb_[ns++] = gx; sb_[ns++] = gy + 1; sb_[ns++] = gx + 1; sb_[ns++] = gy + 1;
                 } else if (bo !== o) {
                     si_[ni++] = gx; si_[ni++] = gy + 1; si_[ni++] = gx + 1; si_[ni++] = gy + 1;
@@ -209,7 +320,7 @@ const render = {
         }
         this._nSeg = ns;
         this._nInner = ni;
-        this.tctx.putImageData(this.timg, 0, 0);
+        this._borderVersion = s.ownerVersion;
     },
 
     _paintBorders(s, ox, oy, z) {
@@ -288,15 +399,20 @@ const render = {
         const half = d * 0.5;
         const colors = this._colors;
 
+        /* One path per bucket, one fill. Twenty thousand separate fillRect
+           calls spend most of their time re-validating canvas state; batching
+           the rectangles into a path pays that cost eight times instead. */
         for (let b = 0; b < this._nb; b++) {
             const n = bn[b];
             if (n === 0) continue;
             /* Lords are few and matter; give them a bigger mark. */
             const sz = b === iL ? Math.max(3, d * 2) : d;
             const hf = sz * 0.5;
-            ctx.fillStyle = colors[b];
             const ax = bx[b], ay = by[b];
-            for (let k = 0; k < n; k++) ctx.fillRect(ax[k] - hf, ay[k] - hf, sz, sz);
+            ctx.beginPath();
+            for (let k = 0; k < n; k++) ctx.rect(ax[k] - hf, ay[k] - hf, sz, sz);
+            ctx.fillStyle = colors[b];
+            ctx.fill();
         }
     },
 

@@ -14,6 +14,13 @@
     const SIM_HZ = 60;
     const STEP_MS = 1000 / SIM_HZ;
     const MAX_STEPS = 4;
+    /* Ceiling on how long one frame may spend simulating. Without it a machine
+       that cannot keep up at high speed keeps piling on catch-up steps — at x16
+       with twelve thousand agents the loop was running sixty-four ticks a frame
+       and the page rendered at ten. The budget does not change the timestep or
+       how many ticks a speed setting asks for; it just stops a frame that has
+       already overrun from taking another whole base step. */
+    const FRAME_BUDGET_MS = 20;
 
     let running = true;
     let speed = 1;
@@ -35,13 +42,15 @@
         sim.P.startPop = clampInt($('popInput').value, 50, sim.MAX_AGENTS);
         sim.reset(isFinite(seed) ? seed : 1);
         metrics.reset(sim);
+        render.worldChanged(sim);
         foundingMet = sim.pop ? sim.sumMet / sim.pop : sim.P.metMean;
-        render.selected = -1;
         chronLen = -1;
         acc = 0;
         last = performance.now();
         buildClassRows();
         buildRoleRows();
+        buildTerrainRows();
+        buildResRows();
         buildLegend();
         hud(last, true);
     }
@@ -64,11 +73,13 @@
         if (running && sim.pop > 0) {
             acc += dt;
             let steps = 0;
+            const deadline = now + FRAME_BUDGET_MS;
             while (acc >= STEP_MS && steps < MAX_STEPS) {
                 for (let k = 0; k < speed; k++) sim.tick();
                 tickAcc += speed;
                 acc -= STEP_MS;
                 steps++;
+                if (performance.now() >= deadline) { acc = 0; break; }
             }
             if (steps === MAX_STEPS) acc = 0;      /* shed the backlog */
         }
@@ -154,6 +165,26 @@
             set('classP' + i, num(share * 100, 1) + '%');
             set('classW' + i, num(wshare * 100, 1) + '%');
         }
+
+        /* --- the map --- */
+        for (let t = 0; t < 5; t++) {
+            const seg = $('terSeg' + t);
+            if (seg) seg.style.width = (n.terrain[t] * 100).toFixed(2) + '%';
+            set('terP' + t, num(n.terrain[t] * 100, 1) + '%');
+        }
+        set('statFarmable', num(n.farmable * 100, 0) + '% of the map');
+
+        /* --- deposits --- */
+        for (let k = 0; k < 4; k++) {
+            set('resTot' + k, num(n.resTotal[k], 0));
+            set('resHeld' + k, n.resTotal[k] > 0
+                ? num(n.resHeld[k] / n.resTotal[k] * 100, 0) + '%' : '—');
+            const ratio = n.resMapDens[k] > 0 ? n.resHeldDens[k] / n.resMapDens[k] : 0;
+            set('resRel' + k, ratio > 0 ? num(ratio, 2) + '×' : '—');
+            const el = $('resRel' + k);
+            if (el) el.className = 'n ' + (ratio > 1.08 ? 'good' : ratio < 0.92 ? 'poor' : '');
+        }
+        set('statOilYear', num(n.oilYear, 1) + ' / yr');
 
         /* --- property --- */
         set('statEstates', String(n.estates));
@@ -383,6 +414,41 @@
         });
     }
 
+    const TERRAIN_COLORS = ['#1a3a52', '#3a5a3e', '#2a4a34', '#7a6a4a', '#66666c'];
+    const RES_COLORS = ['#b0becc', '#a86cdc', '#f2c14e', '#7ad06c'];
+
+    function buildTerrainRows() {
+        const bar = $('terrainBar'), rows = $('terrainRows');
+        if (bar.childElementCount) return;
+        sim.TERRAIN_NAMES.forEach((name, t) => {
+            const seg = document.createElement('i');
+            seg.id = 'terSeg' + t;
+            seg.style.background = TERRAIN_COLORS[t];
+            seg.title = name;
+            bar.appendChild(seg);
+
+            const tr = document.createElement('tr');
+            tr.innerHTML =
+                '<td><i class="dot" style="background:' + TERRAIN_COLORS[t] + '"></i>' + name + '</td>' +
+                '<td class="n" id="terP' + t + '">—</td>';
+            rows.appendChild(tr);
+        });
+    }
+
+    function buildResRows() {
+        const rows = $('resRows');
+        if (rows.childElementCount) return;
+        sim.RES_NAMES.forEach((name, k) => {
+            const tr = document.createElement('tr');
+            tr.innerHTML =
+                '<td><i class="dot" style="background:' + RES_COLORS[k] + '"></i>' + name + '</td>' +
+                '<td class="n" id="resTot' + k + '">—</td>' +
+                '<td class="n" id="resHeld' + k + '">—</td>' +
+                '<td class="n" id="resRel' + k + '">—</td>';
+            rows.appendChild(tr);
+        });
+    }
+
     function buildRoleRows() {
         const rows = $('roleRows');
         if (rows.childElementCount) return;
@@ -467,6 +533,10 @@
 
         $('estToggle').addEventListener('change', e => {
             render.showEstates = e.target.checked;
+        });
+
+        $('depToggle').addEventListener('change', e => {
+            render.showDeposits = e.target.checked;
         });
 
         render.onPick = (wx, wy) => {

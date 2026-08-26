@@ -14,21 +14,27 @@
  */
 'use strict';
 
-const SIM_VERSION = '0.3.0';
+const SIM_VERSION = '0.4.0';
 
 /* ----------------------------------------------------------- Dimensions --- */
 
-const WORLD_W = 1600;
-const WORLD_H = 1000;
+const WORLD_W = 2200;
+const WORLD_H = 1400;
 const CELL = 10;                       // world units per land cell
-const GW = (WORLD_W / CELL) | 0;       // 160
-const GH = (WORLD_H / CELL) | 0;       // 100
-const NCELL = GW * GH;                 // 16,000
+const GW = (WORLD_W / CELL) | 0;       // 220
+const GH = (WORLD_H / CELL) | 0;       // 140
+const NCELL = GW * GH;                 // 30,800
 const INV_CELL = 1 / CELL;
 const XMAX = WORLD_W - 0.001;
 const YMAX = WORLD_H - 0.001;
 
-const MAX_AGENTS = 10000;
+/* The population ceiling has to stay well clear of what the land can actually
+   feed, or the array becomes the limit and a plateau that is really an
+   allocation shows up on the chart as a result. Raising it means a bigger
+   world, not a denser one: doubling the map keeps the per-cell economy exactly
+   as it was and simply gives it more room, whereas doubling the yield would
+   have made the whole thing more forgiving and quietly killed the famines. */
+const MAX_AGENTS = 20000;
 const MAX_ESTATES = 384;
 const MAX_STATES = 384;      // every manor is a state of one until it isn't
 const TPY = 64;                        // ticks per year
@@ -53,19 +59,60 @@ const ROLE_FARMER = 0;
 const ROLE_LORD = 1;
 const ROLE_SOLDIER = 2;
 
+/* Terrain. Only PLAIN and FOREST grow anything; MARSH and the shallows feed
+   people too, but by fishing rather than farming, which is why the harvestable
+   stock is one array and the reason it is stocked is another. */
+const T_WATER = 0, T_PLAIN = 1, T_FOREST = 2, T_DESERT = 3, T_MOUNTAIN = 4;
+const TERRAIN_NAMES = ['Water', 'Plain', 'Forest', 'Desert', 'Mountain'];
+
+/* Deposits. Four fields, each with its own geography and its own effect on the
+   estate sitting over it — which is how the map ends up deciding who is strong
+   enough to take whose land. */
+const R_MIN = 0, R_OIL = 1, R_ENERGY = 2, R_FERT = 3;
+const NRES = 4;
+const RES_NAMES = ['Minerals', 'Oil', 'Energy', 'Fertiliser'];
+
 /* ------------------------------------------------------------- Tunables --- */
 
 const P = {
     seed: 20260826,
-    startPop: 1500,
+    startPop: 2600,
 
     /* Land. Standing crop in a cell relaxes toward that cell's fertility, which
        is its carrying capacity. Total food the world produces per tick, once
        grazing has flattened the crop, is regrow x (sum of fertility) — which is
        what actually sets the population ceiling. */
-    regrow: 0.023,
+    /* Retuned for the v0.4 map. A third of the world is now sea and a quarter
+       of the rest is rock or desert, so the same rate over far less farmable
+       ground fed a very different number of people. */
+    regrow: 0.024,
     harvestMax: 0.075,     // what an average-metabolism farmer lifts per tick
     harvestFloor: 0.015,   // below this a cell is not worth stopping for
+
+    /* ---- The map (v0.4) ----
+     * Shares, not absolute noise cutoffs — see percentile(). Water is a third
+     * of the world and is not walkable; mountain and desert are walkable but
+     * grow nothing, so the farmable fraction is well under half the map and
+     * the good ground is worth enclosing. */
+    seaLevel: 0.34,        // fraction of the map that is water
+    mountainShare: 0.10,   // fraction that is bare rock
+    desertShare: 0.26,     // share of habitable ground too dry to farm
+    forestShare: 0.20,     // share under trees — farmable, but less
+    fishYield: 0.55,       // what the shallows add to a shore cell's capacity
+    depositCut: 0.62,      // noise below this carries no deposit at all
+
+    /* What a deposit is worth to the lord standing on it. Each acts through a
+       channel the simulation already has, so none of them is a special case:
+       fertiliser feeds more tenants, ore arms more men, fuel makes ground
+       cheaper to hold, and oil is the odd one — an income that does not care
+       how many tenants you have, which is exactly why it distorts everything
+       around it. Densities are per-cell averages, so a big poor estate is not
+       automatically richer than a small rich one. */
+    fertBoost: 1.6,        // multiplier on improvement where fertiliser is
+    mineralDiscount: 0.6,  // fraction off the cost of a soldier
+    energyDiscount: 0.6,   // fraction off estate upkeep
+    oilIncome: 0.9,        // capital per tick per unit of oil density
+    covet: 0.55,           // how far a rich neighbour lowers the bar for war
 
     /* Movement. Three probes ahead, steer toward the best — the same sensor
        trick slime moulds are simulated with. It costs six array reads and makes
@@ -263,22 +310,158 @@ function addOctave(out, s, fx, fy, amp) {
     }
 }
 
-function buildLand(fert, s) {
-    const tmp = new Float32Array(NCELL);
-    const octaves = [[4, 3], [8, 5], [16, 10], [32, 20]];
+function noiseField(s, octaves) {
+    const out = new Float32Array(NCELL);
     let amp = 1, norm = 0;
     for (let o = 0; o < octaves.length; o++) {
-        addOctave(tmp, s, octaves[o][0], octaves[o][1], amp);
+        addOctave(out, s, octaves[o][0], octaves[o][1], amp);
         norm += amp;
         amp *= 0.5;
     }
-    /* Rescaled hard so a good part of the map is genuinely barren. A world of
-       uniformly middling soil gives an evenly smeared population and nothing to
-       congregate around. */
+    for (let c = 0; c < NCELL; c++) out[c] /= norm;
+    return out;
+}
+
+function clamp01(v) { return v < 0 ? 0 : v > 1 ? 1 : v; }
+
+/* Thresholds are taken as percentiles of the field itself rather than as fixed
+   values. Noise does not promise a given distribution, so a hard cutoff gives
+   one seed an archipelago and the next a single unbroken continent; a
+   percentile gives every world the same amount of sea and the same amount of
+   rock, and lets the seed decide only their shape. */
+function percentile(src, frac) {
+    const copy = Float32Array.from(src);
+    copy.sort();
+    let i = Math.floor(frac * (copy.length - 1));
+    if (i < 0) i = 0; else if (i >= copy.length) i = copy.length - 1;
+    return copy[i];
+}
+
+function buildWorld(w, s) {
+    const P0 = w.P;
+    const elev = noiseField(s, [[3, 2], [6, 4], [12, 8], [24, 16]]);
+    const moist = noiseField(s, [[4, 3], [9, 6], [18, 12]]);
+
+    /* Push the elevation down towards the edges so the map is a landmass in an
+       ocean rather than land running off all four sides. */
+    for (let gy = 0, c = 0; gy < GH; gy++) {
+        const ny = Math.abs(gy / (GH - 1) - 0.5) * 2;
+        for (let gx = 0; gx < GW; gx++, c++) {
+            const nx = Math.abs(gx / (GW - 1) - 0.5) * 2;
+            const edge = nx > ny ? nx : ny;
+            const fall = 1 - smoothstep(clamp01((edge - 0.52) / 0.48)) * 0.9;
+            elev[c] *= fall;
+        }
+    }
+
+    const sea = percentile(elev, P0.seaLevel);
+    const rock = percentile(elev, 1 - P0.mountainShare);
+    const terrain = w.terrain, walk = w.walk, fert = w.fert, depth = w.depth;
+
+    /* Desert and forest are shares of the *habitable* ground, so the moisture
+       cuts have to be taken over that subset rather than over the whole map —
+       otherwise the sea, which has no business having a climate, drags the
+       percentiles around and one seed comes out with no forest at all. */
+    let nHab = 0;
+    for (let c = 0; c < NCELL; c++) if (elev[c] >= sea && elev[c] <= rock) nHab++;
+    const habMoist = new Float32Array(Math.max(nHab, 1));
+    for (let c = 0, k = 0; c < NCELL; c++) {
+        if (elev[c] >= sea && elev[c] <= rock) habMoist[k++] = moist[c];
+    }
+    habMoist.sort();
+    const pick = f => habMoist[Math.min(habMoist.length - 1,
+        Math.max(0, Math.floor(f * (habMoist.length - 1))))];
+    const dryCut = pick(P0.desertShare);
+    const wetCut = pick(1 - P0.forestShare);
+    const span = Math.max(wetCut - dryCut, 1e-6);
+
     for (let c = 0; c < NCELL; c++) {
-        let v = (tmp[c] / norm - 0.36) / 0.40;
-        if (v < 0) v = 0; else if (v > 1) v = 1;
-        fert[c] = smoothstep(v);
+        const e = elev[c], m = moist[c];
+        let t;
+        if (e < sea) t = T_WATER;
+        else if (e > rock) t = T_MOUNTAIN;
+        else if (m < dryCut) t = T_DESERT;
+        else if (m > wetCut) t = T_FOREST;
+        else t = T_PLAIN;
+        terrain[c] = t;
+        walk[c] = t === T_WATER ? 0 : 1;
+        depth[c] = t === T_WATER ? clamp01((sea - e) / Math.max(sea, 1e-6)) : 0;
+
+        /* Soil. Wet lowland is the best of it; forest grows food but has to be
+           cleared first, so it yields less. Desert and rock yield nothing. */
+        let f = 0;
+        if (t === T_PLAIN || t === T_FOREST) {
+            const wet = smoothstep(clamp01((m - dryCut) / span));
+            const high = clamp01((e - sea) / Math.max(rock - sea, 1e-6));
+            f = (0.5 + 0.5 * wet) * (1 - high * 0.35);
+            if (t === T_FOREST) f *= 0.7;
+        }
+        fert[c] = f;
+    }
+
+    /* The shallows. Water is not walkable, so nobody farms it — but a cell on
+       the shore draws on what is swimming next to it, and that is stocked into
+       the same harvestable array the farmers already read. It costs the hot
+       loop nothing and it makes a coastline worth living on even where the
+       soil behind it is poor. */
+    const fish = P0.fishYield;
+    for (let gy = 0, c = 0; gy < GH; gy++) {
+        for (let gx = 0; gx < GW; gx++, c++) {
+            if (walk[c] === 0) continue;
+            let water = 0, seen = 0;
+            for (let dy = -2; dy <= 2; dy++) {
+                const yy = gy + dy;
+                if (yy < 0 || yy >= GH) continue;
+                for (let dx = -2; dx <= 2; dx++) {
+                    const xx = gx + dx;
+                    if (xx < 0 || xx >= GW) continue;
+                    seen++;
+                    if (terrain[yy * GW + xx] === T_WATER) water++;
+                }
+            }
+            if (water === 0) continue;
+            const frac = water / seen;
+            fert[c] += fish * clamp01(frac * 3);
+            if (fert[c] > 1) fert[c] = 1;
+        }
+    }
+
+    buildResources(w, s, elev, moist, sea, rock);
+}
+
+/* Each deposit gets its own patchy field and its own habitat, so the four are
+   not four names for the same map: ore sits in the high ground, oil under
+   desert and offshore shelf, fuel in the forests and coal measures, and
+   fertiliser on the silt and guano of the coast. Where they overlap is what
+   makes a particular valley worth fighting over. */
+function buildResources(w, s, elev, moist, sea, rock) {
+    const P0 = w.P, terrain = w.terrain, res = w.res;
+    const raw = [
+        noiseField(s, [[7, 5], [15, 10]]),
+        noiseField(s, [[5, 4], [11, 7]]),
+        noiseField(s, [[8, 5], [16, 11]]),
+        noiseField(s, [[6, 4], [13, 9]])
+    ];
+    const cut = P0.depositCut;
+
+    for (let c = 0; c < NCELL; c++) {
+        const t = terrain[c];
+        const e = elev[c], m = moist[c];
+        const high = clamp01((e - sea) / Math.max(rock - sea, 1e-6));
+        const shore = t === T_WATER ? 1 - w.depth[c] : 0;
+
+        let habitat;
+        habitat = t === T_MOUNTAIN ? 1 : 0.15 + high * 0.7;
+        res[R_MIN][c] = clamp01((raw[0][c] - cut) / (1 - cut)) * habitat;
+
+        habitat = t === T_DESERT ? 1 : t === T_WATER ? shore * 0.9 : 0.12;
+        res[R_OIL][c] = clamp01((raw[1][c] - cut) / (1 - cut)) * habitat;
+
+        habitat = t === T_FOREST ? 1 : t === T_MOUNTAIN ? 0.7 : 0.2 + high * 0.4;
+        res[R_ENERGY][c] = clamp01((raw[2][c] - cut) / (1 - cut)) * habitat;
+
+        habitat = t === T_WATER ? 0 : (m > 0.5 ? 0.5 + m * 0.5 : 0.25);
+        res[R_FERT][c] = clamp01((raw[3][c] - cut) / (1 - cut)) * habitat;
     }
 }
 
@@ -295,9 +478,18 @@ const sim = {
     ROLES: ROLES,
     P: P,
 
+    TERRAIN_NAMES: TERRAIN_NAMES,
+    RES_NAMES: RES_NAMES,
+    NRES: NRES,
+
     /* land */
-    fert: new Float32Array(NCELL),
+    fert: new Float32Array(NCELL),       // harvestable capacity, farmed or fished
     crop: new Float32Array(NCELL),
+    terrain: new Uint8Array(NCELL),
+    walk: new Uint8Array(NCELL),         // 0 = water; nobody walks on it
+    depth: new Float32Array(NCELL),
+    res: [new Float32Array(NCELL), new Float32Array(NCELL),
+          new Float32Array(NCELL), new Float32Array(NCELL)],
     owner: new Int16Array(NCELL),        // estate id, or -1
 
     /* Neighbour counts, double-buffered: the sensor reads last tick's field
@@ -351,6 +543,15 @@ const sim = {
     eCandCap: new Float32Array(MAX_ESTATES),
     eState: new Int16Array(MAX_ESTATES),       // never -1 while the estate lives
     eSubject: new Uint8Array(MAX_ESTATES),     // joined by conquest, not consent
+    /* Deposits under an estate, summed as cells are stamped, plus the four
+       multipliers they buy. Derived once per tick in _settleEstates so a slider
+       change takes effect immediately rather than at the next enclosure. */
+    eRes: new Float32Array(MAX_ESTATES * NRES),
+    eResDens: new Float32Array(MAX_ESTATES * NRES),
+    eRegrow: new Float32Array(MAX_ESTATES),    // read by the land loop
+    eSoldierCost: new Float32Array(MAX_ESTATES),
+    eUpkeep: new Float32Array(MAX_ESTATES),
+    eOilIncome: new Float32Array(MAX_ESTATES),
 
     /* states, struct-of-arrays */
     stAlive: new Uint8Array(MAX_STATES),
@@ -388,6 +589,11 @@ const sim = {
     ownedCells: 0,
     tenantCount: 0,
     rentFlow: 0,
+    oilFlow: 0,
+    /* Bumped whenever the ownership map or the state assignment changes. The
+       renderer traces borders off it and can skip that whole scan otherwise —
+       territory changes a few times a century, not sixty times a second. */
+    ownerVersion: 0,
     enclosures: 0,
     successions: 0,
     dissolutions: 0,
@@ -455,9 +661,15 @@ const sim = {
         if (seed !== undefined) this._seed = seed | 0;
         this._rs = this._seed | 0;
 
-        buildLand(this.fert, this);
+        buildWorld(this, this);
         this.crop.set(this.fert);
         this._buildHazard();
+        this.eRes.fill(0);
+        this.eResDens.fill(0);
+        this.eRegrow.fill(P.regrow);
+        this.eSoldierCost.fill(P.soldierCost);
+        this.eUpkeep.fill(P.upkeep);
+        this.eOilIncome.fill(0);
 
         this.owner.fill(-1);
         this.densR.fill(0);
@@ -508,6 +720,7 @@ const sim = {
         this.lords = 0;
         this.estateCount = this.ownedCells = this.tenantCount = 0;
         this.rentFlow = 0;
+        this.oilFlow = 0;
         this.enclosures = this.successions = this.dissolutions = 0;
         this.soldiers = 0;
         this.garrisonTotal = 0;
@@ -529,10 +742,22 @@ const sim = {
             /* Rejection-sample onto ground worth farming. A founder dropped in
                a desert is a fair outcome; a whole cohort of them is not. */
             let px = 0, py = 0;
-            for (let t = 0; t < 12; t++) {
+            for (let t = 0; t < 24; t++) {
                 px = this.rand() * XMAX;
                 py = this.rand() * YMAX;
-                if (this.fert[((py * INV_CELL) | 0) * GW + ((px * INV_CELL) | 0)] > 0.25) break;
+                const c = ((py * INV_CELL) | 0) * GW + ((px * INV_CELL) | 0);
+                /* Walkable is the hard requirement — a founder in the sea has
+                   nowhere to go. Fertile is the preference. */
+                if (this.walk[c] === 1 && this.fert[c] > 0.25) break;
+                if (t === 23) {
+                    for (let g = 0; g < NCELL; g++) {
+                        if (this.walk[g] === 1) {
+                            px = (g % GW + 0.5) * CELL;
+                            py = ((g / GW) | 0) * CELL + CELL * 0.5;
+                            break;
+                        }
+                    }
+                }
             }
             this.x[i] = px;
             this.y[i] = py;
@@ -559,7 +784,7 @@ const sim = {
 
     tick() {
         const p = this.P;
-        const fert = this.fert, crop = this.crop, own = this.owner;
+        const fert = this.fert, crop = this.crop, own = this.owner, walk = this.walk;
         const X = this.x, Y = this.y, D = this.dir;
         const F = this.food, C = this.capital, M = this.met, A = this.age;
         const AL = this.alive, RO = this.role, EST = this.estateOf;
@@ -573,12 +798,15 @@ const sim = {
         const eSoldiers = this.eSoldiers, eRadius = this.eRadius;
         const eCand = this.eCand, eCandCap = this.eCandCap;
 
-        /* --- the land regrows, faster where somebody has improved it --- */
+        /* --- the land regrows, faster where somebody has improved it. The
+           per-estate rate carries the fertiliser bonus, so a manor sitting on
+           nitrate genuinely grows more food than one that is not. --- */
         const rg = p.regrow;
-        const rgOwned = rg * (1 + p.improve);
+        const eRegrow = this.eRegrow;
         let cropTotal = 0;
         for (let c = 0; c < NCELL; c++) {
-            const rate = own[c] >= 0 ? rgOwned : rg;
+            const o = own[c];
+            const rate = o >= 0 ? eRegrow[o] : rg;
             const v = crop[c] + rate * (fert[c] - crop[c]);
             crop[c] = v;
             cropTotal += v;
@@ -773,13 +1001,21 @@ const sim = {
                 }
             }
 
-            /* --- move, bouncing off the edges of the world --- */
+            /* --- move, bouncing off the edges of the world and off water --- */
+            const fromX = x, fromY = y;
             x += COS[d] * speed;
             y += SIN[d] * speed;
             if (x < 0) { x = 0; d = (512 - d) & DMASK; }
             else if (x > XMAX) { x = XMAX; d = (512 - d) & DMASK; }
             if (y < 0) { y = 0; d = (-d) & DMASK; }
             else if (y > YMAX) { y = YMAX; d = (-d) & DMASK; }
+            /* Nobody swims. Refusing the step rather than sliding along the
+               shore is what keeps the coastline a hard edge; agents pile up on
+               it, which is the point — the fish are on the other side. */
+            if (walk[((y * INV_CELL) | 0) * GW + ((x * INV_CELL) | 0)] === 0) {
+                x = fromX; y = fromY;
+                d = (d + 512) & DMASK;
+            }
             X[i] = x; Y[i] = y; D[i] = d;
 
             densW[((y * INV_CELL) | 0) * GW + ((x * INV_CELL) | 0)]++;
@@ -928,6 +1164,11 @@ const sim = {
             this.eSeatY[e] = py;
             this.eRadius[e] = p.claimRadius;
             this.eCells[e] = 0;
+            for (let k = 0; k < NRES; k++) this.eRes[e * NRES + k] = 0;
+            this.eRegrow[e] = p.regrow * (1 + p.improve);
+            this.eSoldierCost[e] = p.soldierCost;
+            this.eUpkeep[e] = p.upkeep;
+            this.eOilIncome[e] = 0;
             this.eRent[e] = 0;
             this.eRentLast[e] = 0;
             this.eTenants[e] = 0;
@@ -977,6 +1218,7 @@ const sim = {
         let y0 = ((sy - r) * INV_CELL) | 0, y1 = ((sy + r) * INV_CELL) | 0;
         if (x0 < 0) x0 = 0; if (x1 >= GW) x1 = GW - 1;
         if (y0 < 0) y0 = 0; if (y1 >= GH) y1 = GH - 1;
+        const res = this.res, eRes = this.eRes, base = e * NRES;
         let added = 0;
         for (let cy = y0; cy <= y1; cy++) {
             const dy = (cy + 0.5) * CELL - sy;
@@ -986,17 +1228,25 @@ const sim = {
                 const dx = (cx + 0.5) * CELL - sx;
                 if (dx * dx + dy2 > r2) continue;
                 const c = row + cx;
-                if (own[c] < 0) { own[c] = e; added++; }
+                if (own[c] >= 0) continue;
+                /* Open water is nobody's: a lord can hold the shore but not the
+                   sea, so a coastal domain is genuinely smaller than its radius
+                   suggests and pays upkeep only on what it actually holds. */
+                if (this.walk[c] === 0) continue;
+                own[c] = e;
+                added++;
+                for (let k = 0; k < NRES; k++) eRes[base + k] += res[k][c];
             }
         }
         this.eCells[e] += added;
+        if (added > 0) this.ownerVersion++;
     },
 
     _settleEstates() {
         const p = this.P, C = this.capital, AL = this.alive;
         let dissolved = false;
         let count = 0, cells = 0, tenants = 0, rent = 0, wages = 0, levy = 0;
-        let garrison = 0, enforceSum = 0, subjects = 0;
+        let garrison = 0, enforceSum = 0, subjects = 0, oilTotal = 0;
 
         /* Compact list of the living, rebuilt once and reused by the radius
            cap below and by diplomacy and war after. */
@@ -1015,13 +1265,29 @@ const sim = {
                 if (lord < 0) { this._dissolve(e); dissolved = true; continue; }
             }
 
+            /* --- what the ground under this estate is worth --- */
+            const base = e * NRES, nCells = this.eCells[e] || 1;
+            const dens = this.eResDens;
+            for (let k = 0; k < NRES; k++) dens[base + k] = this.eRes[base + k] / nCells;
+            const dMin = dens[base + R_MIN], dOil = dens[base + R_OIL];
+            const dEnergy = dens[base + R_ENERGY], dFert = dens[base + R_FERT];
+
+            this.eRegrow[e] = p.regrow * (1 + p.improve * (1 + p.fertBoost * dFert));
+            const sCost = p.soldierCost * (1 - p.mineralDiscount * dMin);
+            const upk = p.upkeep * (1 - p.energyDiscount * dEnergy);
+            const oil = p.oilIncome * dOil * nCells / 100;
+            this.eSoldierCost[e] = sCost;
+            this.eUpkeep[e] = upk;
+            this.eOilIncome[e] = oil;
+
             const troops = this.eSoldiers[e];
             const tn = this.eTenants[e];
             const income = this.eRent[e];
-            const payroll = p.soldierCost * troops;
+            const payroll = sCost * troops;
 
-            C[lord] += income - p.upkeep * this.eCells[e] - payroll;
+            C[lord] += income + oil - upk * this.eCells[e] - payroll;
             C[lord] -= C[lord] * p.lordDecay;      /* the cost of station */
+            oilTotal += oil;
 
             this.eRentLast[e] = income;
             this.eTenantsLast[e] = tn;
@@ -1041,7 +1307,7 @@ const sim = {
                 const short = -C[lord];
                 C[lord] = 0;
                 if (troops > 0) {
-                    let shed = Math.ceil(short / p.soldierCost);
+                    let shed = Math.ceil(short / Math.max(1e-6, sCost));
                     if (shed > troops) shed = troops;
                     this.eShed[e] = shed;
                     this.eBroke[e] = 1;
@@ -1138,6 +1404,7 @@ const sim = {
                 const o = own[c];
                 if (o >= 0 && eAlive[o] === 0) own[c] = -1;
             }
+            this.ownerVersion++;
         }
 
         this.estateCount = count;
@@ -1146,6 +1413,7 @@ const sim = {
         this.rentFlow = rent;
         this.wageFlow = wages;
         this.levyFlow = levy;
+        this.oilFlow = oilTotal;
         this.garrisonTotal = garrison;
         this.subjectEstates = subjects;
         this.meanEnforce = count > 0 ? enforceSum / count : 0;
@@ -1175,6 +1443,25 @@ const sim = {
             if (this.eAlive[e] === 1 && this.eState[e] === s) v += this.eGarrison[e] + 1;
         }
         return v;
+    },
+
+    /* How rich a state's ground is, 0..1, as the mean deposit density across
+       its estates. Deliberately a density and not a total: a large poor state
+       should not read as a prize simply for being large. */
+    _statePrize(s) {
+        const live = this._liveE, n = this._liveN;
+        let sum = 0, k = 0;
+        for (let i = 0; i < n; i++) {
+            const e = live[i];
+            if (this.eAlive[e] === 0 || this.eState[e] !== s) continue;
+            const base = e * NRES;
+            sum += this.eResDens[base] + this.eResDens[base + 1] +
+                   this.eResDens[base + 2] + this.eResDens[base + 3];
+            k++;
+        }
+        if (k === 0) return 0;
+        const v = sum / (k * NRES);
+        return v > 1 ? 1 : v;
     },
 
     _stateGarrison(s) {
@@ -1218,8 +1505,15 @@ const sim = {
                 const strB = this._stateStrength(sb);
                 const ratio = strA / strB;
 
-                if (ratio > p.aggression) this._declareWar(sa, sb);
-                else if (ratio < 1 / p.aggression) this._declareWar(sb, sa);
+                /* A neighbour worth taking is taken on thinner odds. This is
+                   the whole channel by which the map decides who fights whom:
+                   an ordinary border settles down, a border with ore or oil on
+                   the far side of it does not. */
+                const barAB = p.aggression * (1 - p.covet * this._statePrize(sb));
+                const barBA = p.aggression * (1 - p.covet * this._statePrize(sa));
+
+                if (ratio > barAB) this._declareWar(sa, sb);
+                else if (ratio < 1 / barBA) this._declareWar(sb, sa);
                 else if (this.rand() < p.unionChance) this._unite(sa, sb);
                 else { this.stCd[sa] = p.diploCooldown; this.stCd[sb] = p.diploCooldown; }
                 break;   /* one decision per estate per pass */
@@ -1268,6 +1562,7 @@ const sim = {
         const other = this.stWar[from];
         if (other >= 0 && other !== into) this.stWar[other] = -1;
         this._retireState(from);
+        this.ownerVersion++;      /* the map is recoloured by state */
         return moved;
     },
 
@@ -1351,6 +1646,9 @@ const sim = {
             this.estateOf[lord] = -1;
         }
         this.eAlive[e] = 0;      /* set first, so the successor search skips it */
+        for (let k = 0; k < NRES; k++) { this.eRes[e * NRES + k] = 0; this.eResDens[e * NRES + k] = 0; }
+        this.eRegrow[e] = this.P.regrow;
+        this.eOilIncome[e] = 0;
 
         /* If this manor held the capital, the state has to find another seat —
            the largest remaining member. A state with no members left retires,
@@ -1422,11 +1720,11 @@ const sim = {
        Improved ground counts for more, so enclosure genuinely raises the
        ceiling — the question the run answers is who gets the difference. */
     carryingCapacity() {
-        const p = this.P, own = this.owner, fert = this.fert;
-        const rgOwned = p.regrow * (1 + p.improve);
+        const p = this.P, own = this.owner, fert = this.fert, eRegrow = this.eRegrow;
         let prod = 0;
         for (let c = 0; c < NCELL; c++) {
-            prod += (own[c] >= 0 ? rgOwned : p.regrow) * fert[c];
+            const o = own[c];
+            prod += (o >= 0 ? eRegrow[o] : p.regrow) * fert[c];
         }
         const met = this.pop > 0 ? this.sumMet / this.pop : p.metMean;
         return prod / met;

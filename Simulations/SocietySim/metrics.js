@@ -42,8 +42,10 @@ const metrics = (function () {
        cell is 10 world units and a farmer crosses it in four steps, so at cell
        resolution every transient knot of walkers reads as a town. */
     const BLOCK = 4;
-    const BW = Math.ceil(160 / BLOCK);
-    const BH = Math.ceil(100 / BLOCK);
+    /* Sized from the sim's own grid at reset, not from constants baked in
+       here — the world got half again as large in v0.4 and a hardcoded block
+       grid would have silently indexed off the end of it. */
+    let BW = 0, BH = 0;
 
     /* Gini off an ascending-sorted array: 1 - 2 x (area under the Lorenz
        curve), which reduces to one weighted pass once the values are in order. */
@@ -119,22 +121,40 @@ const metrics = (function () {
             lords: 0, soldiers: 0, garrisonMax: 0, largestEstate: 0,
             /* states */
             states: 0, largestState: 0, wars: 0, sovereign: 0,
-            levyYear: 0, subjectShare: 0, biggestStateCells: 0, capitalCap: 0
+            levyYear: 0, subjectShare: 0, biggestStateCells: 0, capitalCap: 0,
+            /* the map */
+            terrain: new Float32Array(5),
+            resTotal: new Float32Array(4),
+            resHeld: new Float32Array(4),
+            resMapDens: new Float32Array(4),
+            resHeldDens: new Float32Array(4),
+            oilYear: 0, farmable: 0, fishing: 0
         },
 
         _lastTick: -1,
         _prevBirths: 0, _prevStarved: 0, _prevAged: 0,
-        _caps: new Float32Array(10000),
-        _capsA: new Float32Array(10000),
-        _dens: new Int32Array(BW * BH),
-        _label: new Int32Array(BW * BH),
-        _stack: new Int32Array(BW * BH),
+        _caps: null,
+        _capsA: null,
+        _dens: null,
+        _label: null,
+        _stack: null,
         _landBlocks: 0,
         _chartsAt: 0,
 
         /* --------------------------------------------------------- reset -- */
 
         reset(s) {
+            BW = Math.ceil(s.GW / BLOCK);
+            BH = Math.ceil(s.GH / BLOCK);
+            if (!this._dens || this._dens.length !== BW * BH) {
+                this._dens = new Int32Array(BW * BH);
+                this._label = new Int32Array(BW * BH);
+                this._stack = new Int32Array(BW * BH);
+            }
+            if (!this._caps || this._caps.length !== s.MAX_AGENTS) {
+                this._caps = new Float32Array(s.MAX_AGENTS);
+                this._capsA = new Float32Array(s.MAX_AGENTS);
+            }
             for (const k in this.series) {
                 const r = this.series[k];
                 r.n = 0; r.head = 0; r.buf.fill(0);
@@ -144,7 +164,31 @@ const metrics = (function () {
             this._prevStarved = 0;
             this._prevAged = 0;
             this._landBlocks = 0;
-            this.now.capacity = s.carryingCapacity();
+
+            /* Terrain and total deposits never change once a world is built,
+               so they are measured once here rather than every sample. */
+            const n = this.now;
+            n.terrain.fill(0);
+            n.resTotal.fill(0);
+            let land = 0, farm = 0, shore = 0;
+            for (let c = 0; c < s.NCELL; c++) {
+                n.terrain[s.terrain[c]]++;
+                for (let k = 0; k < 4; k++) n.resTotal[k] += s.res[k][c];
+                if (s.walk[c] === 1) {
+                    land++;
+                    if (s.fert[c] > 0.05) farm++;
+                    if (s.terrain[c] === 3 || s.terrain[c] === 4) {
+                        /* dry or bare, yet it feeds people: that is the shallows */
+                        if (s.fert[c] > 0.05) shore++;
+                    }
+                }
+            }
+            for (let t = 0; t < 5; t++) n.terrain[t] /= s.NCELL;
+            for (let k = 0; k < 4; k++) n.resMapDens[k] = land ? n.resTotal[k] / land : 0;
+            n.farmable = s.NCELL ? farm / s.NCELL : 0;
+            n.fishing = s.NCELL ? shore / s.NCELL : 0;
+
+            n.capacity = s.carryingCapacity();
             this.sample(s);
         },
 
@@ -291,6 +335,22 @@ const metrics = (function () {
             }
             n.garrisonMax = gMax;
             n.largestEstate = eMax;
+            n.oilYear = s.oilFlow * s.TPY;
+
+            /* How much of each deposit lies inside somebody's border. The gap
+               between held density and the map's own average is the answer to
+               whether the lords ended up sitting on the good ground, or merely
+               on the ground that grew food. */
+            n.resHeld.fill(0);
+            let heldCells = 0;
+            for (let e = 0; e < s.MAX_ESTATES; e++) {
+                if (s.eAlive[e] === 0) continue;
+                heldCells += s.eCells[e];
+                for (let k = 0; k < 4; k++) n.resHeld[k] += s.eRes[e * 4 + k];
+            }
+            for (let k = 0; k < 4; k++) {
+                n.resHeldDens[k] = heldCells ? n.resHeld[k] / heldCells : 0;
+            }
 
             /* --- states --- */
             n.states = s.stateCount;

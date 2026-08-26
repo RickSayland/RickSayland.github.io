@@ -3,15 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SocietySim — Borders and States</title>
+    <title>SocietySim — Land and Resources</title>
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
-    <link rel="stylesheet" href="society.css?v=0.3.0">
+    <link rel="stylesheet" href="society.css?v=0.4.0">
 </head>
 <body>
     <div class="topbar">
         <h1><span>Society</span>Sim</h1>
-        <span class="version" id="version">v0.3.0</span>
-        <p class="tagline">Farmers, then manors, then the borders where manors meet.</p>
+        <span class="version" id="version">v0.4.0</span>
+        <p class="tagline">Sea, soil, ore and oil &mdash; and the borders that end up drawn around them.</p>
         <div class="controls">
             <button id="playBtn" class="ctl">Pause</button>
             <div class="speed">
@@ -34,7 +34,7 @@
             </div>
             <div class="field">
                 <label for="popInput">Founders</label>
-                <input type="number" id="popInput" value="1500" min="50" max="10000" step="50">
+                <input type="number" id="popInput" value="2600" min="50" max="20000" step="100">
             </div>
             <div class="btn-row">
                 <button id="rollBtn" class="ctl wide">New world</button>
@@ -104,10 +104,13 @@
                 belly — one going hungry today shows red whatever the granary
                 holds. Lords and soldiers are coloured by what they are, because
                 on the map that is the thing worth finding. Gold squares are
-                manors; the ring around one is the border its garrison is
-                holding, and it turns red when the lord is in arrears.
+                manors and the pale ones are the capitals of states; a red halo
+                means that state is at war. Territory is tinted by state and
+                outlined hard — the thin seams inside a bloc are the manors it
+                is made of.
             </p>
-            <label class="check"><input type="checkbox" id="estToggle" checked> Show estates</label>
+            <label class="check"><input type="checkbox" id="estToggle" checked> Show estates &amp; borders</label>
+            <label class="check"><input type="checkbox" id="depToggle"> Show deposits instead of land</label>
 
             <div class="section-title">Inspect</div>
             <div class="inspect empty" id="inspectBody">
@@ -238,6 +241,39 @@
                 census below is for.
             </p>
 
+            <div class="section-title">The map</div>
+            <div class="terrain-bar" id="terrainBar"></div>
+            <table class="tbl">
+                <thead><tr><th>Ground</th><th class="n">share</th></tr></thead>
+                <tbody id="terrainRows"></tbody>
+            </table>
+            <div class="ins-row"><span>Actually feeds anyone</span><b id="statFarmable">—</b></div>
+            <p class="knob-note">
+                Water is not walkable and grows nothing, but a cell on the shore
+                draws on the shallows next to it — so a coastline feeds people
+                even where the soil behind it is thin, and the same is true of a
+                desert that happens to meet the sea. Rock and dry interior feed
+                nobody at all.
+            </p>
+
+            <div class="section-title">Deposits</div>
+            <table class="tbl">
+                <thead><tr><th>Resource</th><th class="n">on map</th><th class="n">enclosed</th><th class="n">vs avg</th></tr></thead>
+                <tbody id="resRows"></tbody>
+            </table>
+            <div class="ins-row"><span>Oil income</span><b id="statOilYear">—</b></div>
+            <p class="knob-note">
+                Four deposits, four separate geographies: ore in the high ground,
+                oil under desert and the offshore shelf, fuel in the forests and
+                coal measures, fertiliser on coastal silt. Each acts through a
+                channel the simulation already had — fertiliser feeds more
+                tenants, ore arms more men cheaply, fuel makes ground cheaper to
+                hold. Oil is the odd one: an income that does not care how many
+                tenants you have, which is exactly why it distorts everything
+                around it. The last column is whether the lords ended up on the
+                good ground or merely on the ground that grew food.
+            </p>
+
             <div class="section-title">Property</div>
             <canvas class="chart" id="chartProperty"></canvas>
             <div class="split-legend wrap">
@@ -355,9 +391,9 @@
         </aside>
     </div>
 
-    <script src="sim.js?v=0.3.0"></script>
-    <script src="metrics.js?v=0.3.0"></script>
-    <script src="render.js?v=0.3.0"></script>
-    <script src="ui.js?v=0.3.0"></script>
+    <script src="sim.js?v=0.4.0"></script>
+    <script src="metrics.js?v=0.4.0"></script>
+    <script src="render.js?v=0.4.0"></script>
+    <script src="ui.js?v=0.4.0"></script>
 </body>
 </html>
