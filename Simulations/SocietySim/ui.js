@@ -37,6 +37,7 @@
         metrics.reset(sim);
         foundingMet = sim.pop ? sim.sumMet / sim.pop : sim.P.metMean;
         render.selected = -1;
+        chronLen = -1;
         acc = 0;
         last = performance.now();
         buildClassRows();
@@ -178,6 +179,19 @@
         set('statRecruits', sim.recruits + ' / ' + sim.desertions);
         set('statArmsShare', sim.pop ? num(n.soldiers / sim.pop * 100, 2) + '% of everyone' : '—');
 
+        /* --- states --- */
+        set('statStates', String(n.states));
+        set('statLargestState', String(n.largestState));
+        set('statWars', String(n.wars));
+        $('statWars').className = 'stat-value ' + (n.wars > 0 ? 'bad' : '');
+        set('statSovereign', n.sovereign + ' of ' + n.states);
+        set('statSubjects', sim.subjectEstates + ' estates · ' + num(n.subjectShare * 100, 0) + '%');
+        set('statLevy', num(n.levyYear, 1) + ' / yr');
+        set('statCapitalCap', num(n.capitalCap, 0));
+        set('statDiplo', sim.unions + ' / ' + sim.warsDeclared + ' / ' + sim.annexations);
+        set('statWarDead', sim.warDead.toLocaleString());
+        chronicle();
+
         /* --- organisation --- */
         set('statSettle', String(n.settlements));
         set('statLargest', n.largest.toLocaleString());
@@ -222,6 +236,54 @@
         }
 
         inspect();
+    }
+
+    /* The chronicle re-renders only when something new has happened — it is a
+       dozen DOM nodes rebuilt from a list that changes a few times a century,
+       and rebuilding it six times a second for nothing is pure waste. */
+    let chronLen = -1;
+    function chronicle() {
+        const log = sim.log;
+        if (log.length === chronLen) return;
+        chronLen = log.length;
+        const el = $('chronicle');
+        if (log.length === 0) {
+            el.innerHTML = '<div class="chron-empty">Nothing has happened yet.</div>';
+            return;
+        }
+        const rows = [];
+        for (let i = log.length - 1; i >= 0 && rows.length < 14; i--) {
+            const ev = log[i];
+            const yr = Math.floor(ev.t / sim.TPY);
+            let cls = 'ev', text;
+            switch (ev.type) {
+                case 'found':
+                    text = 'Manor #' + ev.a + ' enclosed, sovereign.';
+                    break;
+                case 'union':
+                    cls = 'ev union';
+                    text = 'State #' + ev.b + ' joins #' + ev.a + ' — ' +
+                           ev.n + (ev.n === 1 ? ' manor' : ' manors') + ', by agreement.';
+                    break;
+                case 'war':
+                    cls = 'ev war';
+                    text = 'State #' + ev.a + ' declares war on #' + ev.b + '.';
+                    break;
+                case 'annex':
+                    cls = 'ev annex';
+                    text = 'State #' + ev.a + ' annexes #' + ev.b + ' — ' +
+                           ev.n + (ev.n === 1 ? ' manor' : ' manors') + ' held as subject.';
+                    break;
+                case 'peace':
+                    cls = 'ev peace';
+                    text = 'State #' + ev.a + ' and #' + ev.b + ' break off the war.';
+                    break;
+                default:
+                    text = ev.type;
+            }
+            rows.push('<div class="' + cls + '"><span class="ev-yr">' + yr + '</span>' + text + '</div>');
+        }
+        el.innerHTML = rows.join('');
     }
 
     function bargainWord(n) {

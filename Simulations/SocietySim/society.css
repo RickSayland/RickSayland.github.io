@@ -265,6 +265,44 @@ body {
 .sw-top { background: #6f8fd6; }
 .sw-lord { background: #ffd76b; }
 .sw-sold { background: #7fb2d9; }
+.sw-state { background: #e9eef0; }
+
+/* ---- Chronicle ---- */
+
+.chronicle {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    max-height: 210px;
+    overflow-y: auto;
+}
+
+.chronicle::-webkit-scrollbar { width: 3px; }
+.chronicle::-webkit-scrollbar-thumb { background: #1d2e30; border-radius: 2px; }
+
+.chron-empty { font-size: 10.5px; color: #4d6062; }
+
+.ev {
+    font-size: 10.5px;
+    line-height: 1.45;
+    color: #7d9294;
+    padding: 3px 6px;
+    border-left: 2px solid #22383a;
+    background: #0d1618;
+    border-radius: 0 3px 3px 0;
+}
+
+.ev-yr {
+    display: inline-block;
+    min-width: 34px;
+    font-family: ui-monospace, 'Consolas', monospace;
+    color: #4d6062;
+}
+
+.ev.union { border-left-color: #64d6bd; color: #9fd8cb; }
+.ev.war   { border-left-color: #e2603c; color: #e8a08a; }
+.ev.annex { border-left-color: #ffd76b; color: #e8cf9c; }
+.ev.peace { border-left-color: #7fb2d9; color: #a8c8e0; }
 
 .check {
     display: flex;

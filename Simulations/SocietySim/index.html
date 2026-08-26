@@ -3,15 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SocietySim — Land and Lords</title>
+    <title>SocietySim — Borders and States</title>
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
-    <link rel="stylesheet" href="society.css?v=0.2.0">
+    <link rel="stylesheet" href="society.css?v=0.3.0">
 </head>
 <body>
     <div class="topbar">
         <h1><span>Society</span>Sim</h1>
-        <span class="version" id="version">v0.2.0</span>
-        <p class="tagline">Ten thousand farmers, one seed, and whoever ends up owning the ground.</p>
+        <span class="version" id="version">v0.3.0</span>
+        <p class="tagline">Farmers, then manors, then the borders where manors meet.</p>
         <div class="controls">
             <button id="playBtn" class="ctl">Pause</button>
             <div class="speed">
@@ -290,6 +290,37 @@
                 paying less than it is asked for.
             </p>
 
+            <div class="section-title">States</div>
+            <canvas class="chart" id="chartStates"></canvas>
+            <div class="split-legend wrap">
+                <span><i class="sw sw-lord"></i>manors</span>
+                <span><i class="sw sw-state"></i>states</span>
+                <span><i class="sw sw-starve"></i>largest state</span>
+            </div>
+            <div class="stat-grid">
+                <div class="stat"><div class="stat-value" id="statStates">—</div><div class="stat-label">states</div></div>
+                <div class="stat"><div class="stat-value" id="statLargestState">—</div><div class="stat-label">largest, manors</div></div>
+                <div class="stat"><div class="stat-value" id="statWars">—</div><div class="stat-label">wars now</div></div>
+            </div>
+            <div class="ins-row"><span>Still sovereign alone</span><b id="statSovereign">—</b></div>
+            <div class="ins-row"><span>Held by conquest</span><b id="statSubjects">—</b></div>
+            <div class="ins-row"><span>Levy &amp; tribute</span><b id="statLevy">—</b></div>
+            <div class="ins-row"><span>Richest capital holds</span><b id="statCapitalCap">—</b></div>
+            <div class="ins-row"><span>United / fought / annexed</span><b id="statDiplo">—</b></div>
+            <div class="ins-row"><span>Fallen in war</span><b id="statWarDead">—</b></div>
+            <p class="knob-note">
+                Every manor is founded sovereign. When two borders touch, the
+                pair has to settle what they are to each other, and there are
+                only two answers: evenly matched neighbours federate, because
+                conquest is expensive; lopsided ones fight, because it is not.
+                Both roads end in a larger state and differ only in the terms —
+                a partner pays a levy, a conquered estate pays tribute. That gap
+                is what makes a war worth starting.
+            </p>
+
+            <div class="section-title">Chronicle</div>
+            <div class="chronicle" id="chronicle"><div class="chron-empty">Nothing has happened yet.</div></div>
+
             <div class="section-title">Roles &amp; settlement</div>
             <table class="tbl">
                 <thead><tr><th>Role</th><th class="n">people</th><th class="n">share</th></tr></thead>
@@ -324,9 +355,9 @@
         </aside>
     </div>
 
-    <script src="sim.js?v=0.2.0"></script>
-    <script src="metrics.js?v=0.2.0"></script>
-    <script src="render.js?v=0.2.0"></script>
-    <script src="ui.js?v=0.2.0"></script>
+    <script src="sim.js?v=0.3.0"></script>
+    <script src="metrics.js?v=0.3.0"></script>
+    <script src="render.js?v=0.3.0"></script>
+    <script src="ui.js?v=0.3.0"></script>
 </body>
 </html>

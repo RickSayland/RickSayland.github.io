@@ -57,6 +57,13 @@ const render = {
         this.tbuf = this.timg.data;
         for (let i = 3; i < this.tbuf.length; i += 4) this.tbuf[i] = 255;
 
+        /* Border segments, four numbers each. Worst case is every cell fenced
+           on all sides, which cannot happen, but the buffer is cheap. */
+        this._segState = new Float32Array(s.NCELL * 8);
+        this._segInner = new Float32Array(s.NCELL * 4);
+        this._nSeg = 0;
+        this._nInner = 0;
+
         const CL = metrics.CLASSES;
         this._nb = CL.length + 3;
         this._colors = CL.map(c => c.color)
@@ -128,34 +135,112 @@ const render = {
         ctx.lineWidth = 1;
         ctx.strokeRect(ox + 0.5, oy + 0.5, s.W * z, s.H * z);
 
+        if (this.showEstates) this._paintBorders(s, ox, oy, z);
         this._paintAgents(s, ox, oy, z);
         if (this.showEstates) this._paintSeats(s, ox, oy, z);
         this._paintSelection(s, ox, oy, z);
     },
 
+    /* Paints the terrain and, in the same pass, collects the border segments.
+       Territory is tinted by *state*, not by estate, so a union visibly turns
+       two blocs into one colour — and the internal line between them survives
+       as a thin seam, which is the whole picture of a federation in one glance.
+       Segments come out in grid units, independent of the camera, and are
+       transformed at stroke time. */
     _paintLand(s) {
         const buf = this.tbuf, fert = s.fert, crop = s.crop, own = s.owner;
-        const tint = this._tint, showE = this.showEstates;
-        const n = s.NCELL;
-        for (let i = 0, p = 0; i < n; i++, p += 4) {
-            const f = fert[i];
-            /* bare soil darkens toward barren, standing crop pulls it green */
-            const sr = 16 + 20 * f, sg = 22 + 28 * f, sb = 25 + 21 * f;
-            const t = crop[i];
-            let r = sr + (78 - sr) * t;
-            let g = sg + (192 - sg) * t;
-            let b = sb + (158 - sb) * t;
+        const est = s.eState, tint = this._tint, showE = this.showEstates;
+        const GW = s.GW, GH = s.GH;
+        const sb_ = this._segState, si_ = this._segInner;
+        let ns = 0, ni = 0;
 
-            const o = own[i];
-            if (o >= 0 && showE) {
-                const c = tint[o % 10];
-                r += (c[0] - r) * 0.26;
-                g += (c[1] - g) * 0.26;
-                b += (c[2] - b) * 0.26;
+        for (let gy = 0, i = 0; gy < GH; gy++) {
+            for (let gx = 0; gx < GW; gx++, i++) {
+                const f = fert[i];
+                /* bare soil darkens toward barren, standing crop pulls it green */
+                const sr = 16 + 20 * f, sg = 22 + 28 * f, sbb = 25 + 21 * f;
+                const t = crop[i];
+                let r = sr + (78 - sr) * t;
+                let g = sg + (192 - sg) * t;
+                let b = sbb + (158 - sbb) * t;
+
+                const o = own[i];
+                if (o >= 0 && showE) {
+                    const st = est[o];
+                    const c = tint[(st >= 0 ? st : o) % 10];
+                    r += (c[0] - r) * 0.26;
+                    g += (c[1] - g) * 0.26;
+                    b += (c[2] - b) * 0.26;
+                }
+                const p = i << 2;
+                buf[p] = r; buf[p + 1] = g; buf[p + 2] = b;
+
+                if (o < 0 || !showE) continue;
+                const st = est[o];
+
+                /* Right and bottom edges are emitted whenever the neighbour
+                   differs; left and top only against unowned ground. That way
+                   an edge shared by two owned cells is emitted exactly once. */
+                const ro = gx + 1 < GW ? own[i + 1] : -1;
+                if (ro < 0) {
+                    sb_[ns++] = gx + 1; sb_[ns++] = gy; sb_[ns++] = gx + 1; sb_[ns++] = gy + 1;
+                } else if (est[ro] !== st) {
+                    sb_[ns++] = gx + 1; sb_[ns++] = gy; sb_[ns++] = gx + 1; sb_[ns++] = gy + 1;
+                } else if (ro !== o) {
+                    si_[ni++] = gx + 1; si_[ni++] = gy; si_[ni++] = gx + 1; si_[ni++] = gy + 1;
+                }
+
+                const bo = gy + 1 < GH ? own[i + GW] : -1;
+                if (bo < 0) {
+                    sb_[ns++] = gx; sb_[ns++] = gy + 1; sb_[ns++] = gx + 1; sb_[ns++] = gy + 1;
+                } else if (est[bo] !== st) {
+                    sb_[ns++] = gx; sb_[ns++] = gy + 1; sb_[ns++] = gx + 1; sb_[ns++] = gy + 1;
+                } else if (bo !== o) {
+                    si_[ni++] = gx; si_[ni++] = gy + 1; si_[ni++] = gx + 1; si_[ni++] = gy + 1;
+                }
+
+                if ((gx > 0 ? own[i - 1] : -1) < 0) {
+                    sb_[ns++] = gx; sb_[ns++] = gy; sb_[ns++] = gx; sb_[ns++] = gy + 1;
+                }
+                if ((gy > 0 ? own[i - GW] : -1) < 0) {
+                    sb_[ns++] = gx; sb_[ns++] = gy; sb_[ns++] = gx + 1; sb_[ns++] = gy;
+                }
             }
-            buf[p] = r; buf[p + 1] = g; buf[p + 2] = b;
         }
+        this._nSeg = ns;
+        this._nInner = ni;
         this.tctx.putImageData(this.timg, 0, 0);
+    },
+
+    _paintBorders(s, ox, oy, z) {
+        const ctx = this.ctx, CELL = s.CELL;
+        const k = CELL * z;
+
+        /* seams between manors inside one state */
+        if (this._nInner > 0) {
+            const a = this._segInner;
+            ctx.beginPath();
+            for (let i = 0; i < this._nInner; i += 4) {
+                ctx.moveTo(ox + a[i] * k, oy + a[i + 1] * k);
+                ctx.lineTo(ox + a[i + 2] * k, oy + a[i + 3] * k);
+            }
+            ctx.strokeStyle = 'rgba(12,20,22,0.5)';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+        }
+
+        /* the hard border of a state */
+        if (this._nSeg > 0) {
+            const a = this._segState;
+            ctx.beginPath();
+            for (let i = 0; i < this._nSeg; i += 4) {
+                ctx.moveTo(ox + a[i] * k, oy + a[i + 1] * k);
+                ctx.lineTo(ox + a[i + 2] * k, oy + a[i + 3] * k);
+            }
+            ctx.strokeStyle = 'rgba(240,246,246,0.72)';
+            ctx.lineWidth = Math.max(1, Math.min(2.5, z * 1.6));
+            ctx.stroke();
+        }
     },
 
     _paintAgents(s, ox, oy, z) {
@@ -215,25 +300,34 @@ const render = {
         }
     },
 
+    /* Manors, and which of them is a capital. The old circle-of-influence ring
+       is gone: territory is drawn as the ground actually held, so a ring around
+       the seat would only disagree with it. A state at war gets a red halo,
+       which is the one thing the borders cannot show on their own. */
     _paintSeats(s, ox, oy, z) {
         const ctx = this.ctx;
-        ctx.lineWidth = 1;
         for (let e = 0; e < s.MAX_ESTATES; e++) {
             if (s.eAlive[e] === 0) continue;
             const px = ox + s.eSeatX[e] * z, py = oy + s.eSeatY[e] * z;
             if (px < -40 || py < -40 || px > this.vw + 40 || py > this.vh + 40) continue;
 
-            /* the border the garrison is holding */
-            ctx.strokeStyle = s.eBroke[e] ? 'rgba(226,96,60,0.55)' : 'rgba(255,215,107,0.22)';
-            ctx.beginPath();
-            ctx.arc(px, py, s.eRadius[e] * z, 0, 6.2831853);
-            ctx.stroke();
+            const st = s.eState[e];
+            const atWar = st >= 0 && s.stWar[st] >= 0;
+            const capital = st >= 0 && s.stLead[st] === e;
 
-            /* the manor */
-            const r = Math.max(2.5, 1.6 * z);
-            ctx.fillStyle = '#ffd76b';
+            if (atWar || s.eBroke[e]) {
+                ctx.strokeStyle = atWar ? 'rgba(226,96,60,0.85)' : 'rgba(226,96,60,0.45)';
+                ctx.lineWidth = 1.2;
+                ctx.beginPath();
+                ctx.arc(px, py, Math.max(6, 3.4 * z), 0, 6.2831853);
+                ctx.stroke();
+            }
+
+            const r = capital ? Math.max(3.4, 2.2 * z) : Math.max(2.2, 1.4 * z);
+            ctx.fillStyle = capital ? '#fff2c8' : '#ffd76b';
             ctx.fillRect(px - r, py - r, r * 2, r * 2);
             ctx.strokeStyle = 'rgba(10,16,18,0.85)';
+            ctx.lineWidth = 1;
             ctx.strokeRect(px - r, py - r, r * 2, r * 2);
         }
     },

@@ -92,7 +92,10 @@ const metrics = (function () {
             top10: ring(SERIES_LEN),
             ownedShare: ring(SERIES_LEN),
             tenantShare: ring(SERIES_LEN),
-            lordWealthShare: ring(SERIES_LEN)
+            lordWealthShare: ring(SERIES_LEN),
+            states: ring(SERIES_LEN),
+            estates: ring(SERIES_LEN),
+            largestState: ring(SERIES_LEN)
         },
 
         /* latest snapshot, read by the UI */
@@ -113,7 +116,10 @@ const metrics = (function () {
             enforcement: 0, rentYear: 0, wageYear: 0,
             lordCap: 0, soldierCap: 0, tenantCap: 0, freeCap: 0,
             lordWealthShare: 0, tenantEdge: 0,
-            lords: 0, soldiers: 0, garrisonMax: 0, largestEstate: 0
+            lords: 0, soldiers: 0, garrisonMax: 0, largestEstate: 0,
+            /* states */
+            states: 0, largestState: 0, wars: 0, sovereign: 0,
+            levyYear: 0, subjectShare: 0, biggestStateCells: 0, capitalCap: 0
         },
 
         _lastTick: -1,
@@ -286,6 +292,34 @@ const metrics = (function () {
             n.garrisonMax = gMax;
             n.largestEstate = eMax;
 
+            /* --- states --- */
+            n.states = s.stateCount;
+            n.largestState = s.largestState;
+            n.wars = s.warCount;
+            n.levyYear = s.levyFlow * s.TPY;
+            n.subjectShare = s.estateCount > 0 ? s.subjectEstates / s.estateCount : 0;
+
+            /* Ground held by the largest state, and what its capital is worth —
+               the number that separates a king from a merely rich lord. */
+            let bigCells = 0, capCap = 0, sovereign = 0;
+            for (let st = 0; st < s.MAX_STATES; st++) {
+                if (s.stAlive[st] === 0) continue;
+                if (s.stMembers[st] === 1) sovereign++;
+                let cells = 0;
+                for (let e = 0; e < s.MAX_ESTATES; e++) {
+                    if (s.eAlive[e] === 1 && s.eState[e] === st) cells += s.eCells[e];
+                }
+                if (cells > bigCells) {
+                    bigCells = cells;
+                    const lead = s.stLead[st];
+                    const king = lead >= 0 && s.eAlive[lead] === 1 ? s.eLord[lead] : -1;
+                    capCap = king >= 0 && s.alive[king] === 1 ? s.capital[king] : 0;
+                }
+            }
+            n.biggestStateCells = bigCells;
+            n.capitalCap = capCap;
+            n.sovereign = sovereign;
+
             /* --- how the population is arranged on the ground --- */
             this._settlements(s);
 
@@ -303,6 +337,9 @@ const metrics = (function () {
             push(S.ownedShare, n.ownedShare);
             push(S.tenantShare, n.tenantShare);
             push(S.lordWealthShare, n.lordWealthShare);
+            push(S.states, n.states);
+            push(S.estates, s.estateCount);
+            push(S.largestState, n.largestState);
 
             /* Replacement is births over deaths, smoothed — the instantaneous
                ratio at a half-year sample is mostly noise. */
@@ -422,6 +459,15 @@ const metrics = (function () {
                 { r: S.tenantShare, color: '#7fb2d9' },
                 { r: S.lordWealthShare, color: '#e2603c' }
             ], { min: 0, max: 1 });
+
+            /* Estates against states: while the two lines sit together every
+               manor is its own sovereign, and the gap that opens between them
+               is consolidation. */
+            spark('chartStates', [
+                { r: S.estates, color: '#ffd76b' },
+                { r: S.states, color: '#e9eef0' },
+                { r: S.largestState, color: '#e2603c' }
+            ], { zero: true });
 
             this.drawLorenz();
         },

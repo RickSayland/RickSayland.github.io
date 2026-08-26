@@ -14,7 +14,7 @@
  */
 'use strict';
 
-const SIM_VERSION = '0.2.0';
+const SIM_VERSION = '0.3.0';
 
 /* ----------------------------------------------------------- Dimensions --- */
 
@@ -30,6 +30,7 @@ const YMAX = WORLD_H - 0.001;
 
 const MAX_AGENTS = 10000;
 const MAX_ESTATES = 384;
+const MAX_STATES = 384;      // every manor is a state of one until it isn't
 const TPY = 64;                        // ticks per year
 const MAX_AGE = 120 * TPY;             // hazard table length; nobody gets here
 
@@ -147,9 +148,14 @@ const P = {
                            // charge a new lord the lot and the first upkeep bill
                            // bankrupts him before a single rent is collected.
     claimFert: 0.30,       // won't enclose ground not worth owning
-    claimRadius: 50,       // world units
+    claimRadius: 55,       // world units
     maxRadius: 110,
-    seatGap: 92,           // minimum spacing between manors
+    /* Manors do not overlap. A domain may grow to half the distance to its
+       nearest neighbouring seat and no further, so discs meet tangentially and
+       every cell has exactly one owner. seatGap must therefore leave room for
+       two claimRadius discs side by side, or a new manor is born already
+       hemmed in and can never expand. */
+    seatGap: 118,          // floor on spacing; see _enclose for the real test
     expandCost: 28,
     expandStep: 8,
     rentShare: 0.30,
@@ -197,7 +203,36 @@ const P = {
     recruitBonus: 1.0,     // signing payment
     radiusPerSoldier: 6,   // ground a single soldier lets you hold
     soldierSpeed: 0.85,
-    lordReserve: 2.5       // kept back before taking on another mouth
+    lordReserve: 2.5,      // kept back before taking on another mouth
+
+    /* ---- States (v0.3) ----
+     *
+     * Every manor is founded as a sovereign state of one. Two states whose
+     * domains touch have to settle what they are to each other, and there are
+     * only two answers in the model: they merge, or they fight.
+     *
+     * Which one depends on how evenly matched they are. A lopsided pair
+     * produces a war, because conquest is cheap for the stronger; an even pair
+     * produces a union, because it is not. That single rule is enough to give
+     * the map a plausible history — small neighbours federate, big ones eat
+     * small ones, and equals circle each other warily.
+     *
+     * Both outcomes end in the same structure, a larger state, and differ only
+     * in the terms. A partner in a union pays a levy; a conquered estate pays
+     * tribute, which is higher. That is what makes war worth starting.
+     */
+    contactSlack: 14,      // how close two borders must be to count as touching
+    diploInterval: 64,     // ticks between diplomacy passes (one year)
+    diploCooldown: 6 * TPY,
+    foundingGrace: 10 * TPY,
+    aggression: 2.2,       // strength ratio above which the stronger attacks
+    unionChance: 0.6,      // chance an evenly matched pair federates instead
+    battleInterval: 8,     // ticks between rounds of a war
+    warEnforce: 0.6,       // rent enforcement suffers while the men are fighting
+    warPeaceYears: 12,     // after this a stalemate can be called off
+    peaceChance: 0.25,
+    levyShare: 0.12,       // a partner's rent, paid up to the state's capital
+    tributeShare: 0.28     // a conquered estate's rent — the price of losing
 };
 
 /* ----------------------------------------------------------------- Land --- */
@@ -255,6 +290,7 @@ const sim = {
     GW: GW, GH: GH, CELL: CELL, NCELL: NCELL,
     MAX_AGENTS: MAX_AGENTS,
     MAX_ESTATES: MAX_ESTATES,
+    MAX_STATES: MAX_STATES,
     TPY: TPY,
     ROLES: ROLES,
     P: P,
@@ -313,6 +349,22 @@ const sim = {
        candidate is an array read inside a loop already running. */
     eCand: new Int32Array(MAX_ESTATES),
     eCandCap: new Float32Array(MAX_ESTATES),
+    eState: new Int16Array(MAX_ESTATES),       // never -1 while the estate lives
+    eSubject: new Uint8Array(MAX_ESTATES),     // joined by conquest, not consent
+
+    /* states, struct-of-arrays */
+    stAlive: new Uint8Array(MAX_STATES),
+    stLead: new Int32Array(MAX_STATES),        // the capital estate
+    stMembers: new Int32Array(MAX_STATES),
+    stWar: new Int16Array(MAX_STATES),         // opposing state, or -1
+    stWarSince: new Int32Array(MAX_STATES),
+    stCd: new Int32Array(MAX_STATES),          // diplomatic cooldown, in ticks
+    stBattles: new Int32Array(MAX_STATES),
+    stBorn: new Int32Array(MAX_STATES),
+    /* Men owed as casualties. A battle is settled between states, but somebody
+       has to actually die; the debt is paid off in the agent loop in slot
+       order, the same trick eShed uses for discharges. */
+    stCasualties: new Int32Array(MAX_STATES),
 
     /* bookkeeping */
     tickCount: 0,
@@ -345,6 +397,18 @@ const sim = {
     recruits: 0,
     desertions: 0,
     meanEnforce: 0,
+    /* states */
+    stateCount: 0,
+    largestState: 0,
+    warCount: 0,
+    unions: 0,
+    warsDeclared: 0,
+    annexations: 0,
+    battles: 0,
+    warDead: 0,
+    levyFlow: 0,
+    subjectEstates: 0,
+    log: [],
 
     /* mulberry32, held as a single integer so the hot loop can inline the
        recurrence instead of paying for a closure call twice per agent. Every
@@ -361,6 +425,10 @@ const sim = {
     _cqN: 0,
     _eFree: new Int32Array(MAX_ESTATES),
     _eFreeN: 0,
+    _stFree: new Int32Array(MAX_STATES),
+    _stFreeN: 0,
+    _liveE: new Int32Array(MAX_ESTATES),   // compact list, rebuilt each tick
+    _liveN: 0,
     /* Gompertz hazard, precomputed per age in ticks. The curve depends on
        nothing but age, and evaluating Math.exp for every agent every tick cost
        more than the land update and the movement put together. */
@@ -409,6 +477,26 @@ const sim = {
         this.eShed.fill(0);
         this.eCand.fill(-1);
         this.eCandCap.fill(0);
+        this.eState.fill(-1);
+        this.eSubject.fill(0);
+
+        this.stAlive.fill(0);
+        this.stLead.fill(-1);
+        this.stMembers.fill(0);
+        this.stWar.fill(-1);
+        this.stCd.fill(0);
+        this.stCasualties.fill(0);
+        this.stBattles.fill(0);
+        this._stFreeN = 0;
+        for (let s = MAX_STATES - 1; s >= 0; s--) this._stFree[this._stFreeN++] = s;
+
+        this.log = [];
+        this.stateCount = this.largestState = this.warCount = 0;
+        this.unions = this.warsDeclared = this.annexations = 0;
+        this.battles = this.warDead = 0;
+        this.levyFlow = 0;
+        this.subjectEstates = 0;
+        this._liveN = 0;
 
         this.tickCount = 0;
         this.totalBirths = 0;
@@ -480,6 +568,8 @@ const sim = {
         const eRent = this.eRent, eTenants = this.eTenants, eLord = this.eLord;
         const eSeatX = this.eSeatX, eSeatY = this.eSeatY;
         const eAlive = this.eAlive, eShed = this.eShed, eEnforce = this.eEnforce;
+        const eState = this.eState, stCasualties = this.stCasualties;
+        let warDead = 0;
         const eSoldiers = this.eSoldiers, eRadius = this.eRadius;
         const eCand = this.eCand, eCandCap = this.eCandCap;
 
@@ -538,7 +628,17 @@ const sim = {
                 const e = EST[i];
                 let quit = false;
                 if (e < 0 || eAlive[e] === 0) quit = true;
-                else if (ro === ROLE_SOLDIER && eShed[e] > 0) { eShed[e]--; quit = true; }
+                else if (ro === ROLE_SOLDIER) {
+                    /* Somebody has to be the casualty a battle already decided. */
+                    const st = eState[e];
+                    if (st >= 0 && stCasualties[st] > 0) {
+                        stCasualties[st]--;
+                        this._kill(i);
+                        warDead++;
+                        continue;
+                    }
+                    if (eShed[e] > 0) { eShed[e]--; quit = true; }
+                }
                 if (quit) {
                     if (ro === ROLE_SOLDIER) desertions++;
                     ro = ROLE_FARMER;
@@ -734,6 +834,11 @@ const sim = {
            and a newborn must never wake up owning a county. */
         this._enclose();
         this._settleEstates();
+        /* Diplomacy is annual and battles are fought every few days, both off
+           the compact live list _settleEstates just rebuilt. Neither is in the
+           per-agent path, so a map of twenty states costs a few hundred ops. */
+        if (this.tickCount % p.diploInterval === 0) this._diplomacy();
+        if (this.tickCount % p.battleInterval === 0) this._wars();
 
         /* --- births --- */
         let born = 0, denied = 0;
@@ -769,6 +874,7 @@ const sim = {
         this.lords = lords;
         this.soldiers = soldiers;
         this.desertions += desertions;
+        this.warDead += warDead;
         this.births = born;
         this.starved = starved;
         this.aged = aged;
@@ -789,7 +895,7 @@ const sim = {
     _enclose() {
         const p = this.P, gap2 = p.seatGap * p.seatGap;
         for (let k = 0; k < this._cqN; k++) {
-            if (this._eFreeN === 0) break;
+            if (this._eFreeN === 0 || this._stFreeN === 0) break;
             const i = this._cq[k];
             if (this.alive[i] === 0 || this.role[i] !== ROLE_FARMER) continue;
             if (this.capital[i] < p.claimMin) continue;
@@ -797,11 +903,21 @@ const sim = {
             const ci = ((py * INV_CELL) | 0) * GW + ((px * INV_CELL) | 0);
             if (this.owner[ci] >= 0) continue;    /* claimed since queueing */
 
+            /* Two tests, and the second is the one that keeps domains apart.
+               seatGap is a floor for spacing; the real rule is that the new
+               disc must clear every existing disc as it stands *now* — a manor
+               that has grown to maxRadius pushes newcomers correspondingly
+               further out. Testing only the fixed gap let a fresh 55-unit claim
+               be founded inside a grown neighbour's 110, and the two overlapped
+               permanently, because cells are stamped once and never released. */
             let clear = true;
             for (let e = 0; e < MAX_ESTATES; e++) {
                 if (this.eAlive[e] === 0) continue;
                 const dx = this.eSeatX[e] - px, dy = this.eSeatY[e] - py;
-                if (dx * dx + dy * dy < gap2) { clear = false; break; }
+                const d2 = dx * dx + dy * dy;
+                if (d2 < gap2) { clear = false; break; }
+                const need = this.eRadius[e] + p.claimRadius;
+                if (d2 < need * need) { clear = false; break; }
             }
             if (!clear) continue;
 
@@ -824,11 +940,31 @@ const sim = {
             /* Deference only, until he can afford a man. */
             this.eEnforce[e] = p.enforceBase;
 
+            /* Born sovereign: a state of one, answering to nobody until a
+               neighbour's border reaches it. */
+            const st = this._stFree[--this._stFreeN];
+            this.stAlive[st] = 1;
+            this.stLead[st] = e;
+            this.stMembers[st] = 1;
+            this.stWar[st] = -1;
+            this.stWarSince[st] = 0;
+            /* A founding grace. Without it a manor that has not yet hired its
+               first soldier meets a neighbour, loses the opening battle, and is
+               annexed eight ticks later — every new state died in infancy and
+               nothing ever federated. */
+            this.stCd[st] = p.foundingGrace;
+            this.stCasualties[st] = 0;
+            this.stBattles[st] = 0;
+            this.stBorn[st] = this.tickCount;
+            this.eState[e] = st;
+            this.eSubject[e] = 0;
+
             this.capital[i] -= p.claimCost;
             this.role[i] = ROLE_LORD;
             this.estateOf[i] = e;
             this._stamp(e);
             this.enclosures++;
+            this._logEvent('found', e, st, 0);
         }
     },
 
@@ -859,11 +995,19 @@ const sim = {
     _settleEstates() {
         const p = this.P, C = this.capital, AL = this.alive;
         let dissolved = false;
-        let count = 0, cells = 0, tenants = 0, rent = 0, wages = 0;
-        let garrison = 0, enforceSum = 0;
+        let count = 0, cells = 0, tenants = 0, rent = 0, wages = 0, levy = 0;
+        let garrison = 0, enforceSum = 0, subjects = 0;
 
-        for (let e = 0; e < MAX_ESTATES; e++) {
-            if (this.eAlive[e] === 0) continue;
+        /* Compact list of the living, rebuilt once and reused by the radius
+           cap below and by diplomacy and war after. */
+        const live = this._liveE;
+        let ln = 0;
+        for (let e = 0; e < MAX_ESTATES; e++) if (this.eAlive[e] === 1) live[ln++] = e;
+        this._liveN = ln;
+
+        for (let li = 0; li < ln; li++) {
+            const e = live[li];
+            if (this.eAlive[e] === 0) continue;      /* folded earlier this pass */
 
             let lord = this.eLord[e];
             if (AL[lord] === 0) {
@@ -913,10 +1057,32 @@ const sim = {
                 this.eBroke[e] = 0;
             }
 
-            /* What the garrison can hold, applied to next tick's collections. */
+            /* The levy: a partner's share, or a subject's tribute, paid up to
+               whoever holds the capital of the state. This is the first income
+               in the model that scales with how many *manors* answer to you
+               rather than how much land you personally hold — which is what
+               makes a king a different animal from a rich lord. */
+            const st = this.eState[e];
+            if (st >= 0) {
+                const lead = this.stLead[st];
+                if (lead >= 0 && lead !== e && this.eAlive[lead] === 1) {
+                    const king = this.eLord[lead];
+                    if (king >= 0 && AL[king] === 1) {
+                        const due = income * (this.eSubject[e] ? p.tributeShare : p.levyShare);
+                        C[lord] -= due;
+                        C[king] += due;
+                        levy += due;
+                    }
+                }
+                if (this.eSubject[e]) subjects++;
+            }
+
+            /* What the garrison can hold, applied to next tick's collections.
+               Men in the field are not men standing over a harvest. */
             const want = tn * p.perTenant;
             let enf = p.enforceBase + (want > 0 ? troops / want : 1);
             if (enf > 1) enf = 1;
+            if (st >= 0 && this.stWar[st] >= 0) enf *= p.warEnforce;
             this.eEnforce[e] = enf;
             enforceSum += enf;
 
@@ -933,8 +1099,26 @@ const sim = {
                 }
             }
 
-            /* A border is only as wide as the men who can walk it. */
-            const allowed = Math.min(p.maxRadius,
+            /* A border is only as wide as the men who can walk it — and never
+               wider than half the way to the next manor, so domains meet edge
+               to edge instead of growing through one another. */
+            /* Room left is the distance to a neighbour minus what that
+               neighbour already holds — not half the distance between them.
+               Halving is only correct when both discs are the same size; a
+               grown manor beside a small one leaves the small one far less
+               than half, and assuming otherwise let them overlap. Whichever
+               lord expands first takes the ground, which is the right kind of
+               unfairness. */
+            let room = p.maxRadius;
+            for (let lj = 0; lj < ln; lj++) {
+                const f = live[lj];
+                if (f === e || this.eAlive[f] === 0) continue;
+                const dx = this.eSeatX[f] - this.eSeatX[e];
+                const dy = this.eSeatY[f] - this.eSeatY[e];
+                const gap = Math.sqrt(dx * dx + dy * dy) - this.eRadius[f];
+                if (gap < room) room = gap;
+            }
+            const allowed = Math.min(p.maxRadius, room,
                 p.claimRadius + troops * p.radiusPerSoldier);
             if (this.eBroke[e] === 0 && C[lord] >= p.expandCost + p.lordReserve &&
                 this.eRadius[e] < allowed) {
@@ -961,8 +1145,179 @@ const sim = {
         this.tenantCount = tenants;
         this.rentFlow = rent;
         this.wageFlow = wages;
+        this.levyFlow = levy;
         this.garrisonTotal = garrison;
+        this.subjectEstates = subjects;
         this.meanEnforce = count > 0 ? enforceSum / count : 0;
+
+        let states = 0, biggest = 0, wars = 0;
+        for (let s = 0; s < MAX_STATES; s++) {
+            if (this.stAlive[s] === 0) continue;
+            states++;
+            if (this.stMembers[s] > biggest) biggest = this.stMembers[s];
+            if (this.stWar[s] >= 0) wars++;
+            if (this.stCd[s] > 0) this.stCd[s]--;
+        }
+        this.stateCount = states;
+        this.largestState = biggest;
+        this.warCount = wars >> 1;      /* counted from both sides */
+    },
+
+    /* ---------------------------------------------------- states & wars --- */
+
+    /* Fighting strength. The lord counts for one, so a state is never worth
+       zero and a ratio never divides by nothing. */
+    _stateStrength(s) {
+        const live = this._liveE, n = this._liveN;
+        let v = 0;
+        for (let i = 0; i < n; i++) {
+            const e = live[i];
+            if (this.eAlive[e] === 1 && this.eState[e] === s) v += this.eGarrison[e] + 1;
+        }
+        return v;
+    },
+
+    _stateGarrison(s) {
+        const live = this._liveE, n = this._liveN;
+        let v = 0;
+        for (let i = 0; i < n; i++) {
+            const e = live[i];
+            if (this.eAlive[e] === 1 && this.eState[e] === s) v += this.eGarrison[e];
+        }
+        return v;
+    },
+
+    /* Neighbours have to settle what they are to each other. Evenly matched
+       states federate; lopsided ones go to war, because conquest is only worth
+       starting when you expect to win it. */
+    _diplomacy() {
+        const p = this.P;
+        const live = this._liveE, n = this._liveN;
+
+        for (let ia = 0; ia < n; ia++) {
+            const a = live[ia];
+            if (this.eAlive[a] === 0) continue;
+
+            for (let ib = ia + 1; ib < n; ib++) {
+                const b = live[ib];
+                if (this.eAlive[b] === 0) continue;
+
+                /* Re-read every time: an earlier pair this pass may already
+                   have merged one of these into somebody else's state. */
+                const sa = this.eState[a], sb = this.eState[b];
+                if (sa < 0 || sb < 0 || sa === sb) continue;
+                if (this.stWar[sa] >= 0 || this.stWar[sb] >= 0) continue;
+                if (this.stCd[sa] > 0 || this.stCd[sb] > 0) continue;
+
+                const dx = this.eSeatX[b] - this.eSeatX[a];
+                const dy = this.eSeatY[b] - this.eSeatY[a];
+                const d = Math.sqrt(dx * dx + dy * dy);
+                if (d > this.eRadius[a] + this.eRadius[b] + p.contactSlack) continue;
+
+                const strA = this._stateStrength(sa);
+                const strB = this._stateStrength(sb);
+                const ratio = strA / strB;
+
+                if (ratio > p.aggression) this._declareWar(sa, sb);
+                else if (ratio < 1 / p.aggression) this._declareWar(sb, sa);
+                else if (this.rand() < p.unionChance) this._unite(sa, sb);
+                else { this.stCd[sa] = p.diploCooldown; this.stCd[sb] = p.diploCooldown; }
+                break;   /* one decision per estate per pass */
+            }
+        }
+    },
+
+    _declareWar(agg, def) {
+        this.stWar[agg] = def;
+        this.stWar[def] = agg;
+        this.stWarSince[agg] = this.stWarSince[def] = this.tickCount;
+        this.warsDeclared++;
+        this._logEvent('war', agg, def, 0);
+    },
+
+    /* The stronger partner's capital becomes the capital of the union; the
+       other's estates keep their lords and pay a levy. */
+    _unite(sa, sb) {
+        const A = this._stateStrength(sa) >= this._stateStrength(sb) ? sa : sb;
+        const B = A === sa ? sb : sa;
+        const moved = this._absorb(A, B, 0);
+        this.unions++;
+        this.stCd[A] = this.P.diploCooldown;
+        this._logEvent('union', A, B, moved);
+    },
+
+    /* Conquest. Same structure as a union, harsher terms. */
+    _annex(win, lose) {
+        const moved = this._absorb(win, lose, 1);
+        this.annexations++;
+        this.stWar[win] = -1;
+        this.stCd[win] = this.P.diploCooldown;
+        this._logEvent('annex', win, lose, moved);
+    },
+
+    /* Move every estate of `from` into `into` and retire the empty state. */
+    _absorb(into, from, subject) {
+        let moved = 0;
+        for (let e = 0; e < MAX_ESTATES; e++) {
+            if (this.eAlive[e] === 0 || this.eState[e] !== from) continue;
+            this.eState[e] = into;
+            if (subject) this.eSubject[e] = 1;
+            this.stMembers[into]++;
+            moved++;
+        }
+        const other = this.stWar[from];
+        if (other >= 0 && other !== into) this.stWar[other] = -1;
+        this._retireState(from);
+        return moved;
+    },
+
+    _retireState(s) {
+        this.stAlive[s] = 0;
+        this.stMembers[s] = 0;
+        this.stWar[s] = -1;
+        this.stCasualties[s] = 0;
+        this.stLead[s] = -1;
+        this._stFree[this._stFreeN++] = s;
+    },
+
+    _peace(a, b) {
+        this.stWar[a] = -1;
+        this.stWar[b] = -1;
+        this.stCd[a] = this.P.diploCooldown;
+        this.stCd[b] = this.P.diploCooldown;
+        this._logEvent('peace', a, b, 0);
+    },
+
+    /* One round per warring pair. The loser of the round owes a man, paid out
+       of the garrison in the agent loop. A state with nobody left under arms
+       is annexed by the other. */
+    _wars() {
+        const p = this.P;
+        for (let s = 0; s < MAX_STATES; s++) {
+            if (this.stAlive[s] === 0) continue;
+            const t = this.stWar[s];
+            if (t < 0 || t < s) continue;          /* settle each pair once */
+            if (this.stAlive[t] === 0) { this.stWar[s] = -1; continue; }
+
+            const strA = this._stateStrength(s), strB = this._stateStrength(t);
+            if (this.rand() < strA / (strA + strB)) this.stCasualties[t]++;
+            else this.stCasualties[s]++;
+            this.stBattles[s]++; this.stBattles[t]++;
+            this.battles++;
+
+            const garA = this._stateGarrison(s), garB = this._stateGarrison(t);
+            if (garB === 0 && garA > 0) this._annex(s, t);
+            else if (garA === 0 && garB > 0) this._annex(t, s);
+            else if (this.tickCount - this.stWarSince[s] > p.warPeaceYears * TPY &&
+                     this.rand() < p.peaceChance) {
+                this._peace(s, t);
+            }
+        }
+    },
+
+    _logEvent(type, a, b, n) {
+        this.log.push({ t: this.tickCount, type: type, a: a, b: b, n: n });
+        if (this.log.length > 64) this.log.shift();
     },
 
     /* The wealthiest grown commoner standing on the estate takes it over. Not
@@ -995,7 +1350,32 @@ const sim = {
             this.role[lord] = ROLE_FARMER;
             this.estateOf[lord] = -1;
         }
-        this.eAlive[e] = 0;
+        this.eAlive[e] = 0;      /* set first, so the successor search skips it */
+
+        /* If this manor held the capital, the state has to find another seat —
+           the largest remaining member. A state with no members left retires,
+           and any war it was fighting ends with it. */
+        const s = this.eState[e];
+        if (s >= 0 && this.stAlive[s] === 1) {
+            this.stMembers[s]--;
+            if (this.stLead[s] === e) {
+                let best = -1, bestCells = -1;
+                for (let f = 0; f < MAX_ESTATES; f++) {
+                    if (this.eAlive[f] === 0 || this.eState[f] !== s) continue;
+                    if (this.eCells[f] > bestCells) { bestCells = this.eCells[f]; best = f; }
+                }
+                if (best >= 0) {
+                    this.stLead[s] = best;
+                } else {
+                    const other = this.stWar[s];
+                    if (other >= 0) this.stWar[other] = -1;
+                    this._retireState(s);
+                }
+            }
+        }
+        this.eState[e] = -1;
+        this.eSubject[e] = 0;
+
         this.eCells[e] = 0;
         this.eRent[e] = 0;
         this.eTenants[e] = 0;
