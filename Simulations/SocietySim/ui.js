@@ -222,6 +222,22 @@
         set('statRoads', Math.round(n.roadCells * sim.CELL / 100) + ' leagues');
         set('statTownVsFarm', n.farmCap > 0 ? num(n.townCap / n.farmCap, 1) + '×' : '—');
 
+        /* --- government --- */
+        set('statGovs', String(n.govs));
+        set('statGovWord', govWord(n));
+        set('statOfficials', n.officials.toLocaleString());
+        set('statAdmin', num(n.admin * 100, 0) + '%');
+        set('statTreasury', num(n.treasury, 0));
+        set('statGarrisonGov', num(n.garrisonGov, 1));
+        set('statGarrisonFeud', num(n.garrisonFeudal, 1));
+        $('statGarrisonGov').className = 'stat-value ' +
+            (n.garrisonGov > n.garrisonFeudal * 1.15 ? 'ok' : '');
+        set('statGovLand', num(n.govLandShare * 100, 0) + '% of what is enclosed');
+        set('statBiggestGov', n.biggestGov + (n.biggestGov === 1 ? ' manor' : ' manors'));
+        set('statTax', num(n.taxYear, 0) + ' / yr');
+        set('statWorks', num(n.worksYear, 0) + ' / yr · ' + num(n.worksFunded * 100, 0) + '% funded');
+        set('statGovEvents', sim.governments + ' / ' + sim.collapses);
+
         /* --- states --- */
         set('statStates', String(n.states));
         set('statLargestState', String(n.largestState));
@@ -321,12 +337,30 @@
                     cls = 'ev peace';
                     text = 'State #' + ev.a + ' and #' + ev.b + ' break off the war.';
                     break;
+                case 'gov':
+                    cls = 'ev gov';
+                    text = 'State #' + ev.a + ' takes a government — ' + ev.b +
+                           ' manors, a treasury, and offices to run it.';
+                    break;
+                case 'collapse':
+                    cls = 'ev collapse';
+                    text = 'State #' + ev.a + ' falls to ' + ev.b +
+                           ' manors; the offices are abolished.';
+                    break;
                 default:
                     text = ev.type;
             }
             rows.push('<div class="' + cls + '"><span class="ev-yr">' + yr + '</span>' + text + '</div>');
         }
         el.innerHTML = rows.join('');
+    }
+
+    function govWord(n) {
+        if (n.govs === 0) return 'none yet — every crown still a household';
+        if (n.admin < 0.45) return 'paper states, living on customary dues';
+        if (n.govLandShare < 0.3) return 'a few, among many feudal neighbours';
+        if (n.govLandShare < 0.6) return 'the coming thing';
+        return 'the age of the nation-state';
     }
 
     function bargainWord(n) {
@@ -483,6 +517,7 @@
         el.insertAdjacentHTML('beforeend', row(metrics.HUNGRY_COLOR, 'going hungry'));
         el.insertAdjacentHTML('beforeend', row(metrics.SOLDIER_COLOR, 'soldier'));
         el.insertAdjacentHTML('beforeend', row(metrics.CITIZEN_COLOR, 'townsfolk'));
+        el.insertAdjacentHTML('beforeend', row(metrics.OFFICIAL_COLOR, 'official'));
         el.insertAdjacentHTML('beforeend', row(metrics.LORD_COLOR, 'lord · manor'));
     }
 
@@ -505,7 +540,12 @@
         { key: 'foodPrice',    id: 'knobPrice',    fmt: v => v.toFixed(2) },
         { key: 'cityWage',     id: 'knobWage',     fmt: v => v.toFixed(3) },
         { key: 'craftValue',   id: 'knobCraft',    fmt: v => v.toFixed(3) },
-        { key: 'levyFood',     id: 'knobLevyFood', fmt: v => (v * 100).toFixed(0) + '%' }
+        { key: 'levyFood',     id: 'knobLevyFood', fmt: v => (v * 100).toFixed(0) + '%' },
+        { key: 'govMinEstates',    id: 'knobGovMin',  fmt: v => String(Math.round(v)) },
+        { key: 'taxRate',          id: 'knobTax',     fmt: v => (v * 100).toFixed(0) + '%' },
+        { key: 'officialsPerEstate', id: 'knobOffPer', fmt: v => v.toFixed(1) },
+        { key: 'worksBonus',       id: 'knobWorks',   fmt: v => '+' + (v * 100).toFixed(0) + '%' },
+        { key: 'govArmyBonus',     id: 'knobGovArmy', fmt: v => '+' + (v * 100).toFixed(0) + '%' }
     ];
 
     function wireKnobs() {

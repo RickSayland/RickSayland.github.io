@@ -82,14 +82,15 @@ const render = {
         this._estTint = new Int8Array(s.MAX_ESTATES);
 
         const CL = metrics.CLASSES;
-        this._nb = CL.length + 4;
+        this._nb = CL.length + 5;
         this._colors = CL.map(c => c.color)
-            .concat([metrics.HUNGRY_COLOR, metrics.SOLDIER_COLOR,
-                     metrics.CITIZEN_COLOR, metrics.LORD_COLOR]);
+            .concat([metrics.HUNGRY_COLOR, metrics.SOLDIER_COLOR, metrics.CITIZEN_COLOR,
+                     metrics.OFFICIAL_COLOR, metrics.LORD_COLOR]);
         this._iHungry = CL.length;
         this._iSoldier = CL.length + 1;
         this._iCitizen = CL.length + 2;
-        this._iLord = CL.length + 3;
+        this._iOfficial = CL.length + 3;
+        this._iLord = CL.length + 4;
 
         this._bx = [];
         this._by = [];
@@ -371,7 +372,7 @@ const render = {
         const nc = CL.length;
         const hungryFood = metrics.HUNGRY_FOOD;
         const iH = this._iHungry, iS = this._iSoldier;
-        const iC = this._iCitizen, iL = this._iLord;
+        const iC = this._iCitizen, iO = this._iOfficial, iL = this._iLord;
 
         /* cull to the visible rectangle, with a cell of slack */
         const wx0 = -ox / z - 4, wx1 = (this.vw - ox) / z + 4;
@@ -393,6 +394,7 @@ const render = {
             else if (F[i] < hungryFood) b = iH;
             else if (role === 2) b = iS;
             else if (role === 3) b = iC;
+            else if (role === 4) b = iO;
             else {
                 const cap = C[i];
                 b = 0;

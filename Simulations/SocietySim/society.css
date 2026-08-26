@@ -266,6 +266,7 @@ body {
 .sw-lord { background: #ffd76b; }
 .sw-sold { background: #7fb2d9; }
 .sw-state { background: #e9eef0; }
+.sw-off { background: #8ce8d0; }
 
 /* ---- Chronicle ---- */
 
@@ -303,6 +304,8 @@ body {
 .ev.war   { border-left-color: #e2603c; color: #e8a08a; }
 .ev.annex { border-left-color: #ffd76b; color: #e8cf9c; }
 .ev.peace { border-left-color: #7fb2d9; color: #a8c8e0; }
+.ev.gov      { border-left-color: #8ce8d0; color: #b6ede0; }
+.ev.collapse { border-left-color: #c98a6a; color: #d9a98f; }
 
 .check {
     display: flex;

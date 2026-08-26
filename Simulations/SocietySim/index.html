@@ -3,15 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SocietySim — Towns and Roads</title>
+    <title>SocietySim — Manors to Nations</title>
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
-    <link rel="stylesheet" href="society.css?v=0.5.0">
+    <link rel="stylesheet" href="society.css?v=0.6.0">
 </head>
 <body>
     <div class="topbar">
         <h1><span>Society</span>Sim</h1>
-        <span class="version" id="version">v0.5.0</span>
-        <p class="tagline">Farms feed manors, manors feed towns, and every road runs to a capital.</p>
+        <span class="version" id="version">v0.6.0</span>
+        <p class="tagline">Farms to manors, manors to towns, and three manors under one crown to a state.</p>
         <div class="controls">
             <button id="playBtn" class="ctl">Pause</button>
             <div class="speed">
@@ -123,6 +123,35 @@
                     <div class="knob-head"><span class="knob-name">Grain sent to the capital</span><span class="knob-val">—</span></div>
                     <input type="range" class="slider">
                     <p class="knob-note">What share of a town's granary goes up the road each day. This, and nothing else, is why a capital becomes a city.</p>
+                </div>
+            </div>
+
+            <div class="section-title">Government</div>
+            <div class="knobs">
+                <div class="knob" id="knobGovMin" data-min="2" data-max="8" data-step="1">
+                    <div class="knob-head"><span class="knob-name">Manors to make a state</span><span class="knob-val">—</span></div>
+                    <input type="range" class="slider">
+                    <p class="knob-note">How many manors must answer to one crown before the arrangement stops being personal and becomes a government. Fall back below it and the offices are abolished.</p>
+                </div>
+                <div class="knob" id="knobTax" data-min="0" data-max="0.6" data-step="0.01">
+                    <div class="knob-head"><span class="knob-name">Tax rate</span><span class="knob-val">—</span></div>
+                    <input type="range" class="slider">
+                    <p class="knob-note">What a government asks of each manor's revenue. What it actually receives is this times its administrative reach.</p>
+                </div>
+                <div class="knob" id="knobOffPer" data-min="0.2" data-max="4" data-step="0.1">
+                    <div class="knob-head"><span class="knob-name">Officials per manor</span><span class="knob-val">—</span></div>
+                    <input type="range" class="slider">
+                    <p class="knob-note">How many officials it takes to actually collect what is owed. Too few and the state is a paper one, living on customary dues.</p>
+                </div>
+                <div class="knob" id="knobWorks" data-min="0" data-max="1.5" data-step="0.05">
+                    <div class="knob-head"><span class="knob-name">Public works</span><span class="knob-val">—</span></div>
+                    <input type="range" class="slider">
+                    <p class="knob-note">How much drainage and irrigation add to the land of a fully funded nation. This is what a treasury is <em>for</em>.</p>
+                </div>
+                <div class="knob" id="knobGovArmy" data-min="0" data-max="2" data-step="0.05">
+                    <div class="knob-head"><span class="knob-name">Standing army</span><span class="knob-val">—</span></div>
+                    <input type="range" class="slider">
+                    <p class="knob-note">Extra men per subject a nation keeps over a manor. At zero a government is only a better tax collector and conquers nothing.</p>
                 </div>
             </div>
 
@@ -418,6 +447,49 @@
                 is what makes a war worth starting.
             </p>
 
+            <div class="section-title">Government</div>
+            <div class="headline">
+                <div class="headline-val" id="statGovs">—</div>
+                <div class="headline-unit">nation-states · <span id="statGovWord">—</span></div>
+            </div>
+            <canvas class="chart" id="chartGov"></canvas>
+            <div class="split-legend wrap">
+                <span><i class="sw sw-off"></i>land under a government</span>
+                <span><i class="sw sw-lord"></i>administrative reach</span>
+            </div>
+            <div class="stat-grid">
+                <div class="stat"><div class="stat-value" id="statOfficials">—</div><div class="stat-label">officials</div></div>
+                <div class="stat"><div class="stat-value" id="statAdmin">—</div><div class="stat-label">reach</div></div>
+                <div class="stat"><div class="stat-value" id="statTreasury">—</div><div class="stat-label">treasury</div></div>
+            </div>
+            <div class="stat-grid two">
+                <div class="stat"><div class="stat-value" id="statGarrisonGov">—</div><div class="stat-label">men per state manor</div></div>
+                <div class="stat"><div class="stat-value" id="statGarrisonFeud">—</div><div class="stat-label">per feudal manor</div></div>
+            </div>
+            <div class="ins-row"><span>Land under a government</span><b id="statGovLand">—</b></div>
+            <div class="ins-row"><span>Largest nation</span><b id="statBiggestGov">—</b></div>
+            <div class="ins-row"><span>Tax collected</span><b id="statTax">—</b></div>
+            <div class="ins-row"><span>Spent on public works</span><b id="statWorks">—</b></div>
+            <div class="ins-row"><span>Founded / collapsed</span><b id="statGovEvents">—</b></div>
+            <p class="knob-note">
+                Three manors under one crown and the arrangement stops being
+                personal. Up to that point a state's money <b>is</b> the king's
+                money — a levy paid from one lord's purse into another's. A
+                government has a treasury that belongs to nobody in it, and the
+                levy becomes a tax. A tax has to be assessed and collected, so
+                the state appoints officials out of the towns, and its reach is
+                exactly what they can cover: without them only the customary
+                dues come in.
+            </p>
+            <p class="knob-note">
+                What the treasury buys is the reason any of this beats
+                feudalism. It drains and irrigates a whole country at once, and
+                it keeps more men under arms per subject than a lord managing
+                his own affairs ever could — watch the two garrison figures
+                above diverge. Fall below three manors and the offices are
+                abolished and the survivors are lords again.
+            </p>
+
             <div class="section-title">Chronicle</div>
             <div class="chronicle" id="chronicle"><div class="chron-empty">Nothing has happened yet.</div></div>
 
@@ -455,9 +527,9 @@
         </aside>
     </div>
 
-    <script src="sim.js?v=0.5.0"></script>
-    <script src="metrics.js?v=0.5.0"></script>
-    <script src="render.js?v=0.5.0"></script>
-    <script src="ui.js?v=0.5.0"></script>
+    <script src="sim.js?v=0.6.0"></script>
+    <script src="metrics.js?v=0.6.0"></script>
+    <script src="render.js?v=0.6.0"></script>
+    <script src="ui.js?v=0.6.0"></script>
 </body>
 </html>

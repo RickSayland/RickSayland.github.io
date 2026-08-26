@@ -38,6 +38,7 @@ const metrics = (function () {
     const LORD_COLOR = '#ffd76b';
     const SOLDIER_COLOR = '#7fb2d9';
     const CITIZEN_COLOR = '#d9a7f0';
+    const OFFICIAL_COLOR = '#8ce8d0';
 
     /* Settlement detection works on blocks of land cells, not single cells: one
        cell is 10 world units and a farmer crosses it in four steps, so at cell
@@ -83,6 +84,7 @@ const metrics = (function () {
         LORD_COLOR: LORD_COLOR,
         SOLDIER_COLOR: SOLDIER_COLOR,
         CITIZEN_COLOR: CITIZEN_COLOR,
+        OFFICIAL_COLOR: OFFICIAL_COLOR,
 
         series: {
             pop: ring(SERIES_LEN),
@@ -101,7 +103,9 @@ const metrics = (function () {
             estates: ring(SERIES_LEN),
             largestState: ring(SERIES_LEN),
             urban: ring(SERIES_LEN),
-            biggestTown: ring(SERIES_LEN)
+            biggestTown: ring(SERIES_LEN),
+            govLandShare: ring(SERIES_LEN),
+            admin: ring(SERIES_LEN)
         },
 
         /* latest snapshot, read by the UI */
@@ -136,7 +140,11 @@ const metrics = (function () {
             /* towns */
             townsfolk: 0, urbanShareRole: 0, towns: 0, biggestTown: 0,
             meanCapitalTown: 0, meanOtherTown: 0, granary: 0,
-            craftYear: 0, roadCells: 0, townCap: 0, farmCap: 0
+            craftYear: 0, roadCells: 0, townCap: 0, farmCap: 0,
+            /* government */
+            govs: 0, officials: 0, admin: 0, treasury: 0, taxYear: 0, worksYear: 0,
+            govEstates: 0, govCells: 0, govLandShare: 0, biggestGov: 0,
+            garrisonGov: 0, garrisonFeudal: 0, govPopShare: 0, worksFunded: 0
         },
 
         _lastTick: -1,
@@ -417,6 +425,43 @@ const metrics = (function () {
             for (let c = 0; c < s.NCELL; c++) if (s.road[c] === 1) roadCells++;
             n.roadCells = roadCells;
 
+            /* --- government --- */
+            n.govs = s.govCount;
+            n.officials = s.officials;
+            n.treasury = s.treasuryTotal;
+            n.taxYear = s.taxFlow * s.TPY;
+            n.worksYear = s.worksFlow * s.TPY;
+
+            let govEst = 0, govCells = 0, feudEst = 0, govGar = 0, feudGar = 0;
+            let bigGov = 0, adminSum = 0, worksSum = 0, nGov = 0;
+            for (let e = 0; e < s.MAX_ESTATES; e++) {
+                if (s.eAlive[e] === 0) continue;
+                const st = s.eState[e];
+                if (st >= 0 && s.stGov[st] === 1) {
+                    govEst++; govCells += s.eCells[e]; govGar += s.eGarrison[e];
+                } else {
+                    feudEst++; feudGar += s.eGarrison[e];
+                }
+            }
+            for (let st = 0; st < s.MAX_STATES; st++) {
+                if (s.stAlive[st] === 0 || s.stGov[st] === 0) continue;
+                nGov++;
+                adminSum += s.stAdmin[st];
+                worksSum += s.stWorks[st];
+                if (s.stMembers[st] > bigGov) bigGov = s.stMembers[st];
+            }
+            n.govEstates = govEst;
+            n.govCells = govCells;
+            n.govLandShare = s.ownedCells > 0 ? govCells / s.ownedCells : 0;
+            n.biggestGov = bigGov;
+            n.admin = nGov ? adminSum / nGov : 0;
+            n.worksFunded = nGov ? worksSum / nGov : 0;
+            /* The number that says whether a nation-state is worth being: how
+               many men it keeps under arms per manor against what a lord
+               managing his own affairs can field. */
+            n.garrisonGov = govEst ? govGar / govEst : 0;
+            n.garrisonFeudal = feudEst ? feudGar / feudEst : 0;
+
             /* --- how the population is arranged on the ground --- */
             this._settlements(s);
 
@@ -439,6 +484,8 @@ const metrics = (function () {
             push(S.largestState, n.largestState);
             push(S.urban, n.urbanShareRole);
             push(S.biggestTown, n.biggestTown);
+            push(S.govLandShare, n.govLandShare);
+            push(S.admin, n.admin);
 
             /* Replacement is births over deaths, smoothed — the instantaneous
                ratio at a half-year sample is mostly noise. */
@@ -557,6 +604,13 @@ const metrics = (function () {
                 { r: S.ownedShare, color: '#ffd76b' },
                 { r: S.tenantShare, color: '#7fb2d9' },
                 { r: S.lordWealthShare, color: '#e2603c' }
+            ], { min: 0, max: 1 });
+
+            /* The share of enclosed land under a government, against how far
+               its administration actually reaches. */
+            spark('chartGov', [
+                { r: S.govLandShare, color: '#8ce8d0' },
+                { r: S.admin, color: '#ffd76b' }
             ], { min: 0, max: 1 });
 
             spark('chartTowns', [

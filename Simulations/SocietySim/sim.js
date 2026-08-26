@@ -14,7 +14,7 @@
  */
 'use strict';
 
-const SIM_VERSION = '0.5.0';
+const SIM_VERSION = '0.6.0';
 
 /* ----------------------------------------------------------- Dimensions --- */
 
@@ -54,11 +54,12 @@ for (let i = 0; i < DIRS; i++) {
     SIN[i] = Math.sin(a);
 }
 
-const ROLES = ['Farmer', 'Lord', 'Soldier', 'Townsfolk'];
+const ROLES = ['Farmer', 'Lord', 'Soldier', 'Townsfolk', 'Official'];
 const ROLE_FARMER = 0;
 const ROLE_LORD = 1;
 const ROLE_SOLDIER = 2;
 const ROLE_CITIZEN = 3;
+const ROLE_OFFICIAL = 4;
 
 /* Terrain. Only PLAIN and FOREST grow anything; MARSH and the shallows feed
    people too, but by fishing rather than farming, which is why the harvestable
@@ -324,7 +325,55 @@ const P = {
     cityMinGranary: 4,     // no grain in store, no town
     cityDraw: 0.004,       // chance per tick a farmer in town takes up a trade
     levyFood: 0.15,        // grain a member town sends up the road to the capital
-    roadSpeed: 1.7         // how much faster the going is on a made road
+    roadSpeed: 1.7,        // how much faster the going is on a made road
+
+    /* ---- Government (v0.6) ----
+     *
+     * Three manors under one crown and the arrangement stops being personal.
+     * That is the whole transition: up to this point a state's money IS the
+     * king's money — a levy paid by one lord into another lord's purse. A
+     * government has a TREASURY, which belongs to the state and not to anyone
+     * in it, and the levy becomes a tax.
+     *
+     * A tax has to be assessed and collected by somebody, so a government
+     * needs Officials, and they are drawn from townsfolk because that is where
+     * literate people who are not needed in a field can be found. Administration
+     * works exactly the way a garrison's enforcement does: without officials
+     * only the customary dues come in (govAdminBase); with enough of them the
+     * state collects what it is owed.
+     *
+     * What the treasury buys is the reason any of this beats feudalism:
+     *   - it pays a share of every member's payroll, so a nation fields an army
+     *     larger than the sum of the retinues it replaced;
+     *   - it runs a national grain reserve, taking from towns in surplus and
+     *     giving to towns in want, which is the difference between a bad
+     *     harvest and a famine.
+     * Both are things no single lord can do for himself, and both are why a
+     * government out-competes the feudal states around it.
+     *
+     * Fall below three manors and it all unwinds: the officials go back to
+     * their trades and the survivors are lords again.
+     */
+    govMinEstates: 3,
+    taxRate: 0.22,
+    govAdminBase: 0.30,
+    officialsPerEstate: 1.6,
+    officialSalary: 0.05,
+    armyShare: 0.35,       // of a member's payroll, met from the treasury
+    reserveTarget: 10,     // the granary level the state tries to hold everywhere
+    reserveRate: 0.05,
+    treasuryReserve: 15,   // kept back before appointing anyone
+    /* Public works — drainage, irrigation, terracing. The treasury's main
+       expense and the reason a nation feeds more people than the manors it was
+       made of. It is charged per cell held, so it scales with the country and
+       a large state cannot simply hoard: a treasury with nothing to spend on
+       grows without bound and the whole fiscal side stops meaning anything. */
+    govArmyBonus: 0.8,     // extra men per subject a state keeps over a manor
+    worksCost: 0.008,      // per owned cell per tick
+    worksBonus: 0.6,       // added to the improvement multiplier when fully funded
+    /* Peculation, and the cost of being a state. Without it a solvent treasury
+       grows without bound and the figure stops carrying any information. */
+    treasuryWaste: 0.003
 };
 
 /* ----------------------------------------------------------------- Land --- */
@@ -621,6 +670,19 @@ const sim = {
        has to actually die; the debt is paid off in the agent loop in slot
        order, the same trick eShed uses for discharges. */
     stCasualties: new Int32Array(MAX_STATES),
+    /* Government. stTreasury is the state's money and belongs to nobody in it —
+       that distinction is the whole of v0.6. */
+    stGov: new Uint8Array(MAX_STATES),
+    stTreasury: new Float32Array(MAX_STATES),
+    stReserve: new Float32Array(MAX_STATES),    // national grain store
+    stOfficials: new Int32Array(MAX_STATES),    // counted fresh each tick
+    stOffLast: new Int32Array(MAX_STATES),
+    stAdmin: new Float32Array(MAX_STATES),      // 0..1, how much tax arrives
+    stShedOff: new Int32Array(MAX_STATES),      // posts the treasury cannot fund
+    stGovSince: new Int32Array(MAX_STATES),
+    stTaxTake: new Float32Array(MAX_STATES),
+    stWantOff: new Int32Array(MAX_STATES),
+    stWorks: new Float32Array(MAX_STATES),      // 0..1, how much of the works are paid for
 
     /* bookkeeping */
     tickCount: 0,
@@ -659,6 +721,15 @@ const sim = {
     dissolutions: 0,
     soldiers: 0,
     citizens: 0,
+    officials: 0,
+    govCount: 0,
+    governments: 0,      // cumulative, for the chronicle
+    collapses: 0,
+    treasuryTotal: 0,
+    reserveTotal: 0,
+    taxFlow: 0,
+    taxPaid: 0,
+    armySubsidy: 0,
     garrisonTotal: 0,
     wageFlow: 0,
     recruits: 0,
@@ -770,6 +841,21 @@ const sim = {
         this.stCd.fill(0);
         this.stCasualties.fill(0);
         this.stBattles.fill(0);
+        this.stGov.fill(0);
+        this.stTreasury.fill(0);
+        this.stReserve.fill(0);
+        this.stOfficials.fill(0);
+        this.stOffLast.fill(0);
+        this.stAdmin.fill(0);
+        this.stShedOff.fill(0);
+        this.stTaxTake.fill(0);
+        this.stWantOff.fill(0);
+        this.stWorks.fill(0);
+        this.worksFlow = 0;
+        this.officials = this.govCount = 0;
+        this.governments = this.collapses = 0;
+        this.treasuryTotal = this.reserveTotal = 0;
+        this.taxFlow = this.taxPaid = this.armySubsidy = 0;
         this._stFreeN = 0;
         for (let s = MAX_STATES - 1; s >= 0; s--) this._stFree[this._stFreeN++] = s;
 
@@ -912,11 +998,15 @@ const sim = {
         const cspd = p.speed * 0.5;
         const cityWage = p.cityWage, price = p.foodPrice, ration = p.ration;
         const cityStock = p.cityStock;
+        const stGov = this.stGov, stOfficials = this.stOfficials;
+        const stShedOff = this.stShedOff, offSalary = p.officialSalary;
+        const stWantOff = this.stWantOff;
         const minGrain = p.cityMinGranary, draw = p.cityDraw;
         const roadSpeed = p.roadSpeed;
         let desertions = 0;
 
-        let pop = 0, lords = 0, soldiers = 0, citizens = 0, sf = 0, sc = 0, sm = 0, harvested = 0;
+        let pop = 0, lords = 0, soldiers = 0, citizens = 0, officials = 0;
+        let sf = 0, sc = 0, sm = 0, harvested = 0;
         let starved = 0, aged = 0;
         this._bqN = 0;
         this._cqN = 0;
@@ -957,9 +1047,54 @@ const sim = {
             const isLord = ro === ROLE_LORD;
             const isSoldier = ro === ROLE_SOLDIER;
             const isCitizen = ro === ROLE_CITIZEN;
+            const isOfficial = ro === ROLE_OFFICIAL;
             let speed;
 
-            if (isCitizen) {
+            if (isOfficial) {
+                /* An official lives a townsman's life — same walls, same
+                   market — but is paid by the state rather than by a lord, and
+                   what he produces is administration rather than goods. */
+                const e = EST[i];
+                const st = eState[e];
+                if (st < 0 || stGov[st] === 0 || stShedOff[st] > 0) {
+                    if (st >= 0 && stShedOff[st] > 0) stShedOff[st]--;
+                    RO[i] = ROLE_CITIZEN;
+                } else {
+                    const seatDX = eSeatX[e] - x, seatDY = eSeatY[e] - y;
+                    if (seatDX * seatDX + seatDY * seatDY > cityR2) {
+                        const wantD = ((Math.atan2(seatDY, seatDX) * DIR_PER_RAD) | 0) & DMASK;
+                        let diff = (wantD - d) & DMASK;
+                        if (diff > 512) diff -= DIRS;
+                        if (diff > turn) diff = turn; else if (diff < -turn) diff = -turn;
+                        d = (d + diff) & DMASK;
+                    }
+                    stOfficials[st]++;
+                    C[i] += offSalary;
+
+                    const stock = eGranary[e];
+                    let want = cityStock - F[i];
+                    if (want > ration) want = ration;
+                    if (want > stock) want = stock;
+                    const afford = C[i] / price;
+                    if (want > afford) want = afford;
+                    if (want > 0) {
+                        eGranary[e] = stock - want;
+                        eFoodSold[e] += want;
+                        C[i] -= want * price;
+                        F[i] += want;
+                    } else if (F[i] < 0.6) {
+                        RO[i] = ROLE_CITIZEN;
+                    }
+                }
+                speed = cspd;
+
+                rs = (rs + 0x6D2B79F5) | 0;
+                let to = Math.imul(rs ^ (rs >>> 15), 1 | rs);
+                to = (to + Math.imul(to ^ (to >>> 7), 61 | to)) ^ to;
+                const ro2 = ((to ^ (to >>> 14)) >>> 0) / 4294967296;
+                d = (d + (((ro2 * 2 - 1) * wob) | 0)) & DMASK;
+
+            } else if (isCitizen) {
                 /* Keep to the town, draw the wage, buy the day's grain. A
                    townsman with no granary to buy from, or no coin to buy
                    with, goes back to the land rather than dying in the street. */
@@ -1012,6 +1147,18 @@ const sim = {
                    in hand simply waits for the next cart. */
                 else if (F[i] < 0.6) {
                     RO[i] = ROLE_FARMER; EST[i] = -1;
+                }
+
+                /* Officials are drawn from townsfolk, because that is where
+                   literate people not needed in a field are to be found. One
+                   appointment per state per tick, the same pacing a lord uses
+                   to raise men. */
+                if (RO[i] === ROLE_CITIZEN) {
+                    const st2 = eState[e];
+                    if (st2 >= 0 && stGov[st2] === 1 && stWantOff[st2] > 0) {
+                        stWantOff[st2]--;
+                        RO[i] = ROLE_OFFICIAL;
+                    }
                 }
 
             } else if (isSoldier) {
@@ -1216,6 +1363,7 @@ const sim = {
             if (isLord) lords++;
             else if (isSoldier) soldiers++;
             else if (isCitizen) citizens++;
+            else if (isOfficial) officials++;
         }
 
         this._rs = rs;   /* hand the stream back before any cold-path draws */
@@ -1226,6 +1374,7 @@ const sim = {
            and a newborn must never wake up owning a county. */
         this._enclose();
         this._settleEstates();
+        this._settleStates();
         /* Diplomacy is annual and battles are fought every few days, both off
            the compact live list _settleEstates just rebuilt. Neither is in the
            per-agent path, so a map of twenty states costs a few hundred ops. */
@@ -1266,6 +1415,7 @@ const sim = {
         this.lords = lords;
         this.soldiers = soldiers;
         this.citizens = citizens;
+        this.officials = officials;
         this.desertions += desertions;
         this.warDead += warDead;
         this.births = born;
@@ -1478,6 +1628,7 @@ const sim = {
         let count = 0, cells = 0, tenants = 0, rent = 0, wages = 0, levy = 0;
         let garrison = 0, enforceSum = 0, subjects = 0, oilTotal = 0;
         let townPop = 0, granaryTotal = 0, craftTotal = 0, grainMoved = 0;
+        let taxPaid = 0, subsidy = 0;
 
         /* Compact list of the living, rebuilt once and reused by the radius
            cap below and by diplomacy and war after. */
@@ -1503,7 +1654,14 @@ const sim = {
             const dMin = dens[base + R_MIN], dOil = dens[base + R_OIL];
             const dEnergy = dens[base + R_ENERGY], dFert = dens[base + R_FERT];
 
-            this.eRegrow[e] = p.regrow * (1 + p.improve * (1 + p.fertBoost * dFert));
+            /* A lord improves his own ground; a government drains and irrigates
+               a whole country. The works bonus is what a nation-state actually
+               buys its farmers, and it is why one out-feeds the manors it was
+               assembled from. */
+            const stNow = this.eState[e];
+            const works = (stNow >= 0 && this.stGov[stNow] === 1)
+                ? p.worksBonus * this.stWorks[stNow] : 0;
+            this.eRegrow[e] = p.regrow * (1 + p.improve * (1 + p.fertBoost * dFert) + works);
             const sCost = p.soldierCost * (1 - p.mineralDiscount * dMin);
             const upk = p.upkeep * (1 - p.energyDiscount * dEnergy);
             const oil = p.oilIncome * dOil * nCells / 100;
@@ -1594,7 +1752,31 @@ const sim = {
                rather than how much land you personally hold — which is what
                makes a king a different animal from a rich lord. */
             const st = this.eState[e];
-            if (st >= 0) {
+            if (st >= 0 && this.stGov[st] === 1) {
+                /* A government taxes. The money goes to the treasury, which
+                   belongs to the state and not to whoever holds the capital —
+                   that is the entire difference between this and a levy. What
+                   arrives is the assessment times how far the administration
+                   actually reaches. */
+                const due = revenue * p.taxRate * this.stAdmin[st];
+                C[lord] -= due;
+                this.stTreasury[st] += due;
+                this.stTaxTake[st] += due;
+                taxPaid += due;
+
+                /* And the state meets part of his payroll — but never out of
+                   the standing reserve, which is spoken for by the civil
+                   service. A bigger national army made this bill large enough
+                   to swallow the treasury whole, the officials went unpaid and
+                   were dismissed, administration fell back to its customary
+                   base, and the tax that funded the army fell with it. */
+                const help = payroll * p.armyShare;
+                if (this.stTreasury[st] - help >= p.treasuryReserve) {
+                    this.stTreasury[st] -= help;
+                    C[lord] += help;
+                    subsidy += help;
+                }
+            } else if (st >= 0) {
                 const lead = this.stLead[st];
                 if (lead >= 0 && lead !== e && this.eAlive[lead] === 1) {
                     const king = this.eLord[lead];
@@ -1623,8 +1805,16 @@ const sim = {
             }
 
             /* What the garrison can hold, applied to next tick's collections.
-               Men in the field are not men standing over a harvest. */
-            const want = tn * p.perTenant;
+               Men in the field are not men standing over a harvest.
+
+               A government keeps more men under arms per subject than a manor
+               does — that, not the subsidy, is what makes a nation militarily
+               heavier. Paying half of a lord's payroll only made him richer,
+               because his garrison was sized by how many tenants he had to
+               watch and never by what he could afford: subsidised and
+               unsubsidised estates fielded the same 7 men apiece. */
+            const isGov = st >= 0 && this.stGov[st] === 1;
+            const want = tn * p.perTenant * (isGov ? 1 + p.govArmyBonus : 1);
             let enf = p.enforceBase + (want > 0 ? troops / want : 1);
             if (enf > 1) enf = 1;
             if (st >= 0 && this.stWar[st] >= 0) enf *= p.warEnforce;
@@ -1692,6 +1882,8 @@ const sim = {
         this.granaryTotal = granaryTotal;
         this.craftFlow = craftTotal;
         this.grainMoved = grainMoved;
+        this.taxPaid = taxPaid;
+        this.armySubsidy = subsidy;
         this.estateCount = count;
         this.ownedCells = cells;
         this.tenantCount = tenants;
@@ -1714,6 +1906,133 @@ const sim = {
         this.stateCount = states;
         this.largestState = biggest;
         this.warCount = wars >> 1;      /* counted from both sides */
+    },
+
+    /* ------------------------------------------------------- government --- */
+
+    /* Runs after the estates have settled, because the tax it collects is
+       assessed on revenue those estates have only just realised. */
+    _settleStates() {
+        const p = this.P;
+        const live = this._liveE, n = this._liveN;
+        let govs = 0, treasury = 0, reserve = 0, tax = 0, officials = 0, works = 0;
+
+        for (let s = 0; s < MAX_STATES; s++) {
+            if (this.stAlive[s] === 0) continue;
+            const members = this.stMembers[s];
+
+            if (this.stGov[s] === 0 && members >= p.govMinEstates) {
+                this.stGov[s] = 1;
+                this.stGovSince[s] = this.tickCount;
+                this.stAdmin[s] = p.govAdminBase;
+                this.governments++;
+                this._logEvent('gov', s, members, 0);
+            } else if (this.stGov[s] === 1 && members < p.govMinEstates) {
+                /* Too few manors left to be a state rather than a household.
+                   The offices are abolished and the survivors are lords again. */
+                this.stGov[s] = 0;
+                this.stShedOff[s] = this.stOffLast[s];
+                this.stAdmin[s] = 0;
+                this.collapses++;
+                this._logEvent('collapse', s, members, 0);
+            }
+
+            const off = this.stOfficials[s];
+            this.stOffLast[s] = off;
+            this.stOfficials[s] = 0;
+            this.stWantOff[s] = 0;
+
+            if (this.stGov[s] === 0) {
+                this.stAdmin[s] = 0;
+                this.stTaxTake[s] = 0;
+                continue;
+            }
+
+            /* Officials paid themselves in the agent loop off this same count,
+               so debiting the treasury here keeps the two halves exact. */
+            this.stTreasury[s] -= p.officialSalary * off;
+
+            if (this.stTreasury[s] < 0) {
+                const short = -this.stTreasury[s];
+                this.stTreasury[s] = 0;
+                let shed = Math.ceil(short / Math.max(1e-6, p.officialSalary));
+                if (shed > off) shed = off;
+                this.stShedOff[s] = shed;
+            }
+
+            /* What the state can actually collect. Without officials only the
+               customary dues come in; with enough of them it collects its due. */
+            const wantOff = members * p.officialsPerEstate;
+            let admin = p.govAdminBase + (wantOff > 0 ? off / wantOff : 1);
+            if (admin > 1) admin = 1;
+            this.stAdmin[s] = admin;
+
+            if (off < Math.ceil(wantOff) && this.stTreasury[s] > p.treasuryReserve) {
+                this.stWantOff[s] = 1;    /* one appointment a tick, like a levy of men */
+            }
+
+            /* Public works, charged on the ground held. Partly funded is
+               partly built — the bonus follows the money. */
+            let held = 0;
+            for (let i = 0; i < n; i++) {
+                const e = live[i];
+                if (this.eAlive[e] === 1 && this.eState[e] === s) held += this.eCells[e];
+            }
+            const bill = held * p.worksCost;
+            if (bill > 0) {
+                /* Works are paid out of what is left ABOVE the standing reserve,
+                   never out of it. Letting them spend the treasury to the floor
+                   meant there was never anything left to appoint an official
+                   with, so administration stayed at its customary base, the tax
+                   never rose, and the whole civil service failed to exist — a
+                   government that could build roads but not staff itself. */
+                const spendable = this.stTreasury[s] - p.treasuryReserve;
+                const afford = spendable <= 0 ? 0 : (spendable < bill ? spendable : bill);
+                this.stTreasury[s] -= afford;
+                this.stWorks[s] = afford / bill;
+                works += afford;
+            } else {
+                this.stWorks[s] = 0;
+            }
+
+            this.stTreasury[s] -= this.stTreasury[s] * p.treasuryWaste;
+
+            govs++;
+            treasury += this.stTreasury[s];
+            reserve += this.stReserve[s];
+            tax += this.stTaxTake[s];
+            officials += off;
+            this.stTaxTake[s] = 0;
+        }
+
+        /* The national granary. Towns in surplus give, towns in want draw —
+           which is the difference between a bad harvest and a famine, and the
+           one thing here no single lord could do for himself. */
+        const target = p.reserveTarget, rate = p.reserveRate;
+        for (let i = 0; i < n; i++) {
+            const e = live[i];
+            if (this.eAlive[e] === 0) continue;
+            const s = this.eState[e];
+            if (s < 0 || this.stGov[s] === 0) continue;
+            const g = this.eGranary[e];
+            if (g > target) {
+                const take = (g - target) * rate;
+                this.eGranary[e] = g - take;
+                this.stReserve[s] += take;
+            } else if (this.stReserve[s] > 0) {
+                let give = (target - g) * rate;
+                if (give > this.stReserve[s]) give = this.stReserve[s];
+                this.eGranary[e] = g + give;
+                this.stReserve[s] -= give;
+            }
+        }
+
+        this.govCount = govs;
+        this.treasuryTotal = treasury;
+        this.reserveTotal = reserve;
+        this.taxFlow = tax;
+        this.worksFlow = works;
+        this.officialsEmployed = officials;
     },
 
     /* ---------------------------------------------------- states & wars --- */
@@ -1844,6 +2163,9 @@ const sim = {
             this.stMembers[into]++;
             moved++;
         }
+        /* The treasury and the grain reserve are seized with the country. */
+        this.stTreasury[into] += this.stTreasury[from];
+        this.stReserve[into] += this.stReserve[from];
         const other = this.stWar[from];
         if (other >= 0 && other !== into) this.stWar[other] = -1;
         this._retireState(from);
@@ -1857,6 +2179,15 @@ const sim = {
         this.stWar[s] = -1;
         this.stCasualties[s] = 0;
         this.stLead[s] = -1;
+        /* Everything the state owned goes with it. The officials find out at
+           the top of next tick, when their state no longer answers. */
+        this.stGov[s] = 0;
+        this.stTreasury[s] = 0;
+        this.stReserve[s] = 0;
+        this.stAdmin[s] = 0;
+        this.stShedOff[s] = this.stOffLast[s];
+        this.stOfficials[s] = 0;
+        this.stWantOff[s] = 0;
         this._stFree[this._stFreeN++] = s;
     },
 
@@ -1880,8 +2211,18 @@ const sim = {
             if (this.stAlive[t] === 0) { this.stWar[s] = -1; continue; }
 
             const strA = this._stateStrength(s), strB = this._stateStrength(t);
-            if (this.rand() < strA / (strA + strB)) this.stCasualties[t]++;
-            else this.stCasualties[s]++;
+            /* The loser of a round takes casualties in proportion to how badly
+               it is outmatched. With a flat one-per-round, evenly matched
+               powers ground each other down at exactly the same rate, no
+               garrison ever reached zero, and forty-four wars produced not one
+               conquest — every war ended in a negotiated peace regardless of
+               who was winning it. */
+            let winner, loser, ratio;
+            if (this.rand() < strA / (strA + strB)) { winner = s; loser = t; ratio = strA / strB; }
+            else { winner = t; loser = s; ratio = strB / strA; }
+            let toll = 1 + Math.floor(ratio - 1);
+            if (toll > 4) toll = 4; else if (toll < 1) toll = 1;
+            this.stCasualties[loser] += toll;
             this.stBattles[s]++; this.stBattles[t]++;
             this.battles++;
 
@@ -1990,17 +2331,19 @@ const sim = {
     },
 
     _recount() {
-        let n = 0, lords = 0, soldiers = 0, citizens = 0, sf = 0, sc = 0, sm = 0, ct = 0;
+        let n = 0, lords = 0, soldiers = 0, citizens = 0, officials = 0;
+        let sf = 0, sc = 0, sm = 0, ct = 0;
         for (let i = 0; i < MAX_AGENTS; i++) {
             if (this.alive[i] === 0) continue;
             n++; sf += this.food[i]; sc += this.capital[i]; sm += this.met[i];
             if (this.role[i] === ROLE_LORD) lords++;
             else if (this.role[i] === ROLE_SOLDIER) soldiers++;
             else if (this.role[i] === ROLE_CITIZEN) citizens++;
+            else if (this.role[i] === ROLE_OFFICIAL) officials++;
         }
         for (let c = 0; c < NCELL; c++) ct += this.crop[c];
         this.pop = n; this.lords = lords; this.soldiers = soldiers;
-        this.citizens = citizens;
+        this.citizens = citizens; this.officials = officials;
         this.sumFood = sf; this.sumCapital = sc; this.sumMet = sm;
         this.cropTotal = ct;
     },
