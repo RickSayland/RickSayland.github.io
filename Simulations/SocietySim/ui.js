@@ -190,6 +190,7 @@
         set('statEstates', String(n.estates));
         set('statOwned', num(n.ownedShare * 100, 1) + '%');
         set('statTenantShare', num(n.tenantShare * 100, 0) + '%');
+        set('statWorked', num(n.workedShare * 100, 0) + '% — the rest is frontier');
         set('statRent', num(n.rentYear, 0) + ' / yr');
         set('statLargestEstate', n.largestEstate.toLocaleString() + ' cells');
         set('statEnclosures', sim.enclosures + ' / ' + sim.dissolutions);

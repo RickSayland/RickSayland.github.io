@@ -368,6 +368,16 @@ const P = {
        made of. It is charged per cell held, so it scales with the country and
        a large state cannot simply hoard: a treasury with nothing to spend on
        grows without bound and the whole fiscal side stops meaning anything. */
+    /* Contiguity. A manor holds a disc; a country holds a map. Territory is
+       allowed to reach this far past what a manor could garrison on its own,
+       which is exactly enough for neighbouring members to meet in the middle
+       and close the gap between them. A lone manor gets none of it and stays a
+       disc in a commons — the patchwork is what feudalism looks like, and the
+       filled-in border is what a state looks like. */
+    fillBonus: 34,         // reach past the garrisoned radius, for any state
+    govFillBonus: 78,      // a government reaches a great deal further
+    consolidateInterval: 32,
+
     govArmyBonus: 0.8,     // extra men per subject a state keeps over a manor
     worksCost: 0.008,      // per owned cell per tick
     worksBonus: 0.6,       // added to the improvement multiplier when fully funded
@@ -584,6 +594,11 @@ const sim = {
     depth: new Float32Array(NCELL),
     road: new Uint8Array(NCELL),         // made road; the going is faster on it
     city: new Int16Array(NCELL),         // town whose walls this cell is inside
+    /* Held is not the same as worked. A manor's core is drained and irrigated;
+       the frontier a state fills in to make its border contiguous is held,
+       taxed and defended, but nobody has improved it. Without this distinction
+       drawing a modern border doubled the country's food supply overnight. */
+    improved: new Uint8Array(NCELL),
     res: [new Float32Array(NCELL), new Float32Array(NCELL),
           new Float32Array(NCELL), new Float32Array(NCELL)],
     owner: new Int16Array(NCELL),        // estate id, or -1
@@ -767,6 +782,8 @@ const sim = {
     _stFreeN: 0,
     _liveE: new Int32Array(MAX_ESTATES),   // compact list, rebuilt each tick
     _liveN: 0,
+    _fillQ: new Int32Array(NCELL),         // BFS queue for consolidation
+    _fillSeen: new Uint8Array(NCELL),
     /* Gompertz hazard, precomputed per age in ticks. The curve depends on
        nothing but age, and evaluating Math.exp for every agent every tick cost
        more than the land update and the movement put together. */
@@ -804,6 +821,7 @@ const sim = {
         this.eOilIncome.fill(0);
 
         this.owner.fill(-1);
+        this.improved.fill(0);
         this.road.fill(0);
         this.city.fill(-1);
         this.eGranary.fill(0);
@@ -959,11 +977,11 @@ const sim = {
            per-estate rate carries the fertiliser bonus, so a manor sitting on
            nitrate genuinely grows more food than one that is not. --- */
         const rg = p.regrow;
-        const eRegrow = this.eRegrow;
+        const eRegrow = this.eRegrow, improved = this.improved;
         let cropTotal = 0;
         for (let c = 0; c < NCELL; c++) {
             const o = own[c];
-            const rate = o >= 0 ? eRegrow[o] : rg;
+            const rate = (o >= 0 && improved[c] === 1) ? eRegrow[o] : rg;
             const v = crop[c] + rate * (fert[c] - crop[c]);
             crop[c] = v;
             cropTotal += v;
@@ -1375,6 +1393,7 @@ const sim = {
         this._enclose();
         this._settleEstates();
         this._settleStates();
+        if (this.tickCount % p.consolidateInterval === 0) this._consolidate();
         /* Diplomacy is annual and battles are fought every few days, both off
            the compact live list _settleEstates just rebuilt. Neither is in the
            per-agent path, so a map of twenty states costs a few hundred ops. */
@@ -1541,6 +1560,7 @@ const sim = {
                    suggests and pays upkeep only on what it actually holds. */
                 if (this.walk[c] === 0) continue;
                 own[c] = e;
+                this.improved[c] = 1;      /* the manor's own worked ground */
                 added++;
                 for (let k = 0; k < NRES; k++) eRes[base + k] += res[k][c];
             }
@@ -1868,10 +1888,10 @@ const sim = {
         }
 
         if (dissolved) {
-            const own = this.owner, eAlive = this.eAlive;
+            const own = this.owner, eAlive = this.eAlive, improved = this.improved;
             for (let c = 0; c < NCELL; c++) {
                 const o = own[c];
-                if (o >= 0 && eAlive[o] === 0) own[c] = -1;
+                if (o >= 0 && eAlive[o] === 0) { own[c] = -1; improved[c] = 0; }
             }
             this.ownerVersion++;
         }
@@ -1906,6 +1926,82 @@ const sim = {
         this.stateCount = states;
         this.largestState = biggest;
         this.warCount = wars >> 1;      /* counted from both sides */
+    },
+
+    /* ---------------------------------------------------- consolidation --- */
+
+    /* Fills the gaps between the manors of one state, so a country reads as a
+       country rather than as beads on a road.
+     *
+     * A breadth-first sweep outward from every cell already held, nearest
+     * holder first — so an unclaimed cell goes to whichever manor is closest to
+     * it, and where two states meet the border falls halfway between them
+     * instead of leaving a strip of nobody's land. Bounding it by distance from
+     * the SEAT rather than by how many steps the sweep has taken is what makes
+     * it converge: the reachable set is fixed, so once it is claimed, later
+     * passes find nothing to do. Bounding by sweep depth instead would dilate
+     * the same territory outward a little further every time it ran, and the
+     * map would slowly be eaten.
+     *
+     * Only states with more than one manor consolidate. That is the whole
+     * point — a lone lord holds a disc with commons around it, and joining a
+     * state is what turns a holding into a territory. It also, incidentally,
+     * hands states the wasteland between their manors, which is where the ore
+     * and the oil have been sitting untouched since v0.4.
+     */
+    _consolidate() {
+        const p = this.P;
+        const own = this.owner, walk = this.walk, res = this.res;
+        const q = this._fillQ, seen = this._fillSeen;
+        const eState = this.eState, stGov = this.stGov, stMembers = this.stMembers;
+        let head = 0, tail = 0;
+
+        for (let c = 0; c < NCELL; c++) {
+            const o = own[c];
+            if (o < 0) { seen[c] = 0; continue; }
+            seen[c] = 1;
+            const s = eState[o];
+            if (s < 0 || stMembers[s] < 2) continue;
+            q[tail++] = c;
+        }
+
+        let claimed = 0;
+        while (head < tail) {
+            const c = q[head++];
+            const o = own[c];
+            if (o < 0 || this.eAlive[o] === 0) continue;
+            const s = eState[o];
+            if (s < 0) continue;
+            const reach = this.eRadius[o] +
+                (stGov[s] === 1 ? p.govFillBonus : p.fillBonus);
+            const r2 = reach * reach;
+            const sx = this.eSeatX[o], sy = this.eSeatY[o];
+            const cx = c % GW, cy = (c / GW) | 0;
+
+            for (let k = 0; k < 4; k++) {
+                let nx = cx, ny = cy;
+                if (k === 0) { if (cx === 0) continue; nx--; }
+                else if (k === 1) { if (cx === GW - 1) continue; nx++; }
+                else if (k === 2) { if (cy === 0) continue; ny--; }
+                else { if (cy === GH - 1) continue; ny++; }
+
+                const nb = ny * GW + nx;
+                if (seen[nb] === 1 || walk[nb] === 0 || own[nb] >= 0) continue;
+                const dx = (nx + 0.5) * CELL - sx, dy = (ny + 0.5) * CELL - sy;
+                if (dx * dx + dy * dy > r2) continue;
+
+                seen[nb] = 1;
+                own[nb] = o;
+                this.eCells[o]++;
+                const base = o * NRES;
+                for (let j = 0; j < NRES; j++) this.eRes[base + j] += res[j][nb];
+                q[tail++] = nb;
+                claimed++;
+            }
+        }
+
+        if (claimed > 0) this.ownerVersion++;
+        return claimed;
     },
 
     /* ------------------------------------------------------- government --- */
@@ -2356,10 +2452,11 @@ const sim = {
        ceiling — the question the run answers is who gets the difference. */
     carryingCapacity() {
         const p = this.P, own = this.owner, fert = this.fert, eRegrow = this.eRegrow;
+        const improved = this.improved;
         let prod = 0;
         for (let c = 0; c < NCELL; c++) {
             const o = own[c];
-            prod += (o >= 0 ? eRegrow[o] : p.regrow) * fert[c];
+            prod += ((o >= 0 && improved[c] === 1) ? eRegrow[o] : p.regrow) * fert[c];
         }
         const met = this.pop > 0 ? this.sumMet / this.pop : p.metMean;
         return prod / met;

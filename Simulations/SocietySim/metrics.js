@@ -123,6 +123,7 @@ const metrics = (function () {
             capacity: 0,
             /* property + arms */
             estates: 0, ownedShare: 0, tenants: 0, tenantShare: 0,
+            improvedCells: 0, workedShare: 0,
             enforcement: 0, rentYear: 0, wageYear: 0,
             lordCap: 0, soldierCap: 0, tenantCap: 0, freeCap: 0,
             lordWealthShare: 0, tenantEdge: 0,
@@ -342,6 +343,10 @@ const metrics = (function () {
             /* --- property --- */
             n.estates = s.estateCount;
             n.ownedShare = s.ownedCells / s.NCELL;
+            let improved = 0;
+            for (let c = 0; c < s.NCELL; c++) if (s.improved[c] === 1) improved++;
+            n.improvedCells = improved;
+            n.workedShare = s.ownedCells > 0 ? improved / s.ownedCells : 0;
             n.enforcement = s.meanEnforce;
             n.rentYear = s.rentFlow * s.TPY;
             n.wageYear = s.wageFlow * s.TPY;
