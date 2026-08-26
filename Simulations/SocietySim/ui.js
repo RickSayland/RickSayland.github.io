@@ -154,6 +154,30 @@
             set('classW' + i, num(wshare * 100, 1) + '%');
         }
 
+        /* --- property --- */
+        set('statEstates', String(n.estates));
+        set('statOwned', num(n.ownedShare * 100, 1) + '%');
+        set('statTenantShare', num(n.tenantShare * 100, 0) + '%');
+        set('statRent', num(n.rentYear, 0) + ' / yr');
+        set('statLargestEstate', n.largestEstate.toLocaleString() + ' cells');
+        set('statEnclosures', sim.enclosures + ' / ' + sim.dissolutions);
+
+        set('statTenantEdge', n.freeCap > 0 ? num(n.tenantEdge, 2) + '×' : '—');
+        $('statTenantEdge').className = 'headline-val ' +
+            (n.estates === 0 ? '' : n.tenantEdge > 1.03 ? 'ok' : n.tenantEdge < 0.97 ? 'bad' : 'warn');
+        set('statTenantCap', num(n.tenantCap, 2));
+        set('statFreeCap', num(n.freeCap, 2));
+        set('statSoldierCap', num(n.soldierCap, 2));
+        set('statBargain', bargainWord(n));
+
+        /* --- arms --- */
+        set('statSoldiers', n.soldiers.toLocaleString());
+        set('statGarrisonMax', String(n.garrisonMax));
+        set('statEnforce', num(n.enforcement * 100, 0) + '%');
+        $('barEnforce').style.width = (n.enforcement * 100).toFixed(1) + '%';
+        set('statRecruits', sim.recruits + ' / ' + sim.desertions);
+        set('statArmsShare', sim.pop ? num(n.soldiers / sim.pop * 100, 2) + '% of everyone' : '—');
+
         /* --- organisation --- */
         set('statSettle', String(n.settlements));
         set('statLargest', n.largest.toLocaleString());
@@ -200,6 +224,16 @@
         inspect();
     }
 
+    function bargainWord(n) {
+        if (n.estates === 0) return 'Nobody owns anything yet. Every farmer works the commons.';
+        if (n.freeCap <= 0) return 'No freeholders left to compare against.';
+        const e = n.tenantEdge;
+        if (e > 1.15) return 'The improvement is worth more than the rent, comfortably. Expect the commons to keep emptying.';
+        if (e > 1.03) return 'Tenants are modestly ahead. The bargain holds, but not by much.';
+        if (e > 0.97) return 'A wash. Tenants pay in rent almost exactly what the better ground gives back.';
+        return 'Tenants are worse off than freeholders — the rent has overtaken the improvement, and the borders will start to bleed.';
+    }
+
     function giniWord(g) {
         if (g < 0.2) return 'near-equal';
         if (g < 0.32) return 'mild spread';
@@ -243,6 +277,26 @@
         set('insMet', num(sim.met[i] * 1000, 2));
         const rel = (sim.met[i] / metrics.now.meanMet - 1) * 100;
         set('insMetRel', (rel >= 0 ? '+' : '') + num(rel, 0) + '% vs mean');
+
+        const ci = ((sim.y[i] / sim.CELL) | 0) * sim.GW + ((sim.x[i] / sim.CELL) | 0);
+        const under = sim.owner[ci];
+        set('insGround', under >= 0 ? 'estate #' + under : 'the commons');
+
+        /* A lord's own estate if he has one, otherwise whatever he is standing
+           on — which for a soldier is the ground he is being paid to hold. */
+        let e = sim.estateOf[i];
+        if (e < 0) e = under;
+        const estBox = $('insEstate');
+        if (e >= 0 && sim.eAlive[e] === 1) {
+            estBox.hidden = false;
+            set('insEstId', '#' + e + (sim.eBroke[e] ? ' — in arrears' : ''));
+            set('insEstCells', sim.eCells[e] + ' cells / ' + sim.eGarrison[e] + ' men');
+            set('insEstTen', sim.eTenantsLast[e] + ' / ' + num(sim.eEnforce[e] * 100, 0) + '%');
+            set('insEstRent', num(sim.eRentLast[e] * sim.TPY, 1));
+            set('insEstAge', num((sim.tickCount - sim.eBorn[e]) / sim.TPY, 0) + ' yr ago');
+        } else {
+            estBox.hidden = true;
+        }
     }
 
     /* ----------------------------------------------------- panel scaffold -- */
@@ -283,12 +337,12 @@
     function buildLegend() {
         const el = $('legend');
         if (el.childElementCount) return;
-        metrics.CLASSES.forEach(c => {
-            el.insertAdjacentHTML('beforeend',
-                '<span class="lg"><i class="sw" style="background:' + c.color + '"></i>' + c.name + '</span>');
-        });
-        el.insertAdjacentHTML('beforeend',
-            '<span class="lg"><i class="sw" style="background:' + metrics.HUNGRY_COLOR + '"></i>going hungry</span>');
+        const row = (color, label) =>
+            '<span class="lg"><i class="sw" style="background:' + color + '"></i>' + label + '</span>';
+        metrics.CLASSES.forEach(c => el.insertAdjacentHTML('beforeend', row(c.color, c.name)));
+        el.insertAdjacentHTML('beforeend', row(metrics.HUNGRY_COLOR, 'going hungry'));
+        el.insertAdjacentHTML('beforeend', row(metrics.SOLDIER_COLOR, 'soldier'));
+        el.insertAdjacentHTML('beforeend', row(metrics.LORD_COLOR, 'lord · manor'));
     }
 
     /* --------------------------------------------------------- controls -- */
@@ -297,10 +351,15 @@
        touched is only reproducible from seed *plus* the parameters they ended
        on. Leave them alone and the seed alone determines everything. */
     const KNOBS = [
-        { key: 'regrow',    id: 'knobRegrow',  fmt: v => (v * 100).toFixed(1) + '%/tick' },
-        { key: 'harvestMax', id: 'knobHarvest', fmt: v => v.toFixed(3) },
-        { key: 'storeEff',  id: 'knobStore',   fmt: v => (v * 100).toFixed(0) + '%' },
-        { key: 'metMutate', id: 'knobMutate',  fmt: v => (v * 100).toFixed(1) + '%' }
+        { key: 'regrow',      id: 'knobRegrow',  fmt: v => (v * 100).toFixed(1) + '%/tick' },
+        { key: 'harvestMax',  id: 'knobHarvest', fmt: v => v.toFixed(3) },
+        { key: 'storeEff',    id: 'knobStore',   fmt: v => (v * 100).toFixed(0) + '%' },
+        { key: 'metMutate',   id: 'knobMutate',  fmt: v => (v * 100).toFixed(1) + '%' },
+        { key: 'social',      id: 'knobSocial',  fmt: v => v.toFixed(4) },
+        { key: 'rentShare',   id: 'knobRent',    fmt: v => (v * 100).toFixed(0) + '%' },
+        { key: 'improve',     id: 'knobImprove', fmt: v => '+' + (v * 100).toFixed(0) + '%' },
+        { key: 'claimMin',    id: 'knobClaim',   fmt: v => v.toFixed(1) },
+        { key: 'soldierCost', id: 'knobSoldier', fmt: v => v.toFixed(3) }
     ];
 
     function wireKnobs() {
@@ -343,6 +402,10 @@
             boot();
         });
         $('fitBtn').addEventListener('click', () => render.fit(sim));
+
+        $('estToggle').addEventListener('change', e => {
+            render.showEstates = e.target.checked;
+        });
 
         render.onPick = (wx, wy) => {
             const r = 14 / Math.max(render.cam.z, 0.2);

@@ -3,15 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SocietySim — Ten Thousand Farmers</title>
+    <title>SocietySim — Land and Lords</title>
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
-    <link rel="stylesheet" href="society.css?v=0.1.0">
+    <link rel="stylesheet" href="society.css?v=0.2.0">
 </head>
 <body>
     <div class="topbar">
         <h1><span>Society</span>Sim</h1>
-        <span class="version" id="version">v0.1.0</span>
-        <p class="tagline">Ten thousand farmers, one seed, and whatever the land will bear.</p>
+        <span class="version" id="version">v0.2.0</span>
+        <p class="tagline">Ten thousand farmers, one seed, and whoever ends up owning the ground.</p>
         <div class="controls">
             <button id="playBtn" class="ctl">Pause</button>
             <div class="speed">
@@ -66,14 +66,48 @@
                     <input type="range" class="slider">
                     <p class="knob-note">How far a child's metabolism strays from its parent's. At zero, nothing evolves.</p>
                 </div>
+                <div class="knob" id="knobSocial" data-min="0" data-max="0.03" data-step="0.0005">
+                    <div class="knob-head"><span class="knob-name">Gregariousness</span><span class="knob-val">—</span></div>
+                    <input type="range" class="slider">
+                    <p class="knob-note">How much company is worth, priced in crop. A grazed cell holds about 0.07, so 0.006 means ten neighbours are worth roughly one cell of food. Wind it up and they clump hard enough to starve.</p>
+                </div>
+            </div>
+
+            <div class="section-title">Property &amp; arms</div>
+            <div class="knobs">
+                <div class="knob" id="knobRent" data-min="0" data-max="0.7" data-step="0.01">
+                    <div class="knob-head"><span class="knob-name">Rent share</span><span class="knob-val">—</span></div>
+                    <input type="range" class="slider">
+                    <p class="knob-note">What a tenant hands over from every load lifted off a lord's ground — before enforcement, which decides how much of it actually arrives.</p>
+                </div>
+                <div class="knob" id="knobImprove" data-min="0" data-max="2" data-step="0.05">
+                    <div class="knob-head"><span class="knob-name">Improvement</span><span class="knob-val">—</span></div>
+                    <input type="range" class="slider">
+                    <p class="knob-note">How much faster owned land regrows. This is the other half of the bargain: set it below the rent and tenancy is simply robbery, and the tenants walk.</p>
+                </div>
+                <div class="knob" id="knobClaim" data-min="2" data-max="30" data-step="0.5">
+                    <div class="knob-head"><span class="knob-name">Cost of enclosure</span><span class="knob-val">—</span></div>
+                    <input type="range" class="slider">
+                    <p class="knob-note">Capital a farmer must have saved before he can fence anything. Lower it and the commons goes quickly.</p>
+                </div>
+                <div class="knob" id="knobSoldier" data-min="0" data-max="0.4" data-step="0.005">
+                    <div class="knob-head"><span class="knob-name">Cost of a soldier</span><span class="knob-val">—</span></div>
+                    <input type="range" class="slider">
+                    <p class="knob-note">Arms and provisions, per man per day, out of the lord's purse. Raise it far enough and no rent can be collected at all.</p>
+                </div>
             </div>
 
             <div class="section-title">Who's who</div>
             <div class="legend" id="legend"></div>
             <p class="knob-note">
-                Colour is stored capital, not food. A farmer who is going hungry
-                today shows red whatever they have in the granary.
+                Farmers are coloured by stored capital, not by what is in their
+                belly — one going hungry today shows red whatever the granary
+                holds. Lords and soldiers are coloured by what they are, because
+                on the map that is the thing worth finding. Gold squares are
+                manors; the ring around one is the border its garrison is
+                holding, and it turns red when the lord is in arrears.
             </p>
+            <label class="check"><input type="checkbox" id="estToggle" checked> Show estates</label>
 
             <div class="section-title">Inspect</div>
             <div class="inspect empty" id="inspectBody">
@@ -88,8 +122,16 @@
                     <div class="stat"><div class="stat-value" id="insCap">—</div><div class="stat-label">capital</div></div>
                 </div>
                 <div class="ins-row"><span>Role</span><b id="insRole">—</b></div>
+                <div class="ins-row"><span>Standing on</span><b id="insGround">—</b></div>
                 <div class="ins-row"><span>Metabolism</span><b id="insMet">—</b></div>
                 <div class="ins-row"><span></span><b class="soft" id="insMetRel">—</b></div>
+                <div class="ins-estate" id="insEstate" hidden>
+                    <div class="ins-row"><span>Estate</span><b id="insEstId">—</b></div>
+                    <div class="ins-row"><span>Held / garrison</span><b id="insEstCells">—</b></div>
+                    <div class="ins-row"><span>Tenants / enforcement</span><b id="insEstTen">—</b></div>
+                    <div class="ins-row"><span>Rent per year</span><b id="insEstRent">—</b></div>
+                    <div class="ins-row"><span>Founded</span><b id="insEstAge">—</b></div>
+                </div>
             </div>
         </aside>
 
@@ -186,13 +228,69 @@
                 <tbody id="classRows"></tbody>
             </table>
             <p class="knob-note">
-                The bands are absolute, not quantiles: <b>Settled</b> means holding
-                enough to afford a child, <b>Landed</b> means several. A society of
-                identical paupers reads as entirely Destitute — which is the honest
-                answer, and the one percentile bands would get wrong.
+                The bands are absolute, not quantiles: <b>Subsisting</b> is fed,
+                <b>Comfortable</b> can afford a child, <b>Wealthy</b> can afford to
+                enclose ground and <b>Magnate</b> can afford to hold it. A society
+                of identical paupers reads as entirely Destitute — the honest
+                answer, and the one percentile bands would get wrong. These are
+                wealth and nothing else: a soldier and a small freeholder land in
+                the same band on very different terms, which is what the role
+                census below is for.
             </p>
 
-            <div class="section-title">Organisation</div>
+            <div class="section-title">Property</div>
+            <canvas class="chart" id="chartProperty"></canvas>
+            <div class="split-legend wrap">
+                <span><i class="sw sw-lord"></i>land enclosed</span>
+                <span><i class="sw sw-sold"></i>farmers who are tenants</span>
+                <span><i class="sw sw-starve"></i>wealth held by lords</span>
+            </div>
+            <div class="stat-grid">
+                <div class="stat"><div class="stat-value" id="statEstates">—</div><div class="stat-label">estates</div></div>
+                <div class="stat"><div class="stat-value" id="statOwned">—</div><div class="stat-label">of the map</div></div>
+                <div class="stat"><div class="stat-value" id="statTenantShare">—</div><div class="stat-label">are tenants</div></div>
+            </div>
+            <div class="ins-row"><span>Rent collected</span><b id="statRent">—</b></div>
+            <div class="ins-row"><span>Largest estate</span><b id="statLargestEstate">—</b></div>
+            <div class="ins-row"><span>Enclosed / folded, all time</span><b id="statEnclosures">—</b></div>
+
+            <div class="section-title">Is tenancy worth it?</div>
+            <div class="headline">
+                <div class="headline-val" id="statTenantEdge">—</div>
+                <div class="headline-unit">tenant capital ÷ freeholder capital</div>
+            </div>
+            <div class="stat-grid">
+                <div class="stat"><div class="stat-value" id="statTenantCap">—</div><div class="stat-label">tenant</div></div>
+                <div class="stat"><div class="stat-value" id="statFreeCap">—</div><div class="stat-label">freeholder</div></div>
+                <div class="stat"><div class="stat-value" id="statSoldierCap">—</div><div class="stat-label">soldier</div></div>
+            </div>
+            <p class="knob-note" id="statBargain">—</p>
+            <p class="knob-note">
+                Nothing tells a farmer to seek out a manor. Improved ground simply
+                grows more, the same three probes that find good soil find it, and
+                they walk there on their own. Where the border settles is where
+                the crowd has eaten the improvement back down to what the commons
+                offers — so a domain's edge is a price, not a fence.
+            </p>
+
+            <div class="section-title">Arms</div>
+            <div class="stat-grid">
+                <div class="stat"><div class="stat-value" id="statSoldiers">—</div><div class="stat-label">under arms</div></div>
+                <div class="stat"><div class="stat-value" id="statGarrisonMax">—</div><div class="stat-label">largest company</div></div>
+                <div class="stat"><div class="stat-value" id="statEnforce">—</div><div class="stat-label">enforcement</div></div>
+            </div>
+            <div class="split-track"><div class="split-fill enforce" id="barEnforce"></div></div>
+            <div class="ins-row"><span>Recruited / deserted, all time</span><b id="statRecruits">—</b></div>
+            <div class="ins-row"><span>Kept under arms</span><b id="statArmsShare">—</b></div>
+            <p class="knob-note">
+                A title collects nothing on its own. Rent actually taken is the
+                rent share times enforcement, and enforcement is what the garrison
+                can cover — below that, the difference simply stays in the
+                tenants' hands. The bar sitting under full is a countryside
+                paying less than it is asked for.
+            </p>
+
+            <div class="section-title">Roles &amp; settlement</div>
             <table class="tbl">
                 <thead><tr><th>Role</th><th class="n">people</th><th class="n">share</th></tr></thead>
                 <tbody id="roleRows"></tbody>
@@ -207,11 +305,10 @@
             <div class="ins-row"><span></span><b class="soft" id="statSpecWord">—</b></div>
             <p class="knob-note">
                 A settlement is a patch of ground holding twice the average
-                density, found by flood fill — nobody decided where they go, and
-                nothing holds them together either: a farmer has to spread out to
-                eat. So they form on the good soil, drift, and dissolve. There is
-                one role and no institutions yet; this panel is where the rest of
-                it will show up.
+                density, found by flood fill — nobody places them. Before there
+                was property they formed on good soil, drifted and dissolved,
+                because a farmer has to spread out to eat. A manor is the first
+                thing in this world that gives a crowd a reason to stay put.
             </p>
 
             <div class="section-title">Heredity</div>
@@ -227,9 +324,9 @@
         </aside>
     </div>
 
-    <script src="sim.js?v=0.1.0"></script>
-    <script src="metrics.js?v=0.1.0"></script>
-    <script src="render.js?v=0.1.0"></script>
-    <script src="ui.js?v=0.1.0"></script>
+    <script src="sim.js?v=0.2.0"></script>
+    <script src="metrics.js?v=0.2.0"></script>
+    <script src="render.js?v=0.2.0"></script>
+    <script src="ui.js?v=0.2.0"></script>
 </body>
 </html>

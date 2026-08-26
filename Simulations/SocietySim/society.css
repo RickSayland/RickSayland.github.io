@@ -263,6 +263,28 @@ body {
 .sw-aged { background: #2a3d3f; }
 .sw-gini { background: #c9a0ff; }
 .sw-top { background: #6f8fd6; }
+.sw-lord { background: #ffd76b; }
+.sw-sold { background: #7fb2d9; }
+
+.check {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    margin-top: 9px;
+    font-size: 11px;
+    color: #7d9294;
+    cursor: pointer;
+}
+
+.check input { accent-color: #64d6bd; cursor: pointer; }
+
+.ins-estate {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid #162325;
+}
+
+.inspect.empty .ins-estate { display: none; }
 
 /* ---- Inspect ---- */
 
@@ -411,6 +433,8 @@ body {
     transition: width 0.25s linear;
 }
 
+.split-fill.enforce { background: linear-gradient(90deg, #7fb2d9, #ffd76b); }
+
 .split-legend {
     display: flex;
     gap: 14px;
@@ -419,6 +443,8 @@ body {
     color: #6b8082;
     font-family: ui-monospace, 'Consolas', monospace;
 }
+
+.split-legend.wrap { flex-wrap: wrap; gap: 6px 12px; }
 
 .split-legend span { display: flex; align-items: center; gap: 6px; }
 .split-legend b { color: #d3e0e0; font-weight: 600; }

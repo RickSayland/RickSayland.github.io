@@ -14,20 +14,29 @@ const metrics = (function () {
     const SERIES_LEN = 260;
     const RATE_WINDOW = 8;        // samples averaged for birth/death rates
 
-    /* Class bands, in units of stored capital. These are absolute, not
+    /* Wealth bands, in units of stored capital. These are absolute, not
        quantiles: with quantile bands a society of identical paupers still reads
-       as having an upper class, which is exactly the wrong answer. The cuts are
-       pinned to things an agent can actually do — birthCapital is the price of
-       a child, so "Settled" means able to afford one, and "Landed" means able
-       to afford several without ever going hungry. */
+       as having an upper class, which is exactly the wrong answer.
+       They describe wealth and nothing else — a soldier and a small freeholder
+       land in the same band on different terms, and the role census beside them
+       is what separates the two. The cuts are pinned to things an agent can
+       actually do: Subsisting is fed, Comfortable can afford a child, Wealthy
+       can afford to enclose ground, Magnate can afford to hold it. */
     const CLASSES = [
-        { name: 'Destitute', min: 0,    color: '#b4694a' },
-        { name: 'Subsisting', min: 0.8,  color: '#c9a06a' },
-        { name: 'Settled',   min: 3.2,  color: '#f2b56b' },
-        { name: 'Landed',    min: 8.0,  color: '#ffe6a8' }
+        { name: 'Destitute',   min: 0,    color: '#a85a3f' },
+        { name: 'Subsisting',  min: 0.8,  color: '#c9925e' },
+        { name: 'Comfortable', min: 3.2,  color: '#e8a95e' },
+        { name: 'Wealthy',     min: 8.0,  color: '#f6d089' },
+        { name: 'Magnate',     min: 25.0, color: '#fdf0c8' }
     ];
-    const HUNGRY_COLOR = '#e2603c';   /* a condition, not a class */
+    const NCLASS = CLASSES.length;
+
+    /* Conditions and roles, which are not classes and are coloured separately
+       on the map. */
+    const HUNGRY_COLOR = '#e2603c';
     const HUNGRY_FOOD = 0.6;
+    const LORD_COLOR = '#ffd76b';
+    const SOLDIER_COLOR = '#7fb2d9';
 
     /* Settlement detection works on blocks of land cells, not single cells: one
        cell is 10 world units and a farmer crosses it in four steps, so at cell
@@ -68,18 +77,22 @@ const metrics = (function () {
         CLASSES: CLASSES,
         HUNGRY_COLOR: HUNGRY_COLOR,
         HUNGRY_FOOD: HUNGRY_FOOD,
+        LORD_COLOR: LORD_COLOR,
+        SOLDIER_COLOR: SOLDIER_COLOR,
 
         series: {
             pop: ring(SERIES_LEN),
             birthRate: ring(SERIES_LEN),
             deathRate: ring(SERIES_LEN),
-            starveShare: ring(SERIES_LEN),
             meanCapital: ring(SERIES_LEN),
             gini: ring(SERIES_LEN),
             giniAdult: ring(SERIES_LEN),
             meanMet: ring(SERIES_LEN),
             crop: ring(SERIES_LEN),
-            top10: ring(SERIES_LEN)
+            top10: ring(SERIES_LEN),
+            ownedShare: ring(SERIES_LEN),
+            tenantShare: ring(SERIES_LEN),
+            lordWealthShare: ring(SERIES_LEN)
         },
 
         /* latest snapshot, read by the UI */
@@ -89,12 +102,18 @@ const metrics = (function () {
             replacement: 1,
             meanFood: 0, meanCapital: 0, medianCapital: 0, meanMet: 0,
             gini: 0, giniAdult: 0, adults: 0, top10: 0, totalCapital: 0,
-            classCount: [0, 0, 0, 0],
-            classWealth: [0, 0, 0, 0],
+            classCount: new Int32Array(NCLASS),
+            classWealth: new Float64Array(NCLASS),
             hungry: 0,
             lorenz: new Float32Array(33),
             settlements: 0, largest: 0, urbanShare: 0, crowding: 0,
-            capacity: 0
+            capacity: 0,
+            /* property + arms */
+            estates: 0, ownedShare: 0, tenants: 0, tenantShare: 0,
+            enforcement: 0, rentYear: 0, wageYear: 0,
+            lordCap: 0, soldierCap: 0, tenantCap: 0, freeCap: 0,
+            lordWealthShare: 0, tenantEdge: 0,
+            lords: 0, soldiers: 0, garrisonMax: 0, largestEstate: 0
         },
 
         _lastTick: -1,
@@ -160,26 +179,55 @@ const metrics = (function () {
             n.meanCapital = pop ? s.sumCapital / pop : 0;
             n.meanMet = pop ? s.sumMet / pop : s.P.metMean;
 
-            /* --- wealth distribution --- */
+            /* --- one pass: wealth bands, group means, tenancy --- */
             const caps = this._caps, capsA = this._capsA;
             let k = 0, ka = 0, hungry = 0;
             const cc = n.classCount, cw = n.classWealth;
-            cc[0] = cc[1] = cc[2] = cc[3] = 0;
-            cw[0] = cw[1] = cw[2] = cw[3] = 0;
+            cc.fill(0); cw.fill(0);
 
-            const maturity = s.P.maturity;
+            let lordCap = 0, nLord = 0, soldCap = 0, nSold = 0;
+            let tenCap = 0, nTen = 0, freeCap = 0, nFree = 0;
+
+            const maturity = s.P.maturity, GWl = s.GW, cellInv = 1 / s.CELL;
             for (let i = 0; i < s.MAX_AGENTS; i++) {
                 if (s.alive[i] === 0) continue;
                 const c = s.capital[i];
                 caps[k++] = c;
                 if (s.age[i] >= maturity) capsA[ka++] = c;
                 if (s.food[i] < HUNGRY_FOOD) hungry++;
-                const b = c >= CLASSES[3].min ? 3 : c >= CLASSES[2].min ? 2
-                        : c >= CLASSES[1].min ? 1 : 0;
+
+                let b = 0;
+                for (let q = NCLASS - 1; q >= 0; q--) {
+                    if (c >= CLASSES[q].min) { b = q; break; }
+                }
                 cc[b]++; cw[b] += c;
+
+                const role = s.role[i];
+                if (role === 1) { lordCap += c; nLord++; }
+                else if (role === 2) { soldCap += c; nSold++; }
+                else {
+                    /* Tenant or freeholder is a question about the ground under
+                       their feet this instant, not a status they carry. */
+                    const ci = ((s.y[i] * cellInv) | 0) * GWl + ((s.x[i] * cellInv) | 0);
+                    if (s.owner[ci] >= 0) { tenCap += c; nTen++; }
+                    else { freeCap += c; nFree++; }
+                }
             }
             n.hungry = hungry;
             n.adults = ka;
+
+            n.lords = nLord;
+            n.soldiers = nSold;
+            n.lordCap = nLord ? lordCap / nLord : 0;
+            n.soldierCap = nSold ? soldCap / nSold : 0;
+            n.tenantCap = nTen ? tenCap / nTen : 0;
+            n.freeCap = nFree ? freeCap / nFree : 0;
+            n.tenants = nTen;
+            n.tenantShare = (nTen + nFree) > 0 ? nTen / (nTen + nFree) : 0;
+            /* How much better off a tenant is than a freeholder. Above 1 the
+               bargain is worth taking even after the rent; below 1 the lord is
+               extracting more than the improvement is worth. */
+            n.tenantEdge = n.freeCap > 0 ? n.tenantCap / n.freeCap : 0;
 
             const view = caps.subarray(0, k);
             view.sort();                       /* Float32Array sorts numerically */
@@ -190,8 +238,9 @@ const metrics = (function () {
             n.medianCapital = k ? (k & 1 ? view[k >> 1]
                                          : 0.5 * (view[k >> 1] + view[(k >> 1) - 1])) : 0;
             n.gini = giniOf(view, k, total);
+            n.lordWealthShare = total > 0 ? lordCap / total : 0;
 
-            /* The same measure over grown agents only. Most of the headline
+            /* The same measure over grown agents only. Much of the headline
                Gini is lifecycle, not class: a fifteen-year-old owns nothing
                because they have not had time to save, which is not the same
                society as one where a fifteen-year-old owns nothing because
@@ -216,12 +265,26 @@ const metrics = (function () {
                 for (let seg = 0; seg <= 32; seg++) L[seg] = seg / 32;
             }
 
-            /* Share held by the richest tenth. */
             if (k > 0 && total > 0) {
                 let top = 0;
                 for (let i = Math.floor(k * 0.9); i < k; i++) top += view[i];
                 n.top10 = top / total;
             } else n.top10 = 0;
+
+            /* --- property --- */
+            n.estates = s.estateCount;
+            n.ownedShare = s.ownedCells / s.NCELL;
+            n.enforcement = s.meanEnforce;
+            n.rentYear = s.rentFlow * s.TPY;
+            n.wageYear = s.wageFlow * s.TPY;
+            let gMax = 0, eMax = 0;
+            for (let e = 0; e < s.MAX_ESTATES; e++) {
+                if (s.eAlive[e] === 0) continue;
+                if (s.eGarrison[e] > gMax) gMax = s.eGarrison[e];
+                if (s.eCells[e] > eMax) eMax = s.eCells[e];
+            }
+            n.garrisonMax = gMax;
+            n.largestEstate = eMax;
 
             /* --- how the population is arranged on the ground --- */
             this._settlements(s);
@@ -231,13 +294,15 @@ const metrics = (function () {
             push(S.pop, pop);
             push(S.birthRate, n.births);
             push(S.deathRate, n.deaths);
-            push(S.starveShare, n.deaths > 0 ? n.starved / n.deaths : 0);
             push(S.meanCapital, n.meanCapital);
             push(S.gini, n.gini);
             push(S.giniAdult, n.giniAdult);
             push(S.meanMet, n.meanMet);
             push(S.crop, s.cropTotal);
             push(S.top10, n.top10);
+            push(S.ownedShare, n.ownedShare);
+            push(S.tenantShare, n.tenantShare);
+            push(S.lordWealthShare, n.lordWealthShare);
 
             /* Replacement is births over deaths, smoothed — the instantaneous
                ratio at a half-year sample is mostly noise. */
@@ -288,10 +353,6 @@ const metrics = (function () {
             const mean = s.pop / this._landBlocks;
             const thresh = Math.max(4, Math.ceil(2 * mean));
 
-            /* Peak crowding is reported alongside the count because at v0.1.0
-               the count is honestly zero — farmers have to spread out to eat,
-               and nothing yet holds them together. A ratio still moves, and it
-               is the number that will climb once something does. */
             let peak = 0;
             for (let c = 0; c < BW * BH; c++) if (dens[c] > peak) peak = dens[c];
             this.now.crowding = mean > 0 ? peak / mean : 0;
@@ -356,6 +417,12 @@ const metrics = (function () {
                 { r: S.giniAdult, color: '#6f8fd6' }
             ], { min: 0, max: 1 });
 
+            spark('chartProperty', [
+                { r: S.ownedShare, color: '#ffd76b' },
+                { r: S.tenantShare, color: '#7fb2d9' },
+                { r: S.lordWealthShare, color: '#e2603c' }
+            ], { min: 0, max: 1 });
+
             this.drawLorenz();
         },
 
@@ -370,7 +437,6 @@ const metrics = (function () {
             const pad = 3;
             const x0 = pad, y0 = h - pad, sx = w - pad * 2, sy = h - pad * 2;
 
-            /* line of perfect equality */
             ctx.strokeStyle = '#2a3a3c';
             ctx.setLineDash([2, 3]);
             ctx.beginPath();
@@ -382,9 +448,7 @@ const metrics = (function () {
             const L = this.now.lorenz;
             ctx.beginPath();
             ctx.moveTo(x0, y0);
-            for (let i = 0; i <= 32; i++) {
-                ctx.lineTo(x0 + (i / 32) * sx, y0 - L[i] * sy);
-            }
+            for (let i = 0; i <= 32; i++) ctx.lineTo(x0 + (i / 32) * sx, y0 - L[i] * sy);
             ctx.lineTo(x0 + sx, y0);
             ctx.closePath();
             ctx.fillStyle = 'rgba(201,160,255,0.14)';
@@ -441,7 +505,7 @@ const metrics = (function () {
         if (opt.zero) lo = 0;
         if (opt.refLine !== undefined && isFinite(opt.refLine)) hi = Math.max(hi, opt.refLine);
         if (!isFinite(lo) || !isFinite(hi)) return;
-        if (hi - lo < 1e-9) { hi = lo + 1; }
+        if (hi - lo < 1e-9) hi = lo + 1;
         const span = hi - lo;
         const pad = 2;
         const sy = h - pad * 2;

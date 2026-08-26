@@ -4,12 +4,14 @@
  *
  * The land is 16,000 cells, so it is painted into an offscreen canvas one pixel
  * per cell and blown up by drawImage — the upscale happens on the GPU and costs
- * nothing, and the smoothing turns a coarse grid into a landscape.
+ * nothing, and the smoothing turns a coarse grid into a landscape. Ownership
+ * rides on the same pass as a per-estate tint, which is what makes the domains
+ * legible as blocs rather than as a uniform "owned" wash.
  *
  * The agents are up to 10,000 rectangles, which is only fast if the fill style
- * stops changing. They are bucketed by class into pre-allocated coordinate
- * lists first, so the whole population goes down in five fill-style changes
- * rather than ten thousand.
+ * stops changing. They are bucketed first into pre-allocated coordinate lists,
+ * so the whole population goes down in eight fill-style changes rather than ten
+ * thousand.
  */
 'use strict';
 
@@ -23,15 +25,23 @@ const render = {
 
     selected: -1,
     onPick: null,
+    showEstates: true,
 
     /* offscreen land */
     tcv: null, tctx: null, timg: null, tbuf: null,
 
-    /* one coordinate list per bucket: four classes plus the hungry, who are
-       coloured by condition rather than by class */
-    _bx: null, _by: null, _bn: null, _nb: 5,
+    /* buckets: one per wealth band, then hungry, soldier, lord */
+    _bx: null, _by: null, _bn: null, _nb: 0,
+    _colors: null,
 
     _drag: null,
+
+    /* Muted so a domain reads as a bloc without burying the terrain under it.
+       Estates are tinted by id, so neighbours are near-certain to differ. */
+    _tint: [
+        [126, 82, 58], [66, 92, 142], [132, 68, 112], [88, 124, 60], [146, 114, 48],
+        [58, 112, 124], [116, 58, 74], [82, 70, 136], [124, 132, 68], [68, 124, 94]
+    ],
 
     /* -------------------------------------------------------------- init -- */
 
@@ -46,6 +56,14 @@ const render = {
         this.timg = this.tctx.createImageData(s.GW, s.GH);
         this.tbuf = this.timg.data;
         for (let i = 3; i < this.tbuf.length; i += 4) this.tbuf[i] = 255;
+
+        const CL = metrics.CLASSES;
+        this._nb = CL.length + 3;
+        this._colors = CL.map(c => c.color)
+            .concat([metrics.HUNGRY_COLOR, metrics.SOLDIER_COLOR, metrics.LORD_COLOR]);
+        this._iHungry = CL.length;
+        this._iSoldier = CL.length + 1;
+        this._iLord = CL.length + 2;
 
         this._bx = [];
         this._by = [];
@@ -111,20 +129,31 @@ const render = {
         ctx.strokeRect(ox + 0.5, oy + 0.5, s.W * z, s.H * z);
 
         this._paintAgents(s, ox, oy, z);
+        if (this.showEstates) this._paintSeats(s, ox, oy, z);
         this._paintSelection(s, ox, oy, z);
     },
 
     _paintLand(s) {
-        const buf = this.tbuf, fert = s.fert, crop = s.crop;
+        const buf = this.tbuf, fert = s.fert, crop = s.crop, own = s.owner;
+        const tint = this._tint, showE = this.showEstates;
         const n = s.NCELL;
         for (let i = 0, p = 0; i < n; i++, p += 4) {
             const f = fert[i];
             /* bare soil darkens toward barren, standing crop pulls it green */
             const sr = 16 + 20 * f, sg = 22 + 28 * f, sb = 25 + 21 * f;
             const t = crop[i];
-            buf[p]     = sr + (78 - sr) * t;
-            buf[p + 1] = sg + (192 - sg) * t;
-            buf[p + 2] = sb + (158 - sb) * t;
+            let r = sr + (78 - sr) * t;
+            let g = sg + (192 - sg) * t;
+            let b = sb + (158 - sb) * t;
+
+            const o = own[i];
+            if (o >= 0 && showE) {
+                const c = tint[o % 10];
+                r += (c[0] - r) * 0.26;
+                g += (c[1] - g) * 0.26;
+                b += (c[2] - b) * 0.26;
+            }
+            buf[p] = r; buf[p + 1] = g; buf[p + 2] = b;
         }
         this.tctx.putImageData(this.timg, 0, 0);
     },
@@ -135,14 +164,15 @@ const render = {
         bn.fill(0);
 
         const CL = metrics.CLASSES;
-        const c1 = CL[1].min, c2 = CL[2].min, c3 = CL[3].min;
+        const nc = CL.length;
         const hungryFood = metrics.HUNGRY_FOOD;
+        const iH = this._iHungry, iS = this._iSoldier, iL = this._iLord;
 
         /* cull to the visible rectangle, with a cell of slack */
         const wx0 = -ox / z - 4, wx1 = (this.vw - ox) / z + 4;
         const wy0 = -oy / z - 4, wy1 = (this.vh - oy) / z + 4;
 
-        const X = s.x, Y = s.y, F = s.food, C = s.capital, AL = s.alive;
+        const X = s.x, Y = s.y, F = s.food, C = s.capital, AL = s.alive, RO = s.role;
         for (let i = 0; i < s.MAX_AGENTS; i++) {
             if (AL[i] === 0) continue;
             const wx = X[i];
@@ -150,11 +180,19 @@ const render = {
             const wy = Y[i];
             if (wy < wy0 || wy > wy1) continue;
 
+            /* Role wins over wealth on the map: a garrison and a manor are what
+               you are looking for, and neither shows up in a wealth ramp. */
             let b;
-            if (F[i] < hungryFood) b = 4;
+            const role = RO[i];
+            if (role === 1) b = iL;
+            else if (F[i] < hungryFood) b = iH;
+            else if (role === 2) b = iS;
             else {
                 const cap = C[i];
-                b = cap >= c3 ? 3 : cap >= c2 ? 2 : cap >= c1 ? 1 : 0;
+                b = 0;
+                for (let q = nc - 1; q >= 1; q--) {
+                    if (cap >= CL[q].min) { b = q; break; }
+                }
             }
             const k = bn[b]++;
             bx[b][k] = ox + wx * z;
@@ -163,14 +201,40 @@ const render = {
 
         const d = Math.max(1.2, Math.min(6, 1.5 * z));
         const half = d * 0.5;
-        const colors = [CL[0].color, CL[1].color, CL[2].color, CL[3].color, metrics.HUNGRY_COLOR];
+        const colors = this._colors;
 
         for (let b = 0; b < this._nb; b++) {
             const n = bn[b];
             if (n === 0) continue;
+            /* Lords are few and matter; give them a bigger mark. */
+            const sz = b === iL ? Math.max(3, d * 2) : d;
+            const hf = sz * 0.5;
             ctx.fillStyle = colors[b];
             const ax = bx[b], ay = by[b];
-            for (let k = 0; k < n; k++) ctx.fillRect(ax[k] - half, ay[k] - half, d, d);
+            for (let k = 0; k < n; k++) ctx.fillRect(ax[k] - hf, ay[k] - hf, sz, sz);
+        }
+    },
+
+    _paintSeats(s, ox, oy, z) {
+        const ctx = this.ctx;
+        ctx.lineWidth = 1;
+        for (let e = 0; e < s.MAX_ESTATES; e++) {
+            if (s.eAlive[e] === 0) continue;
+            const px = ox + s.eSeatX[e] * z, py = oy + s.eSeatY[e] * z;
+            if (px < -40 || py < -40 || px > this.vw + 40 || py > this.vh + 40) continue;
+
+            /* the border the garrison is holding */
+            ctx.strokeStyle = s.eBroke[e] ? 'rgba(226,96,60,0.55)' : 'rgba(255,215,107,0.22)';
+            ctx.beginPath();
+            ctx.arc(px, py, s.eRadius[e] * z, 0, 6.2831853);
+            ctx.stroke();
+
+            /* the manor */
+            const r = Math.max(2.5, 1.6 * z);
+            ctx.fillStyle = '#ffd76b';
+            ctx.fillRect(px - r, py - r, r * 2, r * 2);
+            ctx.strokeStyle = 'rgba(10,16,18,0.85)';
+            ctx.strokeRect(px - r, py - r, r * 2, r * 2);
         }
     },
 
