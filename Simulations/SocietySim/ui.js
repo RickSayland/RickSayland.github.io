@@ -210,6 +210,18 @@
         set('statRecruits', sim.recruits + ' / ' + sim.desertions);
         set('statArmsShare', sim.pop ? num(n.soldiers / sim.pop * 100, 2) + '% of everyone' : '—');
 
+        /* --- towns --- */
+        set('statUrbanPct', num(n.urbanShareRole * 100, 1) + '%');
+        set('statTownsfolk', n.townsfolk.toLocaleString());
+        set('statTowns', String(n.towns));
+        set('statBiggestTown', Math.round(n.biggestTown).toLocaleString());
+        set('statCapitalTown', num(n.meanCapitalTown, 0));
+        set('statOtherTown', num(n.meanOtherTown, 0));
+        set('statGranary', num(n.granary, 0));
+        set('statCraft', num(n.craftYear, 0) + ' / yr');
+        set('statRoads', Math.round(n.roadCells * sim.CELL / 100) + ' leagues');
+        set('statTownVsFarm', n.farmCap > 0 ? num(n.townCap / n.farmCap, 1) + '×' : '—');
+
         /* --- states --- */
         set('statStates', String(n.states));
         set('statLargestState', String(n.largestState));
@@ -470,6 +482,7 @@
         metrics.CLASSES.forEach(c => el.insertAdjacentHTML('beforeend', row(c.color, c.name)));
         el.insertAdjacentHTML('beforeend', row(metrics.HUNGRY_COLOR, 'going hungry'));
         el.insertAdjacentHTML('beforeend', row(metrics.SOLDIER_COLOR, 'soldier'));
+        el.insertAdjacentHTML('beforeend', row(metrics.CITIZEN_COLOR, 'townsfolk'));
         el.insertAdjacentHTML('beforeend', row(metrics.LORD_COLOR, 'lord · manor'));
     }
 
@@ -487,7 +500,12 @@
         { key: 'rentShare',   id: 'knobRent',    fmt: v => (v * 100).toFixed(0) + '%' },
         { key: 'improve',     id: 'knobImprove', fmt: v => '+' + (v * 100).toFixed(0) + '%' },
         { key: 'claimMin',    id: 'knobClaim',   fmt: v => v.toFixed(1) },
-        { key: 'soldierCost', id: 'knobSoldier', fmt: v => v.toFixed(3) }
+        { key: 'soldierCost', id: 'knobSoldier', fmt: v => v.toFixed(3) },
+        { key: 'granaryShare', id: 'knobGranary',  fmt: v => (v * 100).toFixed(0) + '%' },
+        { key: 'foodPrice',    id: 'knobPrice',    fmt: v => v.toFixed(2) },
+        { key: 'cityWage',     id: 'knobWage',     fmt: v => v.toFixed(3) },
+        { key: 'craftValue',   id: 'knobCraft',    fmt: v => v.toFixed(3) },
+        { key: 'levyFood',     id: 'knobLevyFood', fmt: v => (v * 100).toFixed(0) + '%' }
     ];
 
     function wireKnobs() {

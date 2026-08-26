@@ -14,7 +14,7 @@
  */
 'use strict';
 
-const SIM_VERSION = '0.4.0';
+const SIM_VERSION = '0.5.0';
 
 /* ----------------------------------------------------------- Dimensions --- */
 
@@ -54,10 +54,11 @@ for (let i = 0; i < DIRS; i++) {
     SIN[i] = Math.sin(a);
 }
 
-const ROLES = ['Farmer', 'Lord', 'Soldier'];
+const ROLES = ['Farmer', 'Lord', 'Soldier', 'Townsfolk'];
 const ROLE_FARMER = 0;
 const ROLE_LORD = 1;
 const ROLE_SOLDIER = 2;
+const ROLE_CITIZEN = 3;
 
 /* Terrain. Only PLAIN and FOREST grow anything; MARSH and the shallows feed
    people too, but by fishing rather than farming, which is why the harvestable
@@ -279,7 +280,51 @@ const P = {
     warPeaceYears: 12,     // after this a stalemate can be called off
     peaceChance: 0.25,
     levyShare: 0.12,       // a partner's rent, paid up to the state's capital
-    tributeShare: 0.28     // a conquered estate's rent — the price of losing
+    tributeShare: 0.28,    // a conquered estate's rent — the price of losing
+
+    /* ---- Cities (v0.5) ----
+     *
+     * A city is people eating grain that grew somewhere else. Everything here
+     * follows from that one sentence.
+     *
+     * Rent already moves food off the land and into a lord's hands; until now
+     * it evaporated into capital. Now half of it piles up as a physical
+     * granary at the manor, and that stock is the only thing a town can live
+     * on. Nobody is fed for free: townsfolk draw a wage for working the lord's
+     * town and BUY their grain out of the granary at foodPrice. The lord's
+     * profit is the spread — craftValue is the worth of what a townsman makes,
+     * cityWage is what he is paid for making it, and the difference plus the
+     * grain sales is why a lord wants a town at all.
+     *
+     * Both sides have to come out ahead or the arrangement is not a city:
+     *   townsman:  cityWage  >  foodPrice x metabolism
+     *   lord:      craftValue > cityWage - foodPrice x metabolism
+     * craftValue is the value added, and the two inequalities are how it gets
+     * split. Set craftValue to zero and the town is a pure drain that starves.
+     *
+     * The whole thing is self-limiting without any cap on city size: too many
+     * townsfolk drain the granary, grain runs out, and they go back to the
+     * land. A city is exactly as large as the surplus feeding it.
+     */
+    granaryShare: 0.9,     // of rent food held as grain rather than sold at once
+    /* A working stock, not a strategic reserve. The cap has to be small enough
+       that it fills in weeks, because everything above it is sold and that sale
+       is the lord's cash. At 600 the silo swallowed a lord's entire income for
+       six hundred ticks while it filled, and the manors went bankrupt one after
+       another before a single town existed. The stock only has to buffer a
+       town's daily bread — the binding constraint on a city is the rent
+       flowing in, never the size of the barn. */
+    granaryCap: 120,
+    foodPrice: 1.0,        // capital per unit of grain at market
+    cityWage: 0.026,       // what a townsman earns per tick
+    craftValue: 0.05,      // what a townsman's work is worth to the lord
+    ration: 0.05,          // most grain a townsman buys in one tick
+    cityStock: 1.6,        // the larder a townsman keeps; must stay < storeAbove
+    cityRadius: 46,
+    cityMinGranary: 4,     // no grain in store, no town
+    cityDraw: 0.004,       // chance per tick a farmer in town takes up a trade
+    levyFood: 0.15,        // grain a member town sends up the road to the capital
+    roadSpeed: 1.7         // how much faster the going is on a made road
 };
 
 /* ----------------------------------------------------------------- Land --- */
@@ -488,6 +533,8 @@ const sim = {
     terrain: new Uint8Array(NCELL),
     walk: new Uint8Array(NCELL),         // 0 = water; nobody walks on it
     depth: new Float32Array(NCELL),
+    road: new Uint8Array(NCELL),         // made road; the going is faster on it
+    city: new Int16Array(NCELL),         // town whose walls this cell is inside
     res: [new Float32Array(NCELL), new Float32Array(NCELL),
           new Float32Array(NCELL), new Float32Array(NCELL)],
     owner: new Int16Array(NCELL),        // estate id, or -1
@@ -549,6 +596,14 @@ const sim = {
     eRes: new Float32Array(MAX_ESTATES * NRES),
     eResDens: new Float32Array(MAX_ESTATES * NRES),
     eRegrow: new Float32Array(MAX_ESTATES),    // read by the land loop
+    /* The town. eGranary is a physical stock of grain, not a number of coins —
+       it is what the townsfolk buy from and the only thing keeping them off
+       the land. */
+    eGranary: new Float32Array(MAX_ESTATES),
+    eCitizens: new Int32Array(MAX_ESTATES),    // counted fresh each tick
+    eTownPop: new Int32Array(MAX_ESTATES),     // last settled count
+    eFoodSold: new Float32Array(MAX_ESTATES),
+    eGrainIn: new Float32Array(MAX_ESTATES),
     eSoldierCost: new Float32Array(MAX_ESTATES),
     eUpkeep: new Float32Array(MAX_ESTATES),
     eOilIncome: new Float32Array(MAX_ESTATES),
@@ -594,10 +649,16 @@ const sim = {
        renderer traces borders off it and can skip that whole scan otherwise —
        territory changes a few times a century, not sixty times a second. */
     ownerVersion: 0,
+    roadVersion: -1,
+    townPop: 0,
+    granaryTotal: 0,
+    craftFlow: 0,
+    grainMoved: 0,
     enclosures: 0,
     successions: 0,
     dissolutions: 0,
     soldiers: 0,
+    citizens: 0,
     garrisonTotal: 0,
     wageFlow: 0,
     recruits: 0,
@@ -672,6 +733,16 @@ const sim = {
         this.eOilIncome.fill(0);
 
         this.owner.fill(-1);
+        this.road.fill(0);
+        this.city.fill(-1);
+        this.eGranary.fill(0);
+        this.eCitizens.fill(0);
+        this.eTownPop.fill(0);
+        this.eFoodSold.fill(0);
+        this.eGrainIn.fill(0);
+        this.ownerVersion = 0;
+        this.roadVersion = -1;
+        this.townPop = this.granaryTotal = this.craftFlow = this.grainMoved = 0;
         this.densR.fill(0);
         this.densW.fill(0);
         this.alive.fill(0);
@@ -834,9 +905,18 @@ const sim = {
         const claimMin = p.claimMin;
         const lspdS = p.speed * p.soldierSpeed;
         const wage = p.soldierWage;
+        const road = this.road, city = this.city;
+        const eGranary = this.eGranary, eCitizens = this.eCitizens;
+        const eFoodSold = this.eFoodSold, eGrainIn = this.eGrainIn;
+        const cityR2 = p.cityRadius * p.cityRadius;
+        const cspd = p.speed * 0.5;
+        const cityWage = p.cityWage, price = p.foodPrice, ration = p.ration;
+        const cityStock = p.cityStock;
+        const minGrain = p.cityMinGranary, draw = p.cityDraw;
+        const roadSpeed = p.roadSpeed;
         let desertions = 0;
 
-        let pop = 0, lords = 0, soldiers = 0, sf = 0, sc = 0, sm = 0, harvested = 0;
+        let pop = 0, lords = 0, soldiers = 0, citizens = 0, sf = 0, sc = 0, sm = 0, harvested = 0;
         let starved = 0, aged = 0;
         this._bqN = 0;
         this._cqN = 0;
@@ -876,9 +956,65 @@ const sim = {
             }
             const isLord = ro === ROLE_LORD;
             const isSoldier = ro === ROLE_SOLDIER;
+            const isCitizen = ro === ROLE_CITIZEN;
             let speed;
 
-            if (isSoldier) {
+            if (isCitizen) {
+                /* Keep to the town, draw the wage, buy the day's grain. A
+                   townsman with no granary to buy from, or no coin to buy
+                   with, goes back to the land rather than dying in the street. */
+                const e = EST[i];
+                const seatDX = eSeatX[e] - x, seatDY = eSeatY[e] - y;
+                if (seatDX * seatDX + seatDY * seatDY > cityR2) {
+                    const want = ((Math.atan2(seatDY, seatDX) * DIR_PER_RAD) | 0) & DMASK;
+                    let diff = (want - d) & DMASK;
+                    if (diff > 512) diff -= DIRS;
+                    if (diff > turn) diff = turn; else if (diff < -turn) diff = -turn;
+                    d = (d + diff) & DMASK;
+                }
+                speed = cspd;
+
+                rs = (rs + 0x6D2B79F5) | 0;
+                let tc = Math.imul(rs ^ (rs >>> 15), 1 | rs);
+                tc = (tc + Math.imul(tc ^ (tc >>> 7), 61 | tc)) ^ tc;
+                const rc = ((tc ^ (tc >>> 14)) >>> 0) / 4294967296;
+                d = (d + (((rc * 2 - 1) * wob) | 0)) & DMASK;
+
+                C[i] += cityWage;
+                eCitizens[e]++;
+
+                /* A townsman buys to keep a larder, not to speculate. The
+                   target is deliberately BELOW storeAbove: buying past that
+                   point would push the surplus straight into the storage rule,
+                   which converts food to capital at a loss — so townsfolk sat
+                   there laundering the granary into coin, never satiating, and
+                   drained every town below the stock a newcomer needs to see
+                   before moving in. The whole urban population was pinned at a
+                   quarter of what the grain could feed by that one line. */
+                const stock = eGranary[e];
+                let want = cityStock - F[i];
+                if (want > ration) want = ration;
+                if (want > stock) want = stock;
+                const afford = C[i] / price;
+                if (want > afford) want = afford;
+                if (want > 0) {
+                    eGranary[e] = stock - want;
+                    eFoodSold[e] += want;
+                    C[i] -= want * price;
+                    F[i] += want;
+                }
+                /* Leaving town is a decision about your own belly, not about
+                   the state of the market this instant. A granary running
+                   hand-to-mouth hits zero most days; reverting everyone the
+                   moment it did emptied every town in the country on a
+                   rounding error and pinned the urban population at a quarter
+                   of what the grain could actually feed. A townsman with food
+                   in hand simply waits for the next cart. */
+                else if (F[i] < 0.6) {
+                    RO[i] = ROLE_FARMER; EST[i] = -1;
+                }
+
+            } else if (isSoldier) {
                 /* Patrol: keep inside the domain, otherwise drift. A garrison
                    is a presence spread over ground, not a formation. */
                 const e = EST[i];
@@ -974,15 +1110,32 @@ const sim = {
                     harvested += take;
                     const o = own[ci];
                     if (o >= 0) {
-                        /* Only what the garrison can actually collect. */
+                        /* Only what the garrison can actually collect. The
+                           grain is real and goes somewhere: half of it into
+                           the town's granary, the rest sold at once. */
                         const rent = take * rentShare * eEnforce[o];
                         eRent[o] += rent;         /* credited after the loop */
+                        eGrainIn[o] += rent;
                         eTenants[o]++;
                         F[i] += take - rent;
                     } else {
                         F[i] += take;
                     }
                     speed = wspd;   /* a farmer working a rich cell lingers */
+                }
+
+                /* Inside a town with grain in store, a farmer may take up a
+                   trade. Slowly — this is a working life changing, not a
+                   crowd flowing downhill. */
+                const ce = city[ci];
+                if (ce >= 0 && eGranary[ce] > minGrain) {
+                    rs = (rs + 0x6D2B79F5) | 0;
+                    let tt = Math.imul(rs ^ (rs >>> 15), 1 | rs);
+                    tt = (tt + Math.imul(tt ^ (tt >>> 7), 61 | tt)) ^ tt;
+                    if (((tt ^ (tt >>> 14)) >>> 0) / 4294967296 < draw) {
+                        RO[i] = ROLE_CITIZEN;
+                        EST[i] = ce;
+                    }
                 }
 
                 const oc = own[ci];
@@ -1003,6 +1156,7 @@ const sim = {
 
             /* --- move, bouncing off the edges of the world and off water --- */
             const fromX = x, fromY = y;
+            if (road[((y * INV_CELL) | 0) * GW + ((x * INV_CELL) | 0)] === 1) speed *= roadSpeed;
             x += COS[d] * speed;
             y += SIN[d] * speed;
             if (x < 0) { x = 0; d = (512 - d) & DMASK; }
@@ -1059,7 +1213,9 @@ const sim = {
             }
 
             pop++; sf += f; sc += cap; sm += M[i];
-            if (isLord) lords++; else if (isSoldier) soldiers++;
+            if (isLord) lords++;
+            else if (isSoldier) soldiers++;
+            else if (isCitizen) citizens++;
         }
 
         this._rs = rs;   /* hand the stream back before any cold-path draws */
@@ -1109,6 +1265,7 @@ const sim = {
         this.pop = pop;
         this.lords = lords;
         this.soldiers = soldiers;
+        this.citizens = citizens;
         this.desertions += desertions;
         this.warDead += warDead;
         this.births = born;
@@ -1242,11 +1399,85 @@ const sim = {
         if (added > 0) this.ownerVersion++;
     },
 
+    /* Towns and the roads between them. Rebuilt whole rather than patched,
+       because it only runs when the ownership map or a state's membership has
+       actually changed — a few times a century — and a full rebuild cannot
+       drift out of step with the estates the way incremental edits would.
+
+       A road runs from every manor to the capital of its own state. That is
+       also, deliberately, the route the grain levy travels: the reason a
+       capital outgrows its own farmland is that it is at the end of every
+       road. */
+    _rebuildInfrastructure() {
+        const p = this.P;
+        this.road.fill(0);
+        this.city.fill(-1);
+
+        const live = this._liveE, n = this._liveN;
+        for (let i = 0; i < n; i++) {
+            const e = live[i];
+            if (this.eAlive[e] === 0) continue;
+
+            this._stampCity(e, p.cityRadius);
+
+            const st = this.eState[e];
+            if (st < 0) continue;
+            const lead = this.stLead[st];
+            if (lead < 0 || lead === e || this.eAlive[lead] === 0) continue;
+            this._stampRoad(this.eSeatX[e], this.eSeatY[e],
+                            this.eSeatX[lead], this.eSeatY[lead]);
+        }
+        this.roadVersion = this.ownerVersion;
+    },
+
+    _stampCity(e, r) {
+        const sx = this.eSeatX[e], sy = this.eSeatY[e], r2 = r * r;
+        const city = this.city, walk = this.walk;
+        let x0 = ((sx - r) * INV_CELL) | 0, x1 = ((sx + r) * INV_CELL) | 0;
+        let y0 = ((sy - r) * INV_CELL) | 0, y1 = ((sy + r) * INV_CELL) | 0;
+        if (x0 < 0) x0 = 0; if (x1 >= GW) x1 = GW - 1;
+        if (y0 < 0) y0 = 0; if (y1 >= GH) y1 = GH - 1;
+        for (let cy = y0; cy <= y1; cy++) {
+            const dy = (cy + 0.5) * CELL - sy, dy2 = dy * dy;
+            const row = cy * GW;
+            for (let cx = x0; cx <= x1; cx++) {
+                const dx = (cx + 0.5) * CELL - sx;
+                if (dx * dx + dy2 > r2) continue;
+                const c = row + cx;
+                if (walk[c] === 1) city[c] = e;
+            }
+        }
+    },
+
+    /* Bresenham, two cells wide so a walker actually lands on it. Water is
+       skipped rather than bridged, so a road across a bay simply is not there —
+       which is the right answer and costs nothing to say. */
+    _stampRoad(wx0, wy0, wx1, wy1) {
+        const road = this.road, walk = this.walk;
+        let x0 = (wx0 * INV_CELL) | 0, y0 = (wy0 * INV_CELL) | 0;
+        const x1 = (wx1 * INV_CELL) | 0, y1 = (wy1 * INV_CELL) | 0;
+        const dx = Math.abs(x1 - x0), sx = x0 < x1 ? 1 : -1;
+        const dy = -Math.abs(y1 - y0), sy = y0 < y1 ? 1 : -1;
+        let err = dx + dy;
+        for (let guard = 0; guard < 4096; guard++) {
+            const c = y0 * GW + x0;
+            if (walk[c] === 1) road[c] = 1;
+            if (x0 + 1 < GW && walk[c + 1] === 1) road[c + 1] = 1;
+            if (y0 + 1 < GH && walk[c + GW] === 1) road[c + GW] = 1;
+            if (x0 === x1 && y0 === y1) break;
+            const e2 = 2 * err;
+            if (e2 >= dy) { err += dy; x0 += sx; }
+            if (e2 <= dx) { err += dx; y0 += sy; }
+            if (x0 < 0 || x0 >= GW || y0 < 0 || y0 >= GH) break;
+        }
+    },
+
     _settleEstates() {
         const p = this.P, C = this.capital, AL = this.alive;
         let dissolved = false;
         let count = 0, cells = 0, tenants = 0, rent = 0, wages = 0, levy = 0;
         let garrison = 0, enforceSum = 0, subjects = 0, oilTotal = 0;
+        let townPop = 0, granaryTotal = 0, craftTotal = 0, grainMoved = 0;
 
         /* Compact list of the living, rebuilt once and reused by the radius
            cap below and by diplomacy and war after. */
@@ -1285,7 +1516,41 @@ const sim = {
             const income = this.eRent[e];
             const payroll = sCost * troops;
 
-            C[lord] += income + oil - upk * this.eCells[e] - payroll;
+            /* --- the granary and the market --------------------------------
+               The rent is booked at market value the moment it arrives, exactly
+               as it was before there were towns — so a lord with no town is
+               precisely as well off as he used to be, and the older economy is
+               untouched underneath this one. An earlier version credited him
+               only for the portion not put into store, and the granary then
+               swallowed a new lord's entire income for the sixty-odd ticks it
+               took to fill: every manor founded went bankrupt before its town
+               existed, and the map fell to two estates.
+
+               Crediting both the rent and the townsfolk's payments is not
+               double counting. The grain is valued once; the coin the townsman
+               hands over is the wage the lord paid him a moment earlier,
+               circulating back. The only thing actually created is craft, which
+               is the whole point of a town. */
+            const grain = this.eGrainIn[e];
+            this.eGrainIn[e] = 0;
+            const grainValue = grain * p.foodPrice;
+            let store = this.eGranary[e] + grain * p.granaryShare;
+            if (store > p.granaryCap) store = p.granaryCap;   /* the rest spoils */
+            this.eGranary[e] = store;
+
+            const cz = this.eCitizens[e];
+            const market = this.eFoodSold[e] * p.foodPrice;   /* grain sold to townsfolk */
+            const cityWages = p.cityWage * cz;
+            const craft = p.craftValue * cz;
+            this.eTownPop[e] = cz;
+            this.eCitizens[e] = 0;
+            this.eFoodSold[e] = 0;
+            townPop += cz;
+            granaryTotal += store;
+            craftTotal += craft;
+
+            const revenue = grainValue + market + craft;
+            C[lord] += revenue + oil - cityWages - upk * this.eCells[e] - payroll;
             C[lord] -= C[lord] * p.lordDecay;      /* the cost of station */
             oilTotal += oil;
 
@@ -1334,10 +1599,24 @@ const sim = {
                 if (lead >= 0 && lead !== e && this.eAlive[lead] === 1) {
                     const king = this.eLord[lead];
                     if (king >= 0 && AL[king] === 1) {
-                        const due = income * (this.eSubject[e] ? p.tributeShare : p.levyShare);
+                        /* Coin on what was actually realised, not on the rent
+                           statistic — grain still sitting in the granary has
+                           not been sold and cannot be taxed. */
+                        const due = revenue * (this.eSubject[e] ? p.tributeShare : p.levyShare);
                         C[lord] -= due;
                         C[king] += due;
                         levy += due;
+
+                        /* And grain itself goes up the road. This is why a
+                           capital outgrows its own farmland: it eats the
+                           surplus of every manor that answers to it. */
+                        const cart = this.eGranary[e] * p.levyFood;
+                        if (cart > 0) {
+                            this.eGranary[e] -= cart;
+                            const room = p.granaryCap - this.eGranary[lead];
+                            this.eGranary[lead] += cart < room ? cart : (room > 0 ? room : 0);
+                            grainMoved += cart;
+                        }
                     }
                 }
                 if (this.eSubject[e]) subjects++;
@@ -1407,6 +1686,12 @@ const sim = {
             this.ownerVersion++;
         }
 
+        if (this.roadVersion !== this.ownerVersion) this._rebuildInfrastructure();
+
+        this.townPop = townPop;
+        this.granaryTotal = granaryTotal;
+        this.craftFlow = craftTotal;
+        this.grainMoved = grainMoved;
         this.estateCount = count;
         this.ownedCells = cells;
         this.tenantCount = tenants;
@@ -1679,6 +1964,11 @@ const sim = {
         this.eTenants[e] = 0;
         this.eSoldiers[e] = 0;
         this.eShed[e] = 0;
+        this.eGranary[e] = 0;
+        this.eCitizens[e] = 0;
+        this.eTownPop[e] = 0;
+        this.eFoodSold[e] = 0;
+        this.eGrainIn[e] = 0;
         this._eFree[this._eFreeN++] = e;
         this.dissolutions++;
     },
@@ -1700,15 +1990,17 @@ const sim = {
     },
 
     _recount() {
-        let n = 0, lords = 0, soldiers = 0, sf = 0, sc = 0, sm = 0, ct = 0;
+        let n = 0, lords = 0, soldiers = 0, citizens = 0, sf = 0, sc = 0, sm = 0, ct = 0;
         for (let i = 0; i < MAX_AGENTS; i++) {
             if (this.alive[i] === 0) continue;
             n++; sf += this.food[i]; sc += this.capital[i]; sm += this.met[i];
             if (this.role[i] === ROLE_LORD) lords++;
             else if (this.role[i] === ROLE_SOLDIER) soldiers++;
+            else if (this.role[i] === ROLE_CITIZEN) citizens++;
         }
         for (let c = 0; c < NCELL; c++) ct += this.crop[c];
         this.pop = n; this.lords = lords; this.soldiers = soldiers;
+        this.citizens = citizens;
         this.sumFood = sf; this.sumCapital = sc; this.sumMet = sm;
         this.cropTotal = ct;
     },

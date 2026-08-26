@@ -3,15 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SocietySim — Land and Resources</title>
+    <title>SocietySim — Towns and Roads</title>
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
-    <link rel="stylesheet" href="society.css?v=0.4.0">
+    <link rel="stylesheet" href="society.css?v=0.5.0">
 </head>
 <body>
     <div class="topbar">
         <h1><span>Society</span>Sim</h1>
-        <span class="version" id="version">v0.4.0</span>
-        <p class="tagline">Sea, soil, ore and oil &mdash; and the borders that end up drawn around them.</p>
+        <span class="version" id="version">v0.5.0</span>
+        <p class="tagline">Farms feed manors, manors feed towns, and every road runs to a capital.</p>
         <div class="controls">
             <button id="playBtn" class="ctl">Pause</button>
             <div class="speed">
@@ -94,6 +94,35 @@
                     <div class="knob-head"><span class="knob-name">Cost of a soldier</span><span class="knob-val">—</span></div>
                     <input type="range" class="slider">
                     <p class="knob-note">Arms and provisions, per man per day, out of the lord's purse. Raise it far enough and no rent can be collected at all.</p>
+                </div>
+            </div>
+
+            <div class="section-title">Town &amp; market</div>
+            <div class="knobs">
+                <div class="knob" id="knobGranary" data-min="0" data-max="1" data-step="0.02">
+                    <div class="knob-head"><span class="knob-name">Grain held in store</span><span class="knob-val">—</span></div>
+                    <input type="range" class="slider">
+                    <p class="knob-note">How much of the rent is kept as grain rather than sold on. The granary is the only thing a town can eat, so this is the tap that feeds every city on the map.</p>
+                </div>
+                <div class="knob" id="knobPrice" data-min="0.3" data-max="3" data-step="0.05">
+                    <div class="knob-head"><span class="knob-name">Price of bread</span><span class="knob-val">—</span></div>
+                    <input type="range" class="slider">
+                    <p class="knob-note">What a townsman pays per load. Push it above what a wage will bear and the towns empty out into the fields.</p>
+                </div>
+                <div class="knob" id="knobWage" data-min="0" data-max="0.1" data-step="0.002">
+                    <div class="knob-head"><span class="knob-name">Town wage</span><span class="knob-val">—</span></div>
+                    <input type="range" class="slider">
+                    <p class="knob-note">What a day in town pays. It has to beat the price of the bread it buys, or nobody can afford to live there.</p>
+                </div>
+                <div class="knob" id="knobCraft" data-min="0" data-max="0.2" data-step="0.005">
+                    <div class="knob-head"><span class="knob-name">Worth of a trade</span><span class="knob-val">—</span></div>
+                    <input type="range" class="slider">
+                    <p class="knob-note">What a townsman's work is worth to his lord. The gap between this and the wage is the whole reason anyone builds a town. At zero it is pure charity and the towns starve.</p>
+                </div>
+                <div class="knob" id="knobLevyFood" data-min="0" data-max="0.4" data-step="0.01">
+                    <div class="knob-head"><span class="knob-name">Grain sent to the capital</span><span class="knob-val">—</span></div>
+                    <input type="range" class="slider">
+                    <p class="knob-note">What share of a town's granary goes up the road each day. This, and nothing else, is why a capital becomes a city.</p>
                 </div>
             </div>
 
@@ -326,6 +355,41 @@
                 paying less than it is asked for.
             </p>
 
+            <div class="section-title">Towns &amp; cities</div>
+            <div class="headline">
+                <div class="headline-val" id="statUrbanPct">—</div>
+                <div class="headline-unit">of everyone lives in a town</div>
+            </div>
+            <canvas class="chart" id="chartTowns"></canvas>
+            <div class="stat-grid">
+                <div class="stat"><div class="stat-value" id="statTownsfolk">—</div><div class="stat-label">townsfolk</div></div>
+                <div class="stat"><div class="stat-value" id="statTowns">—</div><div class="stat-label">towns</div></div>
+                <div class="stat"><div class="stat-value" id="statBiggestTown">—</div><div class="stat-label">largest</div></div>
+            </div>
+            <div class="stat-grid two">
+                <div class="stat"><div class="stat-value" id="statCapitalTown">—</div><div class="stat-label">mean capital city</div></div>
+                <div class="stat"><div class="stat-value" id="statOtherTown">—</div><div class="stat-label">mean other town</div></div>
+            </div>
+            <div class="ins-row"><span>Grain in store</span><b id="statGranary">—</b></div>
+            <div class="ins-row"><span>Craft produced</span><b id="statCraft">—</b></div>
+            <div class="ins-row"><span>Road built</span><b id="statRoads">—</b></div>
+            <div class="ins-row"><span>Townsman vs farmer capital</span><b id="statTownVsFarm">—</b></div>
+            <p class="knob-note">
+                A town is people eating grain that grew somewhere else. Rent
+                already moves food off the land; now most of it piles up as a
+                physical granary at the manor, and townsfolk draw a wage and
+                <b>buy</b> their bread out of it. Nobody is fed for free, and a
+                town is exactly as large as the surplus feeding it — too many
+                mouths drain the granary, the price cannot be met, and they walk
+                back to the land.
+            </p>
+            <p class="knob-note">
+                Capitals outgrow the towns that supply them because every road
+                in a state runs to one of them, and grain travels those roads.
+                That is the only reason a capital is bigger — no rule anywhere
+                says a capital should be a city.
+            </p>
+
             <div class="section-title">States</div>
             <canvas class="chart" id="chartStates"></canvas>
             <div class="split-legend wrap">
@@ -391,9 +455,9 @@
         </aside>
     </div>
 
-    <script src="sim.js?v=0.4.0"></script>
-    <script src="metrics.js?v=0.4.0"></script>
-    <script src="render.js?v=0.4.0"></script>
-    <script src="ui.js?v=0.4.0"></script>
+    <script src="sim.js?v=0.5.0"></script>
+    <script src="metrics.js?v=0.5.0"></script>
+    <script src="render.js?v=0.5.0"></script>
+    <script src="ui.js?v=0.5.0"></script>
 </body>
 </html>

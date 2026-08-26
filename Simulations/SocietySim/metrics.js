@@ -37,6 +37,7 @@ const metrics = (function () {
     const HUNGRY_FOOD = 0.6;
     const LORD_COLOR = '#ffd76b';
     const SOLDIER_COLOR = '#7fb2d9';
+    const CITIZEN_COLOR = '#d9a7f0';
 
     /* Settlement detection works on blocks of land cells, not single cells: one
        cell is 10 world units and a farmer crosses it in four steps, so at cell
@@ -81,6 +82,7 @@ const metrics = (function () {
         HUNGRY_FOOD: HUNGRY_FOOD,
         LORD_COLOR: LORD_COLOR,
         SOLDIER_COLOR: SOLDIER_COLOR,
+        CITIZEN_COLOR: CITIZEN_COLOR,
 
         series: {
             pop: ring(SERIES_LEN),
@@ -97,7 +99,9 @@ const metrics = (function () {
             lordWealthShare: ring(SERIES_LEN),
             states: ring(SERIES_LEN),
             estates: ring(SERIES_LEN),
-            largestState: ring(SERIES_LEN)
+            largestState: ring(SERIES_LEN),
+            urban: ring(SERIES_LEN),
+            biggestTown: ring(SERIES_LEN)
         },
 
         /* latest snapshot, read by the UI */
@@ -128,7 +132,11 @@ const metrics = (function () {
             resHeld: new Float32Array(4),
             resMapDens: new Float32Array(4),
             resHeldDens: new Float32Array(4),
-            oilYear: 0, farmable: 0, fishing: 0
+            oilYear: 0, farmable: 0, fishing: 0,
+            /* towns */
+            townsfolk: 0, urbanShareRole: 0, towns: 0, biggestTown: 0,
+            meanCapitalTown: 0, meanOtherTown: 0, granary: 0,
+            craftYear: 0, roadCells: 0, townCap: 0, farmCap: 0
         },
 
         _lastTick: -1,
@@ -237,6 +245,7 @@ const metrics = (function () {
 
             let lordCap = 0, nLord = 0, soldCap = 0, nSold = 0;
             let tenCap = 0, nTen = 0, freeCap = 0, nFree = 0;
+            let townCap = 0, nTown = 0;
 
             const maturity = s.P.maturity, GWl = s.GW, cellInv = 1 / s.CELL;
             for (let i = 0; i < s.MAX_AGENTS; i++) {
@@ -255,6 +264,7 @@ const metrics = (function () {
                 const role = s.role[i];
                 if (role === 1) { lordCap += c; nLord++; }
                 else if (role === 2) { soldCap += c; nSold++; }
+                else if (role === 3) { townCap += c; nTown++; }
                 else {
                     /* Tenant or freeholder is a question about the ground under
                        their feet this instant, not a status they carry. */
@@ -380,6 +390,33 @@ const metrics = (function () {
             n.capitalCap = capCap;
             n.sovereign = sovereign;
 
+            /* --- towns --- */
+            n.townsfolk = s.citizens;
+            n.urbanShareRole = s.pop ? s.citizens / s.pop : 0;
+            n.granary = s.granaryTotal;
+            n.craftYear = s.craftFlow * s.TPY;
+            n.townCap = nTown ? townCap / nTown : 0;
+            n.farmCap = n.freeCap;
+
+            let towns = 0, biggest = 0, capSum = 0, nCapT = 0, otherSum = 0, nOther = 0;
+            for (let e = 0; e < s.MAX_ESTATES; e++) {
+                if (s.eAlive[e] === 0) continue;
+                const tp = s.eTownPop[e];
+                if (tp > 10) towns++;
+                if (tp > biggest) biggest = tp;
+                const st = s.eState[e];
+                if (st >= 0 && s.stLead[st] === e) { capSum += tp; nCapT++; }
+                else { otherSum += tp; nOther++; }
+            }
+            n.towns = towns;
+            n.biggestTown = biggest;
+            n.meanCapitalTown = nCapT ? capSum / nCapT : 0;
+            n.meanOtherTown = nOther ? otherSum / nOther : 0;
+
+            let roadCells = 0;
+            for (let c = 0; c < s.NCELL; c++) if (s.road[c] === 1) roadCells++;
+            n.roadCells = roadCells;
+
             /* --- how the population is arranged on the ground --- */
             this._settlements(s);
 
@@ -400,6 +437,8 @@ const metrics = (function () {
             push(S.states, n.states);
             push(S.estates, s.estateCount);
             push(S.largestState, n.largestState);
+            push(S.urban, n.urbanShareRole);
+            push(S.biggestTown, n.biggestTown);
 
             /* Replacement is births over deaths, smoothed — the instantaneous
                ratio at a half-year sample is mostly noise. */
@@ -519,6 +558,10 @@ const metrics = (function () {
                 { r: S.tenantShare, color: '#7fb2d9' },
                 { r: S.lordWealthShare, color: '#e2603c' }
             ], { min: 0, max: 1 });
+
+            spark('chartTowns', [
+                { r: S.urban, color: '#d9a7f0' }
+            ], { min: 0, max: 0.5 });
 
             /* Estates against states: while the two lines sit together every
                manor is its own sovereign, and the gap that opens between them

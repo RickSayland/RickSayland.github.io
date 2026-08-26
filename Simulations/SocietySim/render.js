@@ -82,12 +82,14 @@ const render = {
         this._estTint = new Int8Array(s.MAX_ESTATES);
 
         const CL = metrics.CLASSES;
-        this._nb = CL.length + 3;
+        this._nb = CL.length + 4;
         this._colors = CL.map(c => c.color)
-            .concat([metrics.HUNGRY_COLOR, metrics.SOLDIER_COLOR, metrics.LORD_COLOR]);
+            .concat([metrics.HUNGRY_COLOR, metrics.SOLDIER_COLOR,
+                     metrics.CITIZEN_COLOR, metrics.LORD_COLOR]);
         this._iHungry = CL.length;
         this._iSoldier = CL.length + 1;
-        this._iLord = CL.length + 2;
+        this._iCitizen = CL.length + 2;
+        this._iLord = CL.length + 3;
 
         this._bx = [];
         this._by = [];
@@ -212,7 +214,7 @@ const render = {
     },
 
     _paintLand(s) {
-        const buf = this.tbuf, crop = s.crop, own = s.owner;
+        const buf = this.tbuf, crop = s.crop, own = s.owner, roads = s.road;
         const soil = this._soil, d = this._soilD;
         const showE = this.showEstates;
         const n = s.NCELL;
@@ -244,6 +246,12 @@ const render = {
                         b += (c[2] - b) * 0.26;
                     }
                 }
+            }
+            /* A made road, last, so it reads over both crop and livery. */
+            if (roads[i] === 1) {
+                r += (150 - r) * 0.55;
+                g += (136 - g) * 0.55;
+                b += (110 - b) * 0.55;
             }
             buf[p] = r; buf[p + 1] = g; buf[p + 2] = b;
         }
@@ -362,7 +370,8 @@ const render = {
         const CL = metrics.CLASSES;
         const nc = CL.length;
         const hungryFood = metrics.HUNGRY_FOOD;
-        const iH = this._iHungry, iS = this._iSoldier, iL = this._iLord;
+        const iH = this._iHungry, iS = this._iSoldier;
+        const iC = this._iCitizen, iL = this._iLord;
 
         /* cull to the visible rectangle, with a cell of slack */
         const wx0 = -ox / z - 4, wx1 = (this.vw - ox) / z + 4;
@@ -383,6 +392,7 @@ const render = {
             if (role === 1) b = iL;
             else if (F[i] < hungryFood) b = iH;
             else if (role === 2) b = iS;
+            else if (role === 3) b = iC;
             else {
                 const cap = C[i];
                 b = 0;
@@ -437,6 +447,21 @@ const render = {
                 ctx.beginPath();
                 ctx.arc(px, py, Math.max(6, 3.4 * z), 0, 6.2831853);
                 ctx.stroke();
+            }
+
+            /* The town itself: a halo whose area follows its population, so a
+               capital fed by every road in the state reads as a city beside the
+               villages that supply it. */
+            const town = s.eTownPop[e];
+            if (town > 4) {
+                const tr = Math.max(3, Math.sqrt(town) * 0.55 * Math.max(z, 0.35));
+                const gr = ctx.createRadialGradient(px, py, 0, px, py, tr);
+                gr.addColorStop(0, 'rgba(217,167,240,0.42)');
+                gr.addColorStop(1, 'rgba(217,167,240,0)');
+                ctx.fillStyle = gr;
+                ctx.beginPath();
+                ctx.arc(px, py, tr, 0, 6.2831853);
+                ctx.fill();
             }
 
             const r = capital ? Math.max(3.4, 2.2 * z) : Math.max(2.2, 1.4 * z);
