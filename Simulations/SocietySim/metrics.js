@@ -36,6 +36,15 @@ const metrics = (function () {
     const BW = Math.ceil(160 / BLOCK);
     const BH = Math.ceil(100 / BLOCK);
 
+    /* Gini off an ascending-sorted array: 1 - 2 x (area under the Lorenz
+       curve), which reduces to one weighted pass once the values are in order. */
+    function giniOf(view, k, total) {
+        if (k <= 1 || total <= 0) return 0;
+        let cum = 0, weighted = 0;
+        for (let i = 0; i < k; i++) { cum += view[i]; weighted += cum; }
+        return 1 - 2 * (weighted / (k * total)) + 1 / k;
+    }
+
     function ring(len) { return { buf: new Float32Array(len), n: 0, head: 0 }; }
 
     function push(r, v) {
@@ -67,6 +76,7 @@ const metrics = (function () {
             starveShare: ring(SERIES_LEN),
             meanCapital: ring(SERIES_LEN),
             gini: ring(SERIES_LEN),
+            giniAdult: ring(SERIES_LEN),
             meanMet: ring(SERIES_LEN),
             crop: ring(SERIES_LEN),
             top10: ring(SERIES_LEN)
@@ -78,7 +88,7 @@ const metrics = (function () {
             births: 0, deaths: 0, starved: 0, aged: 0,   /* per year */
             replacement: 1,
             meanFood: 0, meanCapital: 0, medianCapital: 0, meanMet: 0,
-            gini: 0, top10: 0, totalCapital: 0,
+            gini: 0, giniAdult: 0, adults: 0, top10: 0, totalCapital: 0,
             classCount: [0, 0, 0, 0],
             classWealth: [0, 0, 0, 0],
             hungry: 0,
@@ -90,6 +100,7 @@ const metrics = (function () {
         _lastTick: -1,
         _prevBirths: 0, _prevStarved: 0, _prevAged: 0,
         _caps: new Float32Array(10000),
+        _capsA: new Float32Array(10000),
         _dens: new Int32Array(BW * BH),
         _label: new Int32Array(BW * BH),
         _stack: new Int32Array(BW * BH),
@@ -150,22 +161,25 @@ const metrics = (function () {
             n.meanMet = pop ? s.sumMet / pop : s.P.metMean;
 
             /* --- wealth distribution --- */
-            const caps = this._caps;
-            let k = 0, hungry = 0;
+            const caps = this._caps, capsA = this._capsA;
+            let k = 0, ka = 0, hungry = 0;
             const cc = n.classCount, cw = n.classWealth;
             cc[0] = cc[1] = cc[2] = cc[3] = 0;
             cw[0] = cw[1] = cw[2] = cw[3] = 0;
 
+            const maturity = s.P.maturity;
             for (let i = 0; i < s.MAX_AGENTS; i++) {
                 if (s.alive[i] === 0) continue;
                 const c = s.capital[i];
                 caps[k++] = c;
+                if (s.age[i] >= maturity) capsA[ka++] = c;
                 if (s.food[i] < HUNGRY_FOOD) hungry++;
                 const b = c >= CLASSES[3].min ? 3 : c >= CLASSES[2].min ? 2
                         : c >= CLASSES[1].min ? 1 : 0;
                 cc[b]++; cw[b] += c;
             }
             n.hungry = hungry;
+            n.adults = ka;
 
             const view = caps.subarray(0, k);
             view.sort();                       /* Float32Array sorts numerically */
@@ -175,12 +189,19 @@ const metrics = (function () {
             n.totalCapital = total;
             n.medianCapital = k ? (k & 1 ? view[k >> 1]
                                          : 0.5 * (view[k >> 1] + view[(k >> 1) - 1])) : 0;
+            n.gini = giniOf(view, k, total);
 
-            /* Gini off the sorted array: 1 - 2 * (area under Lorenz). Reduces to
-               a single weighted pass once the values are in order. */
-            let cum = 0, weighted = 0;
-            for (let i = 0; i < k; i++) { cum += view[i]; weighted += cum; }
-            n.gini = (k > 1 && total > 0) ? (1 - 2 * (weighted / (k * total)) + 1 / k) : 0;
+            /* The same measure over grown agents only. Most of the headline
+               Gini is lifecycle, not class: a fifteen-year-old owns nothing
+               because they have not had time to save, which is not the same
+               society as one where a fifteen-year-old owns nothing because
+               somebody else owns it. The gap between the two numbers is how
+               much of the inequality is age and how much is structure. */
+            const viewA = capsA.subarray(0, ka);
+            viewA.sort();
+            let totalA = 0;
+            for (let i = 0; i < ka; i++) totalA += viewA[i];
+            n.giniAdult = giniOf(viewA, ka, totalA);
 
             /* Lorenz curve, 32 segments, for the panel's inequality plot. */
             const L = n.lorenz;
@@ -213,6 +234,7 @@ const metrics = (function () {
             push(S.starveShare, n.deaths > 0 ? n.starved / n.deaths : 0);
             push(S.meanCapital, n.meanCapital);
             push(S.gini, n.gini);
+            push(S.giniAdult, n.giniAdult);
             push(S.meanMet, n.meanMet);
             push(S.crop, s.cropTotal);
             push(S.top10, n.top10);
@@ -331,7 +353,7 @@ const metrics = (function () {
 
             spark('chartGini', [
                 { r: S.gini, color: '#c9a0ff' },
-                { r: S.top10, color: '#6f8fd6' }
+                { r: S.giniAdult, color: '#6f8fd6' }
             ], { min: 0, max: 1 });
 
             this.drawLorenz();

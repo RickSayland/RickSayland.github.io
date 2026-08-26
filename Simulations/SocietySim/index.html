@@ -168,9 +168,16 @@
             </div>
             <canvas class="chart" id="chartGini"></canvas>
             <div class="split-legend">
-                <span><i class="sw sw-gini"></i>Gini</span>
-                <span><i class="sw sw-top"></i>top-10% share</span>
+                <span><i class="sw sw-gini"></i>everyone</span>
+                <span><i class="sw sw-top"></i>grown adults <b id="statGiniAdult">—</b></span>
             </div>
+            <p class="knob-note">
+                Most of the headline figure is age, not class. A fifteen-year-old
+                owns nothing because they have not had time to save — which is a
+                different society from one where they own nothing because someone
+                else owns it. Watch the gap between the two lines: while it stays
+                wide, there is no aristocracy here, only a lifecycle.
+            </p>
 
             <div class="section-title">Classes</div>
             <div class="class-bar" id="classBar"></div>
@@ -193,15 +200,18 @@
             <div class="stat-grid">
                 <div class="stat"><div class="stat-value" id="statSettle">—</div><div class="stat-label">settlements</div></div>
                 <div class="stat"><div class="stat-value" id="statLargest">—</div><div class="stat-label">largest</div></div>
-                <div class="stat"><div class="stat-value" id="statUrban">—</div><div class="stat-label">living in one</div></div>
+                <div class="stat"><div class="stat-value" id="statCrowding">—</div><div class="stat-label">peak crowding</div></div>
             </div>
+            <div class="ins-row"><span>Living in a settlement</span><b id="statUrban">—</b></div>
             <div class="ins-row"><span>Division of labour</span><b id="statSpec">—</b></div>
             <div class="ins-row"><span></span><b class="soft" id="statSpecWord">—</b></div>
             <p class="knob-note">
-                A settlement is a knot of ground far denser than the population
-                average, found by flood fill — nobody decided where they go. There
-                is one role and no institutions yet; this panel is where the rest
-                of it will show up.
+                A settlement is a patch of ground holding twice the average
+                density, found by flood fill — nobody decided where they go, and
+                nothing holds them together either: a farmer has to spread out to
+                eat. So they form on the good soil, drift, and dissolve. There is
+                one role and no institutions yet; this panel is where the rest of
+                it will show up.
             </p>
 
             <div class="section-title">Heredity</div>

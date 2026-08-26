@@ -78,8 +78,14 @@ const P = {
     metMean: 0.022,
     metSigma: 0.22,
     metMutate: 0.055,
-    metMin: 0.006,
-    metMax: 0.070,
+    /* metMin is a basal rate, not a tuning knob to taste: a body cannot run on
+       nothing. It is also what stops the population ceiling running away —
+       capacity is production divided by metabolism, so a trait that only ever
+       gets cheaper would push the ceiling up without bound until the agent
+       array, rather than the land, became the limit. With the floor at 0.012
+       the evolved ceiling settles near 8,500 and the array is never binding. */
+    metMin: 0.012,
+    metMax: 0.050,
 
     /* Food is the perishable belly. Capital is the granary: surplus above
        storeAbove is set aside at a loss, and drawn back down when the belly

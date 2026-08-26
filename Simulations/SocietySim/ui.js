@@ -136,6 +136,7 @@
         $('statGini').className = 'headline-val ' +
             (n.gini > 0.5 ? 'bad' : n.gini > 0.32 ? 'warn' : 'ok');
         set('statGiniWord', giniWord(n.gini));
+        set('statGiniAdult', num(n.giniAdult, 3));
         set('statTop10', num(n.top10 * 100, 1) + '%');
         set('statMedMeanGap', n.meanCapital > 0
             ? num(n.medianCapital / n.meanCapital, 2) + '×' : '—');
@@ -156,6 +157,7 @@
         /* --- organisation --- */
         set('statSettle', String(n.settlements));
         set('statLargest', n.largest.toLocaleString());
+        set('statCrowding', num(n.crowding, 1) + '×');
         set('statUrban', num(n.urbanShare * 100, 0) + '%');
 
         const roleCounts = countRoles();
@@ -179,7 +181,22 @@
         set('statTps', Math.round(tps) + ' t/s');
         set('statFps', Math.round(fps) + ' fps');
 
-        $('extinct').hidden = sim.pop > 0;
+        /* The agent array is a hard ceiling the land knows nothing about. With
+           the shipped parameters it is never reached, but say so out loud if a
+           slider ever takes the world there — otherwise births just stop and
+           the plateau looks like a result. */
+        const banner = $('extinct');
+        if (sim.pop === 0) {
+            banner.hidden = false;
+            banner.textContent = 'Nobody left. The land is regrowing over them.';
+        } else if (sim.capped) {
+            banner.hidden = false;
+            banner.textContent = 'All ' + sim.MAX_AGENTS.toLocaleString() +
+                ' slots full — births refused. The array is the ceiling now, not the land.';
+        } else {
+            banner.hidden = true;
+        }
+
         inspect();
     }
 
