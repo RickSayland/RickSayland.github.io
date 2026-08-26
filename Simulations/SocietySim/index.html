@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SocietySim — Ten Thousand Farmers</title>
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+    <link rel="stylesheet" href="society.css?v=0.1.0">
+</head>
+<body>
+    <div class="topbar">
+        <h1><span>Society</span>Sim</h1>
+        <span class="version" id="version">v0.1.0</span>
+        <p class="tagline">Ten thousand farmers, one seed, and whatever the land will bear.</p>
+        <div class="controls">
+            <button id="playBtn" class="ctl">Pause</button>
+            <div class="speed">
+                <button class="ctl spd is-on" data-speed="1">×1</button>
+                <button class="ctl spd" data-speed="4">×4</button>
+                <button class="ctl spd" data-speed="16">×16</button>
+            </div>
+            <button id="fitBtn" class="ctl">Fit</button>
+            <button id="resetBtn" class="ctl">Restart</button>
+        </div>
+    </div>
+
+    <div class="app">
+        <!-- ------------------------------------------------ left rail --- -->
+        <aside class="rail rail-left">
+            <div class="section-title">Founding</div>
+            <div class="field">
+                <label for="seedInput">Seed</label>
+                <input type="number" id="seedInput" value="20260826" step="1">
+            </div>
+            <div class="field">
+                <label for="popInput">Founders</label>
+                <input type="number" id="popInput" value="1500" min="50" max="10000" step="50">
+            </div>
+            <div class="btn-row">
+                <button id="rollBtn" class="ctl wide">New world</button>
+            </div>
+            <p class="knob-note">
+                The seed decides the land and every founder on it. Same seed, same
+                parameters, same history — every time, tick for tick.
+            </p>
+
+            <div class="section-title">Conditions</div>
+            <div class="knobs">
+                <div class="knob" id="knobRegrow" data-min="0.005" data-max="0.08" data-step="0.001">
+                    <div class="knob-head"><span class="knob-name">Land regrowth</span><span class="knob-val">—</span></div>
+                    <input type="range" class="slider">
+                    <p class="knob-note">How fast a grazed field comes back. This, more than anything else, sets how many people the world can hold.</p>
+                </div>
+                <div class="knob" id="knobHarvest" data-min="0.02" data-max="0.15" data-step="0.005">
+                    <div class="knob-head"><span class="knob-name">Harvest rate</span><span class="knob-val">—</span></div>
+                    <input type="range" class="slider">
+                    <p class="knob-note">What one farmer can lift from a field in a day. Raising it does not create food — it just strips the land faster.</p>
+                </div>
+                <div class="knob" id="knobStore" data-min="0.4" data-max="1" data-step="0.01">
+                    <div class="knob-head"><span class="knob-name">Storage efficiency</span><span class="knob-val">—</span></div>
+                    <input type="range" class="slider">
+                    <p class="knob-note">How much of a surplus survives being put by. Cheap storage is what lets wealth accumulate at all.</p>
+                </div>
+                <div class="knob" id="knobMutate" data-min="0" data-max="0.15" data-step="0.005">
+                    <div class="knob-head"><span class="knob-name">Heritable drift</span><span class="knob-val">—</span></div>
+                    <input type="range" class="slider">
+                    <p class="knob-note">How far a child's metabolism strays from its parent's. At zero, nothing evolves.</p>
+                </div>
+            </div>
+
+            <div class="section-title">Who's who</div>
+            <div class="legend" id="legend"></div>
+            <p class="knob-note">
+                Colour is stored capital, not food. A farmer who is going hungry
+                today shows red whatever they have in the granary.
+            </p>
+
+            <div class="section-title">Inspect</div>
+            <div class="inspect empty" id="inspectBody">
+                <div class="ins-hint" id="insHint">Click anyone on the map.</div>
+                <div class="ins-head">
+                    <span class="ins-id" id="insId">—</span>
+                    <span class="ins-class" id="insClass">—</span>
+                </div>
+                <div class="ins-grid">
+                    <div class="stat"><div class="stat-value" id="insAge">—</div><div class="stat-label">age</div></div>
+                    <div class="stat"><div class="stat-value" id="insFood">—</div><div class="stat-label">food</div></div>
+                    <div class="stat"><div class="stat-value" id="insCap">—</div><div class="stat-label">capital</div></div>
+                </div>
+                <div class="ins-row"><span>Role</span><b id="insRole">—</b></div>
+                <div class="ins-row"><span>Metabolism</span><b id="insMet">—</b></div>
+                <div class="ins-row"><span></span><b class="soft" id="insMetRel">—</b></div>
+            </div>
+        </aside>
+
+        <!-- -------------------------------------------------- viewport --- -->
+        <main class="viewport">
+            <canvas id="worldCanvas"></canvas>
+            <div class="banner" id="extinct" hidden>Nobody left. The land is regrowing over them.</div>
+            <div class="footnote">
+                Drag to pan, scroll to zoom, click a farmer to open them up. Every
+                one of them is looking three steps ahead for greener ground — the
+                towns are not placed, they are where the looking stops.
+            </div>
+            <div class="clockbar">
+                <span id="statTps">— t/s</span>
+                <span id="statFps">— fps</span>
+            </div>
+        </main>
+
+        <!-- ----------------------------------------------- right rail --- -->
+        <aside class="rail rail-right">
+            <div class="section-title">Population</div>
+            <div class="headline">
+                <div class="headline-val" id="statPop">—</div>
+                <div class="headline-unit" id="statYear">year 0</div>
+            </div>
+            <canvas class="chart" id="chartPop"></canvas>
+            <div class="stat-grid">
+                <div class="stat"><div class="stat-value" id="statCapacity">—</div><div class="stat-label">land can bear</div></div>
+                <div class="stat"><div class="stat-value" id="statCrowd">—</div><div class="stat-label">of capacity</div></div>
+                <div class="stat"><div class="stat-value" id="statMeanFood">—</div><div class="stat-label">mean belly</div></div>
+            </div>
+            <p class="knob-note">
+                The dashed line is what the fields can actually feed. Population
+                overshoots it, then hunger pulls it back down — the correction is
+                the starvation line below.
+            </p>
+
+            <div class="section-title">Births &amp; deaths</div>
+            <canvas class="chart" id="chartVital"></canvas>
+            <div class="stat-grid">
+                <div class="stat"><div class="stat-value" id="statBirths">—</div><div class="stat-label">births / yr</div></div>
+                <div class="stat"><div class="stat-value" id="statDeaths">—</div><div class="stat-label">deaths / yr</div></div>
+                <div class="stat"><div class="stat-value" id="statRepl">—</div><div class="stat-label">replacement</div></div>
+            </div>
+            <div class="split-track"><div class="split-fill" id="barStarve"></div></div>
+            <div class="split-legend">
+                <span><i class="sw sw-starve"></i>starved <b id="statStarved">—</b></span>
+                <span><i class="sw sw-aged"></i>old age <b id="statAged">—</b></span>
+            </div>
+            <p class="knob-note" id="statStarveShare">—</p>
+
+            <div class="section-title">Wealth</div>
+            <canvas class="chart" id="chartWealth"></canvas>
+            <div class="stat-grid">
+                <div class="stat"><div class="stat-value" id="statMeanCap">—</div><div class="stat-label">mean capital</div></div>
+                <div class="stat"><div class="stat-value" id="statMedCap">—</div><div class="stat-label">median</div></div>
+                <div class="stat"><div class="stat-value" id="statTotalCap">—</div><div class="stat-label">total stored</div></div>
+            </div>
+            <div class="ins-row"><span>Going hungry right now</span><b id="statHungry">—</b></div>
+            <div class="ins-row"><span>Median as a share of mean</span><b id="statMedMeanGap">—</b></div>
+
+            <div class="section-title">Inequality</div>
+            <div class="headline">
+                <div class="headline-val" id="statGini">—</div>
+                <div class="headline-unit">Gini coefficient · <span id="statGiniWord">—</span></div>
+            </div>
+            <div class="lorenz-wrap">
+                <canvas class="chart lorenz" id="chartLorenz"></canvas>
+                <div class="lorenz-side">
+                    <div class="stat"><div class="stat-value" id="statTop10">—</div><div class="stat-label">held by richest 10%</div></div>
+                    <p class="knob-note">
+                        The dotted diagonal is a society where everyone holds the
+                        same. The gap under it is the surplus that has pooled.
+                    </p>
+                </div>
+            </div>
+            <canvas class="chart" id="chartGini"></canvas>
+            <div class="split-legend">
+                <span><i class="sw sw-gini"></i>Gini</span>
+                <span><i class="sw sw-top"></i>top-10% share</span>
+            </div>
+
+            <div class="section-title">Classes</div>
+            <div class="class-bar" id="classBar"></div>
+            <table class="tbl">
+                <thead><tr><th>Band</th><th class="n">people</th><th class="n">of pop</th><th class="n">of wealth</th></tr></thead>
+                <tbody id="classRows"></tbody>
+            </table>
+            <p class="knob-note">
+                The bands are absolute, not quantiles: <b>Settled</b> means holding
+                enough to afford a child, <b>Landed</b> means several. A society of
+                identical paupers reads as entirely Destitute — which is the honest
+                answer, and the one percentile bands would get wrong.
+            </p>
+
+            <div class="section-title">Organisation</div>
+            <table class="tbl">
+                <thead><tr><th>Role</th><th class="n">people</th><th class="n">share</th></tr></thead>
+                <tbody id="roleRows"></tbody>
+            </table>
+            <div class="stat-grid">
+                <div class="stat"><div class="stat-value" id="statSettle">—</div><div class="stat-label">settlements</div></div>
+                <div class="stat"><div class="stat-value" id="statLargest">—</div><div class="stat-label">largest</div></div>
+                <div class="stat"><div class="stat-value" id="statUrban">—</div><div class="stat-label">living in one</div></div>
+            </div>
+            <div class="ins-row"><span>Division of labour</span><b id="statSpec">—</b></div>
+            <div class="ins-row"><span></span><b class="soft" id="statSpecWord">—</b></div>
+            <p class="knob-note">
+                A settlement is a knot of ground far denser than the population
+                average, found by flood fill — nobody decided where they go. There
+                is one role and no institutions yet; this panel is where the rest
+                of it will show up.
+            </p>
+
+            <div class="section-title">Heredity</div>
+            <div class="stat-grid two">
+                <div class="stat"><div class="stat-value" id="statMet">—</div><div class="stat-label">mean metabolism ×10³</div></div>
+                <div class="stat"><div class="stat-value" id="statMetDrift">—</div><div class="stat-label">since founding</div></div>
+            </div>
+            <p class="knob-note">
+                Metabolism is drawn at birth and inherited with drift. Nobody
+                selects for it — but a cheaper farmer banks a surplus sooner and
+                buys more children with it, so watch this number fall.
+            </p>
+        </aside>
+    </div>
+
+    <script src="sim.js?v=0.1.0"></script>
+    <script src="metrics.js?v=0.1.0"></script>
+    <script src="render.js?v=0.1.0"></script>
+    <script src="ui.js?v=0.1.0"></script>
+</body>
+</html>
