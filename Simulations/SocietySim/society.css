@@ -305,6 +305,8 @@ body {
 .ev.annex { border-left-color: #ffd76b; color: #e8cf9c; }
 .ev.peace { border-left-color: #7fb2d9; color: #a8c8e0; }
 .ev.gov      { border-left-color: #8ce8d0; color: #b6ede0; }
+.ev.vassal   { border-left-color: #e0913c; color: #e8b985; }
+.ev.freed    { border-left-color: #64d6bd; color: #9fd8cb; }
 .ev.collapse { border-left-color: #c98a6a; color: #d9a98f; }
 
 .check {

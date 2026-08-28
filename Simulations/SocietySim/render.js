@@ -172,6 +172,7 @@ const render = {
         }
         this._paintAgents(s, ox, oy, z);
         if (this.showEstates) this._paintSeats(s, ox, oy, z);
+        this._paintImpacts(s, ox, oy, z);
         this._paintSelection(s, ox, oy, z);
     },
 
@@ -472,6 +473,30 @@ const render = {
             ctx.strokeStyle = 'rgba(10,16,18,0.85)';
             ctx.lineWidth = 1;
             ctx.strokeRect(px - r, py - r, r * 2, r * 2);
+        }
+    },
+
+    /* Where the shells landed, fading over a season. Bombardment is otherwise
+       invisible — the casualties are just numbers falling in the panel — and
+       seeing a town flash under fire is the only way the range mechanic reads
+       as anything on the map. */
+    _paintImpacts(s, ox, oy, z) {
+        const ctx = this.ctx, list = s.impacts;
+        if (!list || list.length === 0) return;
+        const life = s.TPY * 0.75;
+        for (let i = 0; i < list.length; i++) {
+            const im = list[i];
+            const age = s.tickCount - im.t;
+            if (age < 0 || age > life) continue;
+            const f = 1 - age / life;
+            const px = ox + im.x * z, py = oy + im.y * z;
+            if (px < -50 || py < -50 || px > this.vw + 50 || py > this.vh + 50) continue;
+            const r = Math.max(5, 3.5 * z) * (1 + (1 - f) * 2.2);
+            ctx.strokeStyle = 'rgba(255,132,76,' + (0.75 * f).toFixed(3) + ')';
+            ctx.lineWidth = Math.max(1, 1.8 * f);
+            ctx.beginPath();
+            ctx.arc(px, py, r, 0, 6.2831853);
+            ctx.stroke();
         }
     },
 

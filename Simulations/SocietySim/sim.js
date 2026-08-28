@@ -14,7 +14,7 @@
  */
 'use strict';
 
-const SIM_VERSION = '0.6.0';
+const SIM_VERSION = '0.7.0';
 
 /* ----------------------------------------------------------- Dimensions --- */
 
@@ -379,6 +379,43 @@ const P = {
     consolidateInterval: 32,
 
     govArmyBonus: 0.8,     // extra men per subject a state keeps over a manor
+    /* ---- Ordnance and empire (v0.7) ----
+     *
+     * Until now a war needed a shared border: two states could only fight if
+     * their territories touched, so the map's politics were entirely local.
+     * Long-range weapons break that. A state with an arsenal can reach
+     * strikeRange beyond its own border, which means it can pick a quarrel with
+     * a country it has never bordered — and, for the first time, fight over
+     * ground it does not adjoin.
+     *
+     * Ordnance is the first thing in the model that genuinely REQUIRES the
+     * minerals and fuel that have been sitting unwanted in the mountains since
+     * v0.4. Production is the lesser of the two endowments, so a state with ore
+     * and no fuel builds nothing, and a state with neither is defenceless
+     * against one that has both. Only governments build it: an arsenal needs a
+     * treasury and an administration, which is one more thing feudalism cannot
+     * do.
+     *
+     * How a war at range ends is different from how a war at a border ends. An
+     * army that marches over a border takes the ground and the estates change
+     * hands. Guns that reach across three hundred leagues cannot occupy
+     * anything, so the beaten state keeps its territory, its lord and its
+     * government, and pays tribute instead: a VASSAL rather than a conquest.
+     * That is also what keeps the map's borders contiguous — an empire built by
+     * bombardment is a web of tributaries, not a patchwork of exclaves.
+     */
+    strikeRange: 420,          // how far ordnance reaches past a border
+    ordnanceCost: 2.5,         // treasury per shell
+    ordnanceBudget: 0.35,      // share of spendable treasury put to munitions
+    ordnancePerDeposit: 0.02,  // ceiling set by the ore and fuel actually held
+    ordnanceCap: 60,
+    salvoSize: 1.0,            // shells spent per bombardment
+    strikeCasualties: 2,       // soldiers killed by a salvo
+    strikeCivilians: 3,        // townsfolk killed by a salvo
+    strikeGranary: 0.35,       // share of the target town's grain destroyed
+    vassalTribute: 0.30,       // of a vassal's tax take, paid up to its overlord
+    rebelRatio: 1.8,           // how much stronger a vassal must be to break free
+
     worksCost: 0.008,      // per owned cell per tick
     worksBonus: 0.6,       // added to the improvement multiplier when fully funded
     /* Peculation, and the cost of being a state. Without it a solvent treasury
@@ -668,6 +705,7 @@ const sim = {
     eTownPop: new Int32Array(MAX_ESTATES),     // last settled count
     eFoodSold: new Float32Array(MAX_ESTATES),
     eGrainIn: new Float32Array(MAX_ESTATES),
+    eStrike: new Int32Array(MAX_ESTATES),      // townsfolk a bombardment has killed
     eSoldierCost: new Float32Array(MAX_ESTATES),
     eUpkeep: new Float32Array(MAX_ESTATES),
     eOilIncome: new Float32Array(MAX_ESTATES),
@@ -698,6 +736,10 @@ const sim = {
     stTaxTake: new Float32Array(MAX_STATES),
     stWantOff: new Int32Array(MAX_STATES),
     stWorks: new Float32Array(MAX_STATES),      // 0..1, how much of the works are paid for
+    stOrdnance: new Float32Array(MAX_STATES),   // shells in the arsenal
+    stIndustry: new Float32Array(MAX_STATES),   // what its ore and fuel can sustain
+    stOverlord: new Int16Array(MAX_STATES),     // the state it pays tribute to, or -1
+    stVassals: new Int32Array(MAX_STATES),
 
     /* bookkeeping */
     tickCount: 0,
@@ -742,6 +784,15 @@ const sim = {
     collapses: 0,
     treasuryTotal: 0,
     reserveTotal: 0,
+    arsenalTotal: 0,
+    munitionsFlow: 0,
+    tributeFlow: 0,
+    vassalCount: 0,
+    vassalages: 0,
+    rebellions: 0,
+    strikes: 0,
+    civilianDead: 0,
+    impacts: [],
     taxFlow: 0,
     taxPaid: 0,
     armySubsidy: 0,
@@ -869,7 +920,16 @@ const sim = {
         this.stTaxTake.fill(0);
         this.stWantOff.fill(0);
         this.stWorks.fill(0);
+        this.stOrdnance.fill(0);
+        this.stIndustry.fill(0);
+        this.stOverlord.fill(-1);
+        this.stVassals.fill(0);
+        this.eStrike.fill(0);
         this.worksFlow = 0;
+        this.arsenalTotal = this.munitionsFlow = this.tributeFlow = 0;
+        this.vassalCount = this.vassalages = this.rebellions = 0;
+        this.strikes = this.civilianDead = 0;
+        this.impacts = [];
         this.officials = this.govCount = 0;
         this.governments = this.collapses = 0;
         this.treasuryTotal = this.reserveTotal = 0;
@@ -1016,6 +1076,8 @@ const sim = {
         const cspd = p.speed * 0.5;
         const cityWage = p.cityWage, price = p.foodPrice, ration = p.ration;
         const cityStock = p.cityStock;
+        const eStrike = this.eStrike;
+        let civDead = 0;
         const stGov = this.stGov, stOfficials = this.stOfficials;
         const stShedOff = this.stShedOff, offSalary = p.officialSalary;
         const stWantOff = this.stWantOff;
@@ -1144,6 +1206,14 @@ const sim = {
                    drained every town below the stock a newcomer needs to see
                    before moving in. The whole urban population was pinned at a
                    quarter of what the grain could feed by that one line. */
+                /* Shells landed here. Somebody in the street was under them. */
+                if (eStrike[e] > 0) {
+                    eStrike[e]--;
+                    this._kill(i);
+                    civDead++;
+                    continue;
+                }
+
                 const stock = eGranary[e];
                 let want = cityStock - F[i];
                 if (want > ration) want = ration;
@@ -1397,7 +1467,7 @@ const sim = {
         /* Diplomacy is annual and battles are fought every few days, both off
            the compact live list _settleEstates just rebuilt. Neither is in the
            per-agent path, so a map of twenty states costs a few hundred ops. */
-        if (this.tickCount % p.diploInterval === 0) this._diplomacy();
+        if (this.tickCount % p.diploInterval === 0) { this._diplomacy(); this._rebellions(); }
         if (this.tickCount % p.battleInterval === 0) this._wars();
 
         /* --- births --- */
@@ -1437,6 +1507,7 @@ const sim = {
         this.officials = officials;
         this.desertions += desertions;
         this.warDead += warDead;
+        this.civilianDead += civDead;
         this.births = born;
         this.starved = starved;
         this.aged = aged;
@@ -2012,6 +2083,7 @@ const sim = {
         const p = this.P;
         const live = this._liveE, n = this._liveN;
         let govs = 0, treasury = 0, reserve = 0, tax = 0, officials = 0, works = 0;
+        let munitions = 0, tribute = 0, arsenal = 0, vassals = 0;
 
         for (let s = 0; s < MAX_STATES; s++) {
             if (this.stAlive[s] === 0) continue;
@@ -2074,21 +2146,72 @@ const sim = {
                 const e = live[i];
                 if (this.eAlive[e] === 1 && this.eState[e] === s) held += this.eCells[e];
             }
+            /* Works and munitions draw on one pot, split by ordnanceBudget.
+               They must be allocated together: with works taking everything
+               above the reserve first, there was never anything left for an
+               arsenal and not one shell was ever built. Nothing is ever spent
+               out of the standing reserve, which is the civil service's. */
+            const spendable = Math.max(0, this.stTreasury[s] - p.treasuryReserve);
+            const gunPurse = spendable * p.ordnanceBudget;
+            const worksPurse = spendable - gunPurse;
+
             const bill = held * p.worksCost;
             if (bill > 0) {
-                /* Works are paid out of what is left ABOVE the standing reserve,
-                   never out of it. Letting them spend the treasury to the floor
-                   meant there was never anything left to appoint an official
-                   with, so administration stayed at its customary base, the tax
-                   never rose, and the whole civil service failed to exist — a
-                   government that could build roads but not staff itself. */
-                const spendable = this.stTreasury[s] - p.treasuryReserve;
-                const afford = spendable <= 0 ? 0 : (spendable < bill ? spendable : bill);
+                const afford = worksPurse < bill ? worksPurse : bill;
                 this.stTreasury[s] -= afford;
                 this.stWorks[s] = afford / bill;
                 works += afford;
             } else {
                 this.stWorks[s] = 0;
+            }
+
+            /* --- the arsenal -------------------------------------------------
+               Guns need ore and they need fuel, and the ceiling is the LESSER
+               of the two: a country with mountains full of iron and nothing to
+               fire the forges builds nothing at all. This is the first demand
+               in the model for the barren ground everyone has been ignoring. */
+            let ore = 0, fuel = 0;
+            for (let i = 0; i < n; i++) {
+                const e = live[i];
+                if (this.eAlive[e] === 0 || this.eState[e] !== s) continue;
+                ore += this.eRes[e * NRES + R_MIN];
+                fuel += this.eRes[e * NRES + R_ENERGY];
+            }
+            /* Geometric mean, not the lesser of the two. Both are still
+               strictly required — no ore or no fuel and the forges are cold —
+               but taking the minimum meant only the single best-endowed country
+               on the map could build anything at all, and artillery was a
+               monopoly rather than an arms race. */
+            const industry = Math.sqrt(ore * fuel) * p.ordnancePerDeposit;
+            this.stIndustry[s] = industry;
+            if (industry > 0 && this.stOrdnance[s] < p.ordnanceCap && gunPurse > 0) {
+                let made = gunPurse / p.ordnanceCost;
+                if (made > industry) made = industry;
+                const room = p.ordnanceCap - this.stOrdnance[s];
+                if (made > room) made = room;
+                if (made > 0) {
+                    this.stTreasury[s] -= made * p.ordnanceCost;
+                    this.stOrdnance[s] += made;
+                    munitions += made;
+                }
+            }
+
+            /* --- tribute from vassals ---------------------------------------
+               A country beaten from beyond its own borders keeps everything it
+               had except its independence. */
+            const over = this.stOverlord[s];
+            if (over >= 0) {
+                if (this.stAlive[over] === 0) {
+                    this.stOverlord[s] = -1;
+                    this._logEvent('freed', s, over, 0);
+                } else {
+                    const due = this.stTaxTake[s] * p.vassalTribute;
+                    if (due > 0 && this.stTreasury[s] >= due) {
+                        this.stTreasury[s] -= due;
+                        this.stTreasury[over] += due;
+                        tribute += due;
+                    }
+                }
             }
 
             this.stTreasury[s] -= this.stTreasury[s] * p.treasuryWaste;
@@ -2097,6 +2220,7 @@ const sim = {
             treasury += this.stTreasury[s];
             reserve += this.stReserve[s];
             tax += this.stTaxTake[s];
+            arsenal += this.stOrdnance[s];
             officials += off;
             this.stTaxTake[s] = 0;
         }
@@ -2123,11 +2247,36 @@ const sim = {
             }
         }
 
+        /* Counted over every living state, not only the governments: losing
+           its government does not release a country from tribute, and counting
+           inside the government branch reported one vassal where there were
+           five. */
+        let biggestEmpire = 0;
+        this.stVassals.fill(0);
+        for (let s = 0; s < MAX_STATES; s++) {
+            if (this.stAlive[s] === 0) continue;
+            const over = this.stOverlord[s];
+            if (over >= 0 && this.stAlive[over] === 1) {
+                vassals++;
+                this.stVassals[over]++;
+            }
+        }
+        for (let s = 0; s < MAX_STATES; s++) {
+            if (this.stAlive[s] === 1 && this.stVassals[s] > biggestEmpire) {
+                biggestEmpire = this.stVassals[s];
+            }
+        }
+        this.biggestEmpire = biggestEmpire;
+
         this.govCount = govs;
         this.treasuryTotal = treasury;
         this.reserveTotal = reserve;
         this.taxFlow = tax;
         this.worksFlow = works;
+        this.munitionsFlow = munitions;
+        this.tributeFlow = tribute;
+        this.arsenalTotal = arsenal;
+        this.vassalCount = vassals;
         this.officialsEmployed = officials;
     },
 
@@ -2195,11 +2344,22 @@ const sim = {
                 if (sa < 0 || sb < 0 || sa === sb) continue;
                 if (this.stWar[sa] >= 0 || this.stWar[sb] >= 0) continue;
                 if (this.stCd[sa] > 0 || this.stCd[sb] > 0) continue;
+                /* A vassal does not make war on its own overlord by treaty —
+                   it throws the treaty off instead, and that is decided by
+                   strength, below. */
+                if (this.stOverlord[sa] === sb || this.stOverlord[sb] === sa) continue;
 
+                /* A shared border is no longer the only way to reach somebody.
+                   Either side holding an arsenal extends how far a quarrel can
+                   be picked, which is what lets two countries that have never
+                   met fight over what the other one is sitting on. */
                 const dx = this.eSeatX[b] - this.eSeatX[a];
                 const dy = this.eSeatY[b] - this.eSeatY[a];
                 const d = Math.sqrt(dx * dx + dy * dy);
-                if (d > this.eRadius[a] + this.eRadius[b] + p.contactSlack) continue;
+                const border = this.eRadius[a] + this.eRadius[b];
+                const guns = (this.stOrdnance[sa] >= 1 || this.stOrdnance[sb] >= 1)
+                    ? p.strikeRange : 0;
+                if (d > border + p.contactSlack + guns) continue;
 
                 const strA = this._stateStrength(sa);
                 const strB = this._stateStrength(sb);
@@ -2217,6 +2377,30 @@ const sim = {
                 else if (this.rand() < p.unionChance) this._unite(sa, sb);
                 else { this.stCd[sa] = p.diploCooldown; this.stCd[sb] = p.diploCooldown; }
                 break;   /* one decision per estate per pass */
+            }
+        }
+    },
+
+    /* A tributary that has outgrown the power that beat it stops paying. Run
+       with diplomacy, on the same annual clock. */
+    _rebellions() {
+        const p = this.P;
+        for (let s = 0; s < MAX_STATES; s++) {
+            if (this.stAlive[s] === 0) continue;
+            const over = this.stOverlord[s];
+            if (over < 0) continue;
+            if (this.stAlive[over] === 0) {
+                this.stOverlord[s] = -1;
+                this._logEvent('freed', s, over, 0);
+                continue;
+            }
+            if (this.stCd[s] > 0) continue;
+            const mine = this._stateStrength(s), theirs = this._stateStrength(over);
+            if (mine > theirs * p.rebelRatio) {
+                this.stOverlord[s] = -1;
+                this.stCd[s] = p.diploCooldown;
+                this.rebellions++;
+                this._logEvent('freed', s, over, 1);
             }
         }
     },
@@ -2259,9 +2443,14 @@ const sim = {
             this.stMembers[into]++;
             moved++;
         }
-        /* The treasury and the grain reserve are seized with the country. */
+        /* The treasury, the grain reserve and the arsenal are seized with the
+           country — and so are whatever tributaries it had. */
         this.stTreasury[into] += this.stTreasury[from];
         this.stReserve[into] += this.stReserve[from];
+        this.stOrdnance[into] += this.stOrdnance[from];
+        for (let v = 0; v < MAX_STATES; v++) {
+            if (this.stOverlord[v] === from) this.stOverlord[v] = (v === into ? -1 : into);
+        }
         const other = this.stWar[from];
         if (other >= 0 && other !== into) this.stWar[other] = -1;
         this._retireState(from);
@@ -2280,6 +2469,10 @@ const sim = {
         this.stGov[s] = 0;
         this.stTreasury[s] = 0;
         this.stReserve[s] = 0;
+        this.stOrdnance[s] = 0;
+        this.stOverlord[s] = -1;
+        /* Anyone who answered to this state answers to nobody now. */
+        for (let v = 0; v < MAX_STATES; v++) if (this.stOverlord[v] === s) this.stOverlord[v] = -1;
         this.stAdmin[s] = 0;
         this.stShedOff[s] = this.stOffLast[s];
         this.stOfficials[s] = 0;
@@ -2307,29 +2500,105 @@ const sim = {
             if (this.stAlive[t] === 0) { this.stWar[s] = -1; continue; }
 
             const strA = this._stateStrength(s), strB = this._stateStrength(t);
-            /* The loser of a round takes casualties in proportion to how badly
-               it is outmatched. With a flat one-per-round, evenly matched
-               powers ground each other down at exactly the same rate, no
-               garrison ever reached zero, and forty-four wars produced not one
-               conquest — every war ended in a negotiated peace regardless of
-               who was winning it. */
-            let winner, loser, ratio;
-            if (this.rand() < strA / (strA + strB)) { winner = s; loser = t; ratio = strA / strB; }
-            else { winner = t; loser = s; ratio = strB / strA; }
-            let toll = 1 + Math.floor(ratio - 1);
-            if (toll > 4) toll = 4; else if (toll < 1) toll = 1;
-            this.stCasualties[loser] += toll;
-            this.stBattles[s]++; this.stBattles[t]++;
-            this.battles++;
+
+            /* Men can only fight what they can walk to. If the two countries
+               share no border this is a war of bombardment alone, and the
+               garrisons never meet. */
+            const touching = this._adjacent(s, t);
+            if (touching) {
+                /* The loser of a round takes casualties in proportion to how
+                   badly it is outmatched. With a flat one-per-round, evenly
+                   matched powers ground each other down at exactly the same
+                   rate, no garrison ever reached zero, and forty-four wars
+                   produced not one conquest. */
+                let loser, ratio;
+                if (this.rand() < strA / (strA + strB)) { loser = t; ratio = strA / strB; }
+                else { loser = s; ratio = strB / strA; }
+                let toll = 1 + Math.floor(ratio - 1);
+                if (toll > 4) toll = 4; else if (toll < 1) toll = 1;
+                this.stCasualties[loser] += toll;
+                this.stBattles[s]++; this.stBattles[t]++;
+                this.battles++;
+            }
+
+            this._bombard(s, t);
+            this._bombard(t, s);
 
             const garA = this._stateGarrison(s), garB = this._stateGarrison(t);
-            if (garB === 0 && garA > 0) this._annex(s, t);
-            else if (garA === 0 && garB > 0) this._annex(t, s);
+            if (garB === 0 && garA > 0) this._defeat(s, t, touching);
+            else if (garA === 0 && garB > 0) this._defeat(t, s, touching);
             else if (this.tickCount - this.stWarSince[s] > p.warPeaceYears * TPY &&
                      this.rand() < p.peaceChance) {
                 this._peace(s, t);
             }
         }
+    },
+
+    /* Do these two countries share a border anywhere? Only then can their
+       armies actually reach one another. */
+    _adjacent(s, t) {
+        const p = this.P, live = this._liveE, n = this._liveN;
+        for (let i = 0; i < n; i++) {
+            const a = live[i];
+            if (this.eAlive[a] === 0 || this.eState[a] !== s) continue;
+            for (let j = 0; j < n; j++) {
+                const b = live[j];
+                if (this.eAlive[b] === 0 || this.eState[b] !== t) continue;
+                const dx = this.eSeatX[b] - this.eSeatX[a];
+                const dy = this.eSeatY[b] - this.eSeatY[a];
+                const reach = this.eRadius[a] + this.eRadius[b] + p.contactSlack;
+                if (dx * dx + dy * dy <= reach * reach) return true;
+            }
+        }
+        return false;
+    },
+
+    /* A salvo from s onto t. Guns pick the richest thing in range — the biggest
+       town — because that is what breaks a country fastest: soldiers dead,
+       civilians dead, and the granary that was feeding the place on fire. */
+    _bombard(s, t) {
+        const p = this.P;
+        if (this.stOrdnance[s] < p.salvoSize) return;
+
+        const live = this._liveE, n = this._liveN;
+        let best = -1, bestVal = -1;
+        for (let i = 0; i < n; i++) {
+            const e = live[i];
+            if (this.eAlive[e] === 0 || this.eState[e] !== t) continue;
+            const base = e * NRES;
+            const val = this.eTownPop[e] * 2 + this.eGranary[e] * 0.5 +
+                (this.eRes[base + R_MIN] + this.eRes[base + R_OIL]) * 3;
+            if (val > bestVal) { bestVal = val; best = e; }
+        }
+        if (best < 0) return;
+
+        this.stOrdnance[s] -= p.salvoSize;
+        this.stCasualties[t] += p.strikeCasualties;
+        this.eStrike[best] += p.strikeCivilians;
+        this.eGranary[best] *= (1 - p.strikeGranary);
+        this.strikes++;
+
+        /* Remembered only so the map can show where the shells landed. */
+        this.impacts.push({ x: this.eSeatX[best], y: this.eSeatY[best], t: this.tickCount });
+        if (this.impacts.length > 48) this.impacts.shift();
+    },
+
+    /* How a war ends depends entirely on whether the winner could walk there.
+       Over a shared border the estates change hands; from beyond one, the guns
+       cannot occupy anything, so the beaten state keeps everything it had
+       except its independence. */
+    _defeat(win, lose, touching) {
+        if (touching) { this._annex(win, lose); return; }
+        this.stWar[win] = -1;
+        this.stWar[lose] = -1;
+        this.stCd[win] = this.P.diploCooldown;
+        this.stCd[lose] = this.P.diploCooldown;
+        /* An overlord's own overlord does not inherit; a vassal answers to
+           whoever beat it, and a chain that loops would deadlock the tribute. */
+        if (this.stOverlord[win] === lose) this.stOverlord[win] = -1;
+        this.stOverlord[lose] = win;
+        this.vassalages++;
+        this._logEvent('vassal', win, lose, 0);
     },
 
     _logEvent(type, a, b, n) {
@@ -2406,6 +2675,7 @@ const sim = {
         this.eTownPop[e] = 0;
         this.eFoodSold[e] = 0;
         this.eGrainIn[e] = 0;
+        this.eStrike[e] = 0;
         this._eFree[this._eFreeN++] = e;
         this.dissolutions++;
     },

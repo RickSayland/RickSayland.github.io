@@ -145,7 +145,11 @@ const metrics = (function () {
             /* government */
             govs: 0, officials: 0, admin: 0, treasury: 0, taxYear: 0, worksYear: 0,
             govEstates: 0, govCells: 0, govLandShare: 0, biggestGov: 0,
-            garrisonGov: 0, garrisonFeudal: 0, govPopShare: 0, worksFunded: 0
+            garrisonGov: 0, garrisonFeudal: 0, govPopShare: 0, worksFunded: 0,
+            /* ordnance and empire */
+            arsenal: 0, armedStates: 0, maxOrdnance: 0, industry: 0,
+            vassals: 0, biggestEmpire: 0, tributeYear: 0,
+            strikes: 0, civilianDead: 0, warDead: 0
         },
 
         _lastTick: -1,
@@ -466,6 +470,25 @@ const metrics = (function () {
                managing his own affairs can field. */
             n.garrisonGov = govEst ? govGar / govEst : 0;
             n.garrisonFeudal = feudEst ? feudGar / feudEst : 0;
+
+            /* --- ordnance and empire --- */
+            n.arsenal = s.arsenalTotal;
+            n.vassals = s.vassalCount;
+            n.biggestEmpire = s.biggestEmpire;
+            n.tributeYear = s.tributeFlow * s.TPY;
+            n.strikes = s.strikes;
+            n.civilianDead = s.civilianDead;
+            n.warDead = s.warDead;
+            let armed = 0, maxOrd = 0, ind = 0;
+            for (let st = 0; st < s.MAX_STATES; st++) {
+                if (s.stAlive[st] === 0) continue;
+                if (s.stOrdnance[st] >= 1) armed++;
+                if (s.stOrdnance[st] > maxOrd) maxOrd = s.stOrdnance[st];
+                ind += s.stIndustry[st];
+            }
+            n.armedStates = armed;
+            n.maxOrdnance = maxOrd;
+            n.industry = ind;
 
             /* --- how the population is arranged on the ground --- */
             this._settlements(s);

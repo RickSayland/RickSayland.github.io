@@ -239,6 +239,24 @@
         set('statWorks', num(n.worksYear, 0) + ' / yr · ' + num(n.worksFunded * 100, 0) + '% funded');
         set('statGovEvents', sim.governments + ' / ' + sim.collapses);
 
+        /* --- ordnance & empire --- */
+        set('statArmed', String(n.armedStates));
+        set('statArsenal', num(n.arsenal, 0));
+        set('statStrikes', n.strikes.toLocaleString());
+        set('statVassals', String(n.vassals));
+        set('statEmpire', n.biggestEmpire + (n.biggestEmpire === 1 ? ' tributary' : ' tributaries'));
+        set('statCivDead', n.civilianDead.toLocaleString());
+        set('statWarDead', n.warDead.toLocaleString());
+        const totalDead = n.civilianDead + n.warDead;
+        const civShare = totalDead > 0 ? n.civilianDead / totalDead : 0;
+        $('barCivilian').style.width = (civShare * 100).toFixed(1) + '%';
+        set('statBombNote', n.strikes === 0
+            ? 'Nobody has an arsenal yet. Every war so far has been fought at a border.'
+            : num(civShare * 100, 0) + '% of everyone killed in war was a townsman, ' +
+              'not a soldier — guns pick the biggest town because that is what breaks a country fastest.');
+        set('statTribute', num(n.tributeYear, 1) + ' / yr');
+        set('statVassalEvents', sim.vassalages + ' / ' + sim.rebellions);
+
         /* --- states --- */
         set('statStates', String(n.states));
         set('statLargestState', String(n.largestState));
@@ -347,6 +365,17 @@
                     cls = 'ev collapse';
                     text = 'State #' + ev.a + ' falls to ' + ev.b +
                            ' manors; the offices are abolished.';
+                    break;
+                case 'vassal':
+                    cls = 'ev vassal';
+                    text = 'State #' + ev.b + ' is beaten from beyond its borders ' +
+                           'and pays tribute to #' + ev.a + '.';
+                    break;
+                case 'freed':
+                    cls = 'ev freed';
+                    text = ev.n === 1
+                        ? 'State #' + ev.a + ' has outgrown #' + ev.b + ' and stops paying tribute.'
+                        : 'State #' + ev.a + ' is released — #' + ev.b + ' is gone.';
                     break;
                 default:
                     text = ev.type;

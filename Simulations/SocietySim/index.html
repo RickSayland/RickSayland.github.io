@@ -153,6 +153,21 @@
                     <input type="range" class="slider">
                     <p class="knob-note">Extra men per subject a nation keeps over a manor. At zero a government is only a better tax collector and conquers nothing.</p>
                 </div>
+                <div class="knob" id="knobRange" data-min="0" data-max="900" data-step="20">
+                    <div class="knob-head"><span class="knob-name">Range of the guns</span><span class="knob-val">—</span></div>
+                    <input type="range" class="slider">
+                    <p class="knob-note">How far past its own border an arsenal can reach. At zero a war needs a shared border and the map's politics stay local; wind it up and every country is everyone's neighbour.</p>
+                </div>
+                <div class="knob" id="knobOrdBudget" data-min="0" data-max="0.9" data-step="0.05">
+                    <div class="knob-head"><span class="knob-name">Spent on munitions</span><span class="knob-val">—</span></div>
+                    <input type="range" class="slider">
+                    <p class="knob-note">The share of a treasury that goes to the arsenal rather than to drainage and irrigation. Guns or ditches — the same purse pays for both.</p>
+                </div>
+                <div class="knob" id="knobTribute" data-min="0" data-max="0.8" data-step="0.02">
+                    <div class="knob-head"><span class="knob-name">Tribute</span><span class="knob-val">—</span></div>
+                    <input type="range" class="slider">
+                    <p class="knob-note">What a beaten state pays its overlord each year. Squeeze hard enough and it will never grow strong enough to stop.</p>
+                </div>
             </div>
 
             <div class="section-title">Who's who</div>
@@ -497,6 +512,42 @@
                 his own affairs ever could — watch the two garrison figures
                 above diverge. Fall below three manors and the offices are
                 abolished and the survivors are lords again.
+            </p>
+
+            <div class="section-title">Ordnance &amp; empire</div>
+            <div class="stat-grid">
+                <div class="stat"><div class="stat-value" id="statArmed">—</div><div class="stat-label">states with guns</div></div>
+                <div class="stat"><div class="stat-value" id="statArsenal">—</div><div class="stat-label">shells held</div></div>
+                <div class="stat"><div class="stat-value" id="statStrikes">—</div><div class="stat-label">bombardments</div></div>
+            </div>
+            <div class="stat-grid two">
+                <div class="stat"><div class="stat-value" id="statVassals">—</div><div class="stat-label">tributary states</div></div>
+                <div class="stat"><div class="stat-value" id="statEmpire">—</div><div class="stat-label">largest empire</div></div>
+            </div>
+            <div class="split-track"><div class="split-fill" id="barCivilian"></div></div>
+            <div class="split-legend">
+                <span><i class="sw sw-starve"></i>civilians <b id="statCivDead">—</b></span>
+                <span><i class="sw sw-aged"></i>soldiers <b id="statWarDead">—</b></span>
+            </div>
+            <p class="knob-note" id="statBombNote">—</p>
+            <div class="ins-row"><span>Tribute paid</span><b id="statTribute">—</b></div>
+            <div class="ins-row"><span>Made vassal / rebelled</span><b id="statVassalEvents">—</b></div>
+            <p class="knob-note">
+                A war used to need a shared border. An arsenal reaches far past
+                one, so a country can pick a quarrel with a neighbour it has
+                never had — and guns are the first thing here that genuinely
+                needs the ore and fuel nobody wanted. Production is the
+                geometric mean of the two: plenty of iron and no fuel still
+                builds nothing.
+            </p>
+            <p class="knob-note">
+                How a war ends depends on whether the winner could walk there.
+                Over a shared border the estates change hands. From beyond one
+                the guns cannot occupy anything, so the beaten state keeps its
+                land, its lord and its government and pays tribute instead —
+                which is why an empire built by bombardment is a web of
+                tributaries rather than a patchwork of exclaves. Outgrow the
+                power that beat you and you stop paying.
             </p>
 
             <div class="section-title">Chronicle</div>
