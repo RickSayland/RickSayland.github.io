@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Japanese Progress Tracker</title>
   <link rel="icon" type="image/svg+xml" href="content/favicon.svg">
-  <link rel="stylesheet" href="style.css?v=0.0.1">
+  <link rel="stylesheet" href="style.css?v=0.1.1">
 </head>
 <body>
   <main class="container">
@@ -13,16 +13,68 @@
       <h1>Japanese Progress Tracker</h1>
       <span class="badge">In dev</span>
     </header>
-    <p class="lead">Track study progress across kana, kanji, vocabulary and grammar.</p>
+    <p class="lead">WaniKani progress, read straight from the API.</p>
 
-    <!-- Stub. Sections are rendered from tracker.SECTIONS in script.js. -->
-    <section id="board" class="board"></section>
+    <!-- Shown until a token is available. -->
+    <section id="setup" class="setup" hidden>
+      <h2>Connect WaniKani</h2>
+      <p>
+        Paste a <strong>read-only</strong> personal access token from
+        <a href="https://www.wanikani.com/settings/personal_access_tokens" target="_blank" rel="noopener">
+          your WaniKani API settings</a>.
+        It is kept in this browser's local storage and sent only to
+        <code>api.wanikani.com</code>.
+      </p>
+      <div class="row">
+        <input id="token" type="password" autocomplete="off" spellcheck="false"
+               placeholder="00000000-0000-0000-0000-000000000000">
+        <button id="save">Connect</button>
+      </div>
+    </section>
+
+    <!-- Shown once connected. -->
+    <section id="panel" hidden>
+      <div class="bar-head">
+        <div>
+          <span id="who" class="who"></span>
+          <span id="level" class="level"></span>
+        </div>
+        <div class="row">
+          <button id="refresh">Refresh</button>
+          <button id="forget" class="ghost">Disconnect</button>
+        </div>
+      </div>
+
+      <div id="status" class="status"></div>
+      <div id="plan" class="plan" hidden></div>
+
+      <div class="level-card">
+        <div class="bar"><div id="level-bar" class="bar-fill"></div></div>
+        <div id="level-note" class="count"></div>
+        <div id="queue" class="queue"></div>
+      </div>
+
+      <div id="stages" class="stages"></div>
+      <div id="board" class="board"></div>
+    </section>
 
     <footer class="footnote">
-      Scaffold only — nothing is tracked yet. Progress will be saved locally in your browser.
+      Kana and grammar are not tracked yet — WaniKani covers radicals, kanji and
+      vocabulary only.
     </footer>
   </main>
 
-  <script src="script.js?v=0.0.1"></script>
+  <!-- Optional, untracked: token.local.js sets window.WK_TOKEN. See README.md.
+       Gated on localhost so the deployed site never requests it — document.write
+       is deliberate here, it is the one way to keep a plain script in load order
+       without a build step. Expect a 404 in the console locally until the file
+       exists; that is the "no local token" case, and the paste box handles it. -->
+  <script>
+    if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
+      document.write('<script src="token.local.js"><\/script>');
+    }
+  </script>
+  <script src="wanikani.js?v=0.1.1"></script>
+  <script src="script.js?v=0.1.1"></script>
 </body>
 </html>

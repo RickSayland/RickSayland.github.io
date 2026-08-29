@@ -1,1 +1,6 @@
 CLAUDE.md
+
+# Local secrets. This repo publishes to GitHub Pages, so anything committed
+# here is public — API tokens must never land in a tracked file.
+token.local.js
+*.local.js

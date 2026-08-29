@@ -49,6 +49,183 @@ body {
   margin-bottom: 28px;
 }
 
+/* ---- setup ---- */
+
+.setup {
+  background: #1a1c2a;
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 24px;
+}
+
+.setup h2 {
+  font-size: 1rem;
+  color: #fff;
+  margin-bottom: 8px;
+}
+
+.setup p {
+  font-size: 0.85rem;
+  color: #888;
+  line-height: 1.55;
+  margin-bottom: 14px;
+}
+
+.setup a { color: #bc002d; }
+.setup code {
+  background: #11131e;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 0.8rem;
+}
+
+.row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+input[type="password"] {
+  flex: 1;
+  min-width: 0;
+  background: #11131e;
+  border: 1px solid #2a2d3e;
+  border-radius: 8px;
+  padding: 9px 12px;
+  color: #e0e0e0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.85rem;
+}
+
+input[type="password"]:focus {
+  outline: none;
+  border-color: #bc002d;
+}
+
+button {
+  background: #bc002d;
+  color: #fff;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: 9px 16px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+button:hover { background: #d4183c; }
+
+button.ghost {
+  background: transparent;
+  border-color: #2a2d3e;
+  color: #888;
+  font-weight: 500;
+}
+
+button.ghost:hover { border-color: #444; color: #ccc; }
+
+/* ---- connected panel ---- */
+
+.bar-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.who {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: #fff;
+}
+
+.level {
+  margin-left: 10px;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #e8c07d;
+}
+
+.status {
+  font-size: 0.8rem;
+  color: #666;
+  min-height: 1.2em;
+  margin-bottom: 16px;
+}
+
+.status.error { color: #f0574a; }
+
+.plan {
+  background: #2a2113;
+  border: 1px solid #5a4526;
+  border-radius: 10px;
+  padding: 10px 14px;
+  margin-bottom: 16px;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: #e8c07d;
+}
+
+.level-card {
+  background: #1a1c2a;
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.queue {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #23263a;
+  font-size: 0.85rem;
+  color: #9aa0b4;
+}
+
+/* ---- srs stage chips ---- */
+
+.stages {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.chip {
+  border-radius: 10px;
+  padding: 12px;
+  background: #1a1c2a;
+  border-left: 3px solid #444;
+}
+
+.chip-n {
+  display: block;
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: #fff;
+}
+
+.chip-k {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: #777;
+}
+
+/* WaniKani's own SRS colours, so the chips read the way the site does. */
+.chip.lesson      { border-left-color: #434343; }
+.chip.apprentice  { border-left-color: #dd0093; }
+.chip.guru        { border-left-color: #882d9e; }
+.chip.master      { border-left-color: #294ddb; }
+.chip.enlightened { border-left-color: #0093dd; }
+.chip.burned      { border-left-color: #434343; }
+
+/* ---- per-type progress ---- */
+
 .board {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
@@ -90,7 +267,9 @@ body {
   transition: width 0.2s ease;
 }
 
-.track .count {
+.bar-fill.ready { background: #7fd6a4; }
+
+.count {
   margin-top: 8px;
   font-size: 0.8rem;
   color: #666;
