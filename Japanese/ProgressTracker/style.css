@@ -1,0 +1,103 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background: #0f1117;
+  color: #e0e0e0;
+  min-height: 100vh;
+}
+
+.container {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 48px 24px 60px;
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.head h1 {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: -0.02em;
+}
+
+.badge {
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #e8c07d;
+  border: 1px solid #5a4526;
+  background: #2a2113;
+  border-radius: 999px;
+  padding: 3px 9px;
+}
+
+.lead {
+  color: #888;
+  font-size: 0.95rem;
+  margin-bottom: 28px;
+}
+
+.board {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 16px;
+}
+
+.track {
+  background: #1a1c2a;
+  border-radius: 12px;
+  padding: 16px;
+}
+
+.track h2 {
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #9aa0b4;
+  margin-bottom: 4px;
+}
+
+.track .jp {
+  font-size: 1.4rem;
+  color: #fff;
+  margin-bottom: 12px;
+}
+
+.bar {
+  height: 6px;
+  border-radius: 3px;
+  background: #11131e;
+  overflow: hidden;
+}
+
+.bar-fill {
+  height: 100%;
+  width: 0;
+  background: #bc002d;
+  transition: width 0.2s ease;
+}
+
+.track .count {
+  margin-top: 8px;
+  font-size: 0.8rem;
+  color: #666;
+}
+
+.footnote {
+  margin-top: 32px;
+  font-size: 0.8rem;
+  color: #555;
+}
