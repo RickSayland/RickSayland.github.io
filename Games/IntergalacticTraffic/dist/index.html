@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Intergalactic Traffic Simulator</title>
+<meta name="description" content="An incremental game about being the route authority for the light cone. You own nothing. You license everything.">
+<link rel="icon" type="image/svg+xml" href="./assets/logo-BOXBEsP7.svg">
+  <script type="module" crossorigin src="./assets/index-Dq6ZO0p2.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index-hEtEzwAz.css">
+</head>
+<body>
+<div id="app" aria-busy="true">
+
+  <header id="topbar">
+    <a class="brand" href="#" id="brandHome">
+      <span class="brand-mark" aria-hidden="true">§</span>
+      <span class="brand-text">
+        <span class="brand-title">Intergalactic Traffic</span>
+        <span class="brand-sub" id="eraLabel">Filing&nbsp;charter…</span>
+      </span>
+    </a>
+    <div id="resBar" class="res-bar" role="status" aria-live="off" aria-label="Resources"></div>
+    <div class="topbar-actions">
+      <button class="btn btn-ghost" id="btnSaveNow" title="Save now">Save</button>
+    </div>
+  </header>
+
+  <nav id="tabs" class="tabs" role="tablist" aria-label="Sections"></nav>
+
+  <main id="views">
+    <section class="view" id="view-routes" role="tabpanel" tabindex="-1" aria-labelledby="tab-routes"></section>
+    <section class="view" id="view-network" role="tabpanel" tabindex="-1" aria-labelledby="tab-network" hidden></section>
+    <section class="view" id="view-map" role="tabpanel" tabindex="-1" aria-labelledby="tab-map" hidden></section>
+    <section class="view" id="view-upgrades" role="tabpanel" tabindex="-1" aria-labelledby="tab-upgrades" hidden></section>
+    <section class="view" id="view-research" role="tabpanel" tabindex="-1" aria-labelledby="tab-research" hidden></section>
+    <section class="view" id="view-stats" role="tabpanel" tabindex="-1" aria-labelledby="tab-stats" hidden></section>
+    <section class="view" id="view-settings" role="tabpanel" tabindex="-1" aria-labelledby="tab-settings" hidden></section>
+  </main>
+
+  <div id="modalRoot"></div>
+  <div id="toasts" class="toasts" role="status" aria-live="polite"></div>
+  <div id="srAnnounce" class="sr-only" role="status" aria-live="polite"></div>
+</div>
+
+<noscript>
+  <p style="padding:2rem;font:16px system-ui">This is a client-side simulation. It needs JavaScript enabled.</p>
+</noscript>
+
+</body>
+</html>

@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" role="img" aria-labelledby="itsTitle">
+  <title id="itsTitle">Intergalactic Traffic - Route Authority seal</title>
+
+  <defs>
+    <!-- Legend arcs. Top text sits outside its baseline, bottom text inside,
+         so the two radii differ: 76 over the crown, 86 along the foot. -->
+    <path id="arcTop" d="M 24,100 A 76,76 0 0 1 176,100" fill="none"/>
+    <path id="arcBot" d="M 17,100 A 83,83 0 0 0 183,100" fill="none"/>
+  </defs>
+
+  <!-- Plate -->
+  <rect x="0" y="0" width="200" height="200" rx="6" fill="#0b0e12"/>
+  <rect x="0.75" y="0.75" width="198.5" height="198.5" rx="6" fill="none"
+        stroke="#262d36" stroke-width="1.5"/>
+
+  <!-- Stamp rings -->
+  <circle cx="100" cy="100" r="95.5" fill="none" stroke="#2f3945" stroke-width="1"/>
+  <circle cx="100" cy="100" r="91" fill="none" stroke="#eab558" stroke-width="1.6" opacity="0.85"/>
+  <circle cx="100" cy="100" r="88" fill="none" stroke="#eab558" stroke-width="0.7" opacity="0.5"/>
+  <circle cx="100" cy="100" r="68" fill="none" stroke="#38414d" stroke-width="1.2"/>
+  <circle cx="100" cy="100" r="65.5" fill="none" stroke="#38414d" stroke-width="0.6" opacity="0.7"/>
+
+  <!-- Registration ticks, inward from the inner ring at r=68 -->
+  <g stroke="#9aa2ab" stroke-width="1.2" opacity="0.75">
+    <path d="M 100,32 V 39"/>
+    <path d="M 100,168 V 161"/>
+    <path d="M 32,100 H 39"/>
+    <path d="M 168,100 H 161"/>
+  </g>
+
+  <!-- Legend separators at 3 and 9 o'clock -->
+  <g fill="#eab558" opacity="0.9">
+    <path d="M 21,100 l 3.2,-3.2 3.2,3.2 -3.2,3.2 z"/>
+    <path d="M 179,100 l -3.2,-3.2 -3.2,3.2 3.2,3.2 z"/>
+  </g>
+
+  <!-- ===================== Routing diagram ===================== -->
+
+  <!-- Origin orbit (r=22) and destination orbit (r=48) -->
+  <circle cx="100" cy="100" r="22" fill="none" stroke="#63c2c9" stroke-width="1.2" opacity="0.85"/>
+  <circle cx="100" cy="100" r="48" fill="none" stroke="#63c2c9" stroke-width="1.1"
+          opacity="0.45" stroke-dasharray="2 4"/>
+
+  <!-- Primary, sitting on the focus of the transfer ellipse -->
+  <circle cx="100" cy="100" r="4.6" fill="#e7e5df"/>
+  <circle cx="100" cy="100" r="8.5" fill="none" stroke="#e7e5df" stroke-width="0.7" opacity="0.35"/>
+
+  <!-- The licensed transfer: half-ellipse from the inner orbit to the outer.
+       rx 35 / ry 32.5 about (87,100) puts the near focus at exactly (100,100),
+       so the arc is a true Hohmann and not a decorative swoosh. -->
+  <path d="M 122,100 A 35,32.5 0 0 0 52,100" fill="none" stroke="#eab558"
+        stroke-width="2.6" stroke-linecap="round"/>
+  <!-- The unflown half, for the record -->
+  <path d="M 52,100 A 35,32.5 0 0 0 122,100" fill="none" stroke="#eab558"
+        stroke-width="1" stroke-dasharray="2 3.5" opacity="0.45"/>
+
+  <!-- Heading chevron, on the arc near apoapsis, pointing along travel -->
+  <path d="M 78,67.6 L 85,64.2 L 85,71.0 z" fill="#eab558"/>
+
+  <!-- Departure: filed, square. Arrival: cleared, ringed crosshair. -->
+  <rect x="118.6" y="96.6" width="6.8" height="6.8" fill="#eab558"/>
+  <circle cx="52" cy="100" r="5.2" fill="#0b0e12" stroke="#eab558" stroke-width="1.8"/>
+  <path d="M 52,91.5 V 94.8 M 52,105.2 V 108.5 M 43.5,100 H 46.8 M 57.2,100 H 60.5"
+        stroke="#eab558" stroke-width="1.2"/>
+
+  <!-- ===================== Legend ===================== -->
+  <g font-family="sans-serif" font-weight="700" text-anchor="middle">
+    <text font-size="11" letter-spacing="1" fill="#e7e5df">
+      <textPath href="#arcTop" startOffset="50%">INTERGALACTIC TRAFFIC</textPath>
+    </text>
+    <text font-size="10" letter-spacing="2.2" fill="#9aa2ab">
+      <textPath href="#arcBot" startOffset="50%">ROUTE AUTHORITY</textPath>
+    </text>
+    <text x="100" y="160" font-size="8" letter-spacing="1.3" font-weight="400" fill="#6f7783">FORM ITS-1</text>
+  </g>
+</svg>
