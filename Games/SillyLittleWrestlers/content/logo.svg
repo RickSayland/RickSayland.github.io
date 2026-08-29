@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 570 214">
+  <defs>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="6" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <rect width="570" height="214" fill="#1d1418"/>
+  <!-- ring ropes -->
+  <path d="M0 176h570M0 196h570" fill="none" stroke="#7a2f36" stroke-width="4" opacity="0.7"/>
+  <g text-anchor="middle" font-family="Helvetica, Arial, sans-serif" filter="url(#glow)">
+    <text x="285" y="98" fill="#f0574a" font-size="46" font-weight="700">Silly Little Wrestlers</text>
+    <text x="285" y="140" fill="#f2a35e" font-size="26" font-style="italic">The Game</text>
+  </g>
+</svg>
