@@ -1,0 +1,49 @@
+<svg viewBox="0 0 570 214" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="critFlash" cx="50%" cy="50%">
+      <stop offset="0%" stop-color="#bfe8ff" stop-opacity="0.55"/>
+      <stop offset="45%" stop-color="#4a9dff" stop-opacity="0.18"/>
+      <stop offset="100%" stop-color="#4a9dff" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="critCore" cx="42%" cy="36%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="40%" stop-color="#cfe6f5"/>
+      <stop offset="100%" stop-color="#6d7b84"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="570" height="214" rx="15" fill="#05070b"/>
+  <circle cx="108" cy="104" r="96" fill="url(#critFlash)"/>
+
+  <!-- neutron tracks leaving the core -->
+  <g stroke="#cdd6ff" stroke-width="1.1" opacity="0.5" stroke-linecap="round">
+    <path d="M108 104 L30 52"/>
+    <path d="M108 104 L52 16"/>
+    <path d="M108 104 L104 8"/>
+    <path d="M108 104 L168 22"/>
+    <path d="M108 104 L196 70"/>
+    <path d="M108 104 L200 128"/>
+    <path d="M108 104 L28 92"/>
+    <path d="M108 104 L36 146"/>
+    <path d="M108 104 L86 198"/>
+    <path d="M108 104 L150 196"/>
+  </g>
+  <g stroke="#5fd8ff" stroke-width="1.1" opacity="0.45" stroke-linecap="round">
+    <path d="M108 104 L66 74 L20 78"/>
+    <path d="M108 104 L142 64 L178 44"/>
+    <path d="M108 104 L74 140 L44 176"/>
+  </g>
+
+  <!-- the reflector, held just off the core -->
+  <path d="M46 74 A62 62 0 0 1 170 74" fill="none" stroke="#b6bcae" stroke-width="9" opacity="0.9"/>
+  <path d="M46 116 A62 62 0 0 0 170 116" fill="none" stroke="#b6bcae" stroke-width="9" opacity="0.9"/>
+
+  <!-- the core -->
+  <circle cx="108" cy="104" r="21" fill="url(#critCore)"/>
+
+  <!-- a heap of dust on the bench -->
+  <path d="M8 190 L40 190 L62 172 L84 190 L200 190 L200 200 L8 200 Z" fill="#4c5148" opacity="0.85"/>
+
+  <text x="212" y="98" font-family="system-ui,-apple-system,sans-serif" font-size="42" font-weight="700" fill="#cbd8e6" letter-spacing="1">Criticality</text>
+  <text x="213" y="128" font-family="ui-monospace,monospace" font-size="12.5" fill="#57e0c8" letter-spacing="2.1">RADIOACTIVE DUST BENCH</text>
+</svg>

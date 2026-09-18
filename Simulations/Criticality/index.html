@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Criticality — Radioactive Dust Bench</title>
+    <link rel="icon" type="image/svg+xml" href="content/favicon.svg">
+    <link rel="stylesheet" href="crit.css?v=0.1">
+</head>
+<body>
+    <div class="topbar">
+        <h1><span>Crit</span>icality</h1>
+        <span class="version">v0.1</span>
+        <p class="tagline">Pour radioactive dust on a bench. Critical mass is not a number in here — it is whatever the heap you built turns out to need.</p>
+        <div class="controls">
+            <button id="playBtn" class="ctl">Pause</button>
+            <div class="speed" id="speedGroup">
+                <button class="ctl spd" data-speed="1e-7" title="100 nanoseconds per second: one neutron generation at a time">ns</button>
+                <button class="ctl spd" data-speed="1e-4" title="a tenth of a millisecond per second">µs</button>
+                <button class="ctl spd is-on" data-speed="1" title="real time">×1</button>
+                <button class="ctl spd" data-speed="60" title="a minute per second">min</button>
+                <button class="ctl spd" data-speed="3600" title="an hour per second — for watching fission products decay">hr</button>
+                <button class="ctl spd" data-speed="86400" title="a day per second">day</button>
+            </div>
+            <button id="slowmoBtn" class="ctl is-on" title="Drop into slow motion automatically when the chain reaction takes off">Auto&nbsp;slow-mo</button>
+            <button id="soundBtn" class="ctl" title="Geiger counter audio">🔇</button>
+            <button id="clearBtn" class="ctl">Clear bench</button>
+        </div>
+    </div>
+
+    <div class="app">
+        <aside class="rail rail-left">
+            <div class="section-title">Scenarios</div>
+            <div class="presets" id="presets">
+                <button class="preset" data-preset="pour">Dust hopper</button>
+                <button class="preset" data-preset="sphere">Bare metal sphere</button>
+                <button class="preset" data-preset="demon">Demon core, 1946</button>
+                <button class="preset" data-preset="solution">Solution tank</button>
+                <button class="preset" data-preset="wet">Dust, then water</button>
+                <button class="preset" data-preset="pile">Natural uranium pile</button>
+                <button class="preset" data-preset="shield">Shielding bench</button>
+            </div>
+            <p class="preset-note" id="presetNote">
+                Pick a scenario, or just start painting. Everything is made of the
+                same dust and the same transport either way.
+            </p>
+
+            <div class="section-title" id="gapTitle">Reflector gap <span class="gap-only" id="gapUnit">—</span></div>
+            <div class="knob" id="gapKnob">
+                <input type="range" id="gapSlider" class="slider" min="0" max="14" step="0.25" value="10">
+                <p class="knob-note">
+                    The 1946 accident was this number going to zero with a hand
+                    and a screwdriver. Closing a reflector does not add fuel —
+                    it stops the neutrons leaving.
+                </p>
+            </div>
+
+            <div class="section-title">Material</div>
+            <div id="palette" class="palette"></div>
+            <p class="mat-blurb" id="matBlurb">&nbsp;</p>
+
+            <div class="section-title">Brush</div>
+            <div class="brush-row">
+                <input type="range" id="brushSize" class="slider" min="1" max="14" step="1" value="4">
+                <span class="brush-val" id="brushVal">4 cm</span>
+            </div>
+            <div class="tools" id="tools">
+                <button class="ctl tool is-on" data-tool="paint">Paint</button>
+                <button class="ctl tool" data-tool="erase">Erase</button>
+                <button class="ctl tool" data-tool="probe">Move dosimeter</button>
+            </div>
+            <p class="knob-note">
+                Right-click erases whatever the tool is. Cells are one centimetre,
+                so the brush size is real: a 4 cm brush lays down a 4 cm blob.
+            </p>
+        </aside>
+
+        <main class="viewport">
+            <canvas id="bench"></canvas>
+            <div class="flashLayer" id="flashLayer"></div>
+            <div class="legend">
+                <span class="lg"><i class="sw sw-fast"></i>fast neutron</span>
+                <span class="lg"><i class="sw sw-therm"></i>thermalised</span>
+                <span class="lg"><i class="sw sw-fis"></i>fission</span>
+            </div>
+            <div class="banner" id="banner" hidden></div>
+            <div class="footnote" id="footnote">
+                The bench is 2.4 m across. Neutrons are tracked in three dimensions —
+                the thickness you cannot see is inferred from the width of the pile,
+                which is what lets a heap on a flat screen have a real critical mass.
+            </div>
+        </main>
+
+        <aside class="rail rail-right">
+            <div class="section-title">Multiplication</div>
+            <div class="headline">
+                <div class="headline-val" id="kValue">—</div>
+                <div class="headline-unit">k<sub>eff</sub> &nbsp;·&nbsp; <span id="kErr">±—</span> measured</div>
+                <div class="state" id="state">NO FISSILE MATERIAL</div>
+            </div>
+            <div class="ktrack"><div class="kfill" id="kFill"></div><div class="kmark"></div></div>
+            <div class="stat-grid">
+                <div class="stat"><div class="stat-value" id="statRho">—</div><div class="stat-label">reactivity</div></div>
+                <div class="stat"><div class="stat-value" id="statDollar">—</div><div class="stat-label">dollars</div></div>
+                <div class="stat"><div class="stat-value" id="statPeriod">—</div><div class="stat-label">period</div></div>
+            </div>
+            <p class="knob-note" id="kNote">
+                k is not computed here, it is measured: production over loss, with
+                counting statistics, so the meter settles rather than snapping.
+            </p>
+
+            <div class="section-title">Chain reaction</div>
+            <div class="stat-grid">
+                <div class="stat"><div class="stat-value" id="statPower">—</div><div class="stat-label">power</div></div>
+                <div class="stat"><div class="stat-value" id="statFis">—</div><div class="stat-label">fissions</div></div>
+                <div class="stat"><div class="stat-value" id="statEnergy">—</div><div class="stat-label">energy</div></div>
+            </div>
+            <div class="stat-grid">
+                <div class="stat"><div class="stat-value" id="statLife">—</div><div class="stat-label">gen. time</div></div>
+                <div class="stat"><div class="stat-value" id="statBeta">—</div><div class="stat-label">β delayed</div></div>
+                <div class="stat"><div class="stat-value" id="statTemp">—</div><div class="stat-label">peak temp</div></div>
+            </div>
+            <canvas id="powerChart"></canvas>
+            <p class="knob-note" id="chainNote">
+                Nothing starts the reaction. Spontaneous fission is already going on
+                inside the material — the only question is whether the arrangement
+                multiplies it.
+            </p>
+
+            <div class="section-title">Dosimeter</div>
+            <div class="geiger">
+                <div class="cps"><span id="cpsValue">0</span><small>counts / s</small></div>
+                <canvas id="geigerChart"></canvas>
+            </div>
+            <div class="stat-grid">
+                <div class="stat"><div class="stat-value" id="statRate">—</div><div class="stat-label">dose rate</div></div>
+                <div class="stat"><div class="stat-value" id="statDose">—</div><div class="stat-label">accumulated</div></div>
+                <div class="stat"><div class="stat-value" id="statDist">—</div><div class="stat-label">distance</div></div>
+            </div>
+            <div class="verdict" id="verdict">Background.</div>
+            <div class="dose-split">
+                <span>neutron <b id="splitN">—</b></span>
+                <span>prompt γ <b id="splitG">—</b></span>
+                <span>decay γ <b id="splitD">—</b></span>
+            </div>
+
+            <div class="section-title">On the bench</div>
+            <div class="rows">
+                <div class="row"><span>Fissile mass</span><b id="statFissile">—</b></div>
+                <div class="row"><span>Total mass</span><b id="statMass">—</b></div>
+                <div class="row"><span>Spontaneous source</span><b id="statSource">—</b></div>
+                <div class="row"><span>Activity</span><b id="statAct">—</b></div>
+                <div class="row"><span>Thermalised flux</span><b id="statTherm">—</b></div>
+            </div>
+
+            <div class="section-title">Fission products</div>
+            <div class="rows" id="fpRows">
+                <div class="row empty">Nothing has fissioned yet.</div>
+            </div>
+            <p class="knob-note">
+                Decay heat follows t<sup>-1.2</sup> and does not switch off with the
+                neutrons. It is why the debris of an accident stays hot, and
+                dangerous, long after the reaction has stopped.
+            </p>
+
+            <div class="section-title">Clock</div>
+            <div class="rows">
+                <div class="row"><span>Model time</span><b id="statTime">0</b></div>
+                <div class="row"><span>Time compression</span><b id="statSpeed">×1</b></div>
+                <div class="row"><span>Tracked neutrons</span><b id="statTracked">0</b></div>
+                <div class="row"><span>Frame</span><b id="statFrame">—</b></div>
+            </div>
+        </aside>
+    </div>
+
+    <script src="nuclear.js?v=0.1"></script>
+    <script src="elements.js?v=0.1"></script>
+    <script src="grid.js?v=0.1"></script>
+    <script src="neutrons.js?v=0.1"></script>
+    <script src="render.js?v=0.1"></script>
+    <script src="instruments.js?v=0.1"></script>
+    <script src="main.js?v=0.1"></script>
+</body>
+</html>
