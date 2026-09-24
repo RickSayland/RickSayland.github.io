@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Warp Field Engineering</title>
+<link rel="icon" type="image/svg+xml" href="content/favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="warp.css?v=0.1">
+</head>
+<body data-mode="workshop">
+
+<header class="hdr">
+    <a class="home" href="/" title="Back to the playground">&#9666;</a>
+    <div class="plaque">
+        <h1>WARP FIELD ENGINEERING</h1>
+        <div class="sub">BUBBLE WORKSHOP &middot; TEST RANGE &middot; SIMULATED &mdash; NO DRIVE HAS EVER BEEN BUILT</div>
+    </div>
+    <nav class="modes" id="modes">
+        <button data-mode="workshop" class="on">Workshop</button>
+        <button data-mode="flight">Test flight</button>
+    </nav>
+    <div class="clocks">
+        <div class="clk"><span class="lbl">Earth UTC</span><span id="clkEarth">&mdash;</span></div>
+        <div class="clk"><span class="lbl">Ship clock</span><span id="clkShip">&mdash;</span></div>
+    </div>
+    <div class="timebase" id="timebase">
+        <span class="lbl">Time</span>
+        <button data-rate="0" title="Pause">&#10074;&#10074;</button>
+        <button data-rate="1" class="on">&times;1</button>
+        <button data-rate="10">&times;10</button>
+        <button data-rate="100">&times;100</button>
+        <button data-rate="1000">&times;10&sup3;</button>
+        <button data-rate="10000">&times;10&#8308;</button>
+        <button data-rate="100000">&times;10&#8309;</button>
+    </div>
+    <span class="version">v0.1</span>
+</header>
+
+<main class="stage">
+    <section class="view" id="view">
+        <canvas id="benchCanvas"></canvas>
+        <canvas id="bridgeCanvas"></canvas>
+        <div class="field-tabs workshop-only" id="fieldTabs">
+            <button data-field="rho" class="on" title="Energy density seen by observers riding the time slices">Energy density</button>
+            <button data-field="nec" title="Worst T(k,k) over 48 light-ray directions. Negative = violation.">Null energy</button>
+            <button data-field="york" title="Expansion of volume elements (Alcubierre's York time)">York time</button>
+            <button data-field="mom" title="Momentum density: energy flowing through the wall">Momentum</button>
+            <button data-field="clock" title="How fast a clock at rest in the bubble frame ticks">Clock rate</button>
+            <button data-field="shift" title="How fast space flows past, in units of the local speed of light">Shift speed</button>
+        </div>
+        <div class="bench-note workshop-only" id="benchNote"></div>
+        <div class="view-hint flight-only">drag to look &middot; wheel to zoom &middot; double-click to face the bow</div>
+    </section>
+
+    <aside class="rail">
+        <div class="rail-workshop">
+            <div class="sec-title">Drive family</div>
+            <div class="families" id="families"></div>
+            <div class="card">
+                <h3 id="famName">&mdash;</h3>
+                <div class="cite" id="famCite"></div>
+                <p id="famBlurb"></p>
+            </div>
+
+            <div class="sec-title">Geometry</div>
+            <div id="paramSliders"></div>
+            <div class="slider-row" id="velRow">
+                <div class="sr-head"><span>Design velocity</span><b id="velVal">&mdash;</b></div>
+                <input type="range" id="velSlider" min="0" max="1000" step="1">
+                <p class="sr-note">Shift drives are analysed at this speed. Shells are analysed at rest &mdash; energy conditions do not depend on who is watching.</p>
+            </div>
+
+            <div class="progress"><div class="bar" id="anaBar"></div><span id="anaText">&mdash;</span></div>
+
+            <div class="sec-title">Energy conditions <span class="aside">all observers, not just Eulerian</span></div>
+            <div class="verdicts" id="verdicts"></div>
+
+            <div class="sec-title">What it costs</div>
+            <dl class="totals" id="totals"></dl>
+            <p class="insight" id="insight"></p>
+        </div>
+
+        <div class="rail-flight">
+            <div class="sec-title">Navigation
+                <span class="nav-zoom" id="navZoom">
+                    <button data-zoom="4e8">Local</button>
+                    <button data-zoom="6e12">System</button>
+                    <button data-zoom="1.2e17">Stars</button>
+                </span>
+            </div>
+            <canvas id="navCanvas"></canvas>
+            <div class="sec-title">Field <span class="aside" id="miniLabel"></span></div>
+            <canvas id="miniCanvas"></canvas>
+            <div class="sec-title">Log</div>
+            <ol class="log" id="log"></ol>
+        </div>
+    </aside>
+</main>
+
+<footer class="console flight-only" id="console">
+    <section class="mod mod-helm">
+        <h2>Helm</h2>
+        <div class="seg" id="modeSeg">
+            <button data-helm="auto" class="on">Auto</button>
+            <button data-helm="manual">Manual</button>
+        </div>
+        <label class="dest">Destination
+            <select id="targetSel"></select>
+        </label>
+        <div class="rd-grid">
+            <span>Range</span><b id="rdDist">&mdash;</b>
+            <span>ETA</span><b id="rdEta">&mdash;</b>
+            <span>Light-lag, Earth</span><b id="rdLag">&mdash;</b>
+            <span>Frame</span><b id="rdFrame">&mdash;</b>
+        </div>
+        <div class="keys">W/S pitch &middot; A/D yaw &middot; Q/E roll &middot; [ ] throttle</div>
+    </section>
+
+    <section class="mod mod-throttle">
+        <h2>Throttle</h2>
+        <div class="throttle">
+            <div class="lever" id="lever">
+                <div class="lever-scale" id="leverScale"></div>
+                <div class="lever-track">
+                    <div class="lever-gate" id="leverGate"></div>
+                    <div class="lever-handle" id="leverHandle"></div>
+                </div>
+            </div>
+            <div class="spd">
+                <div class="spd-lbl">Bubble speed</div>
+                <div class="spd-big" id="rdBeta">0</div>
+                <div class="spd-lbl">Set</div>
+                <div class="spd-set" id="rdCruise">&mdash;</div>
+                <div class="spd-status" id="rdStatus">&mdash;</div>
+            </div>
+        </div>
+    </section>
+
+    <section class="mod mod-field">
+        <h2 id="conFieldTitle">Field geometry</h2>
+        <div class="fam-name" id="conFamily">&mdash;</div>
+        <div class="knobs" id="knobs"></div>
+        <div class="thrust" id="thrustRow">
+            <span>Thrust</span>
+            <div class="seg small" id="thrustSeg">
+                <button data-g="0.1">0.1 g</button>
+                <button data-g="1" class="on">1 g</button>
+                <button data-g="10">10 g</button>
+                <button data-g="100">100 g</button>
+            </div>
+        </div>
+    </section>
+
+    <section class="mod mod-energy">
+        <h2 id="conEnergyTitle">Exotic energy</h2>
+        <div class="gauge" id="gauge">
+            <div class="gauge-track"><div class="gauge-fill" id="gaugeFill"></div></div>
+            <div class="gauge-ticks" id="gaugeTicks"></div>
+        </div>
+        <div class="rd-grid">
+            <span>Energy</span><b id="rdEnergy">&mdash;</b>
+            <span>Mass equivalent</span><b id="rdMass">&mdash;</b>
+            <span>Peak density</span><b id="rdPeak">&mdash;</b>
+            <span>vs Casimir cavity</span><b id="rdCasimir">&mdash;</b>
+            <span>Wall vs QI limit</span><b id="rdQI">&mdash;</b>
+        </div>
+    </section>
+
+    <section class="mod mod-causal">
+        <h2>Causality</h2>
+        <div class="rd-grid">
+            <span>Horizons</span><b id="rdHorizon">&mdash;</b>
+            <span>Surface gravity</span><b id="rdKappa">&mdash;</b>
+            <span>Horizon temperature</span><b id="rdTH">&mdash;</b>
+            <span>Instability e-fold</span><b id="rdInstab">&mdash;</b>
+            <span>Swept matter</span><b id="rdSwept">&mdash;</b>
+        </div>
+        <div class="keyswitch" id="interlock" title="Causality interlock">
+            <div class="ks-body"><div class="ks-key"></div></div>
+            <div class="ks-labels"><span>BYPASS</span><span>INTERLOCK</span></div>
+        </div>
+    </section>
+
+    <section class="mod mod-annun">
+        <h2>Annunciator</h2>
+        <div class="annun" id="annun"></div>
+    </section>
+
+    <section class="mod mod-master">
+        <h2>Master</h2>
+        <div class="guard" id="guard">
+            <div class="guard-cover"></div>
+            <div class="toggle"><div class="bat"></div></div>
+            <div class="guard-lbl" id="guardLbl">FIELD</div>
+        </div>
+        <button class="btn engage" id="engageBtn">Engage</button>
+        <button class="btn stop" id="stopBtn">All stop</button>
+        <div class="rd-grid tight">
+            <span>Crew load</span><b id="rdLoad">&mdash;</b>
+            <span>Clock rate</span><b id="rdClock">&mdash;</b>
+            <span>Local speed</span><b id="rdLocal">&mdash;</b>
+        </div>
+    </section>
+</footer>
+
+<script src="metrics.js?v=0.1"></script>
+<script src="einstein.js?v=0.1"></script>
+<script src="optics.js?v=0.1"></script>
+<script src="space.js?v=0.1"></script>
+<script src="ship.js?v=0.1"></script>
+<script src="bench.js?v=0.1"></script>
+<script src="bridge.js?v=0.1"></script>
+<script src="navmap.js?v=0.1"></script>
+<script src="console.js?v=0.1"></script>
+<script src="main.js?v=0.1"></script>
+</body>
+</html>
