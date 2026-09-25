@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Atom Viewer</title>
+<link rel="icon" type="image/svg+xml" href="content/favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="atom.css?v=1.0">
+</head>
+<body data-view="atom">
+
+<header class="hdr">
+    <a class="home" href="/" title="Back to the playground">&#9666;</a>
+    <div class="plaque">
+        <h1>ATOM VIEWER</h1>
+        <div class="sub">ORBITALS FROM A SELF-CONSISTENT FIELD &middot; NUCLEI FROM THE IAEA CHART</div>
+    </div>
+    <nav class="modes" id="views">
+        <button data-view="atom" class="on" title="The electron cloud, at picometre scale">Atom</button>
+        <button data-view="nucleus" title="The nucleus, at femtometre scale — tens of thousands of times closer">Nucleus</button>
+    </nav>
+    <div class="hdr-id" id="hdrId"></div>
+    <span class="version">v1.0</span>
+</header>
+
+<main class="stage">
+    <section class="view" id="view">
+        <canvas id="glCanvas"></canvas>
+        <canvas id="overlayCanvas"></canvas>
+        <canvas id="nucCanvas"></canvas>
+
+        <div class="chipbar atom-only">
+            <div class="chips" id="chips"></div>
+            <div class="chips sub" id="subchips"></div>
+        </div>
+        <div class="legend atom-only" id="legend"></div>
+
+        <div class="controls atom-only">
+            <div class="seg" id="styleSeg">
+                <button data-style="cloud" class="on" title="Probability density as a glowing cloud">Cloud</button>
+                <button data-style="surface" title="The surface enclosing 90% of the probability">Surface</button>
+            </div>
+            <div class="seg" id="scaleSeg">
+                <button data-scale="true" class="on" title="Distances drawn to scale">True scale</button>
+                <button data-scale="shells" title="Radius compressed logarithmically so inner shells are visible">Shells</button>
+            </div>
+            <button class="tog" id="cutBtn" title="Cut a wedge out of the side facing you">Cutaway</button>
+            <button class="tog on" id="spinBtn" title="Turn slowly when idle">Spin</button>
+        </div>
+        <div class="nuc-legend nucleus-only" id="nucLegend"></div>
+        <div class="controls nucleus-only">
+            <button class="tog on" id="spinBtn2" title="Turn slowly when idle">Spin</button>
+        </div>
+
+        <div class="scale-note" id="scaleNote"></div>
+        <div class="status" id="status"></div>
+        <div class="view-hint">drag to rotate &middot; wheel to zoom</div>
+        <div class="nogl" id="noGL" hidden>This view needs WebGL2, which this browser has turned off. The nucleus view and every panel still work.</div>
+    </section>
+
+    <aside class="rail">
+        <div class="sec-title">Element</div>
+        <select id="elSelect" class="el-select"></select>
+        <div class="ident">
+            <div class="ident-sym" id="identSym"></div>
+            <div class="ident-text">
+                <div class="ident-name" id="identName"></div>
+                <div class="ident-sub" id="identSub"></div>
+            </div>
+        </div>
+        <div class="steppers">
+            <div class="stepper" data-k="Z">
+                <span class="st-lbl"><i class="pdot"></i>Protons</span>
+                <button data-d="-1">&minus;</button><input type="number" id="inZ" min="1" max="118"><button data-d="1">+</button>
+            </div>
+            <div class="stepper" data-k="N">
+                <span class="st-lbl"><i class="ndot"></i>Neutrons</span>
+                <button data-d="-1">&minus;</button><input type="number" id="inN" min="0" max="250"><button data-d="1">+</button>
+            </div>
+            <div class="stepper" data-k="E">
+                <span class="st-lbl"><i class="edot"></i>Electrons</span>
+                <button data-d="-1">&minus;</button><input type="number" id="inE" min="0"><button data-d="1">+</button>
+                <button class="mini" id="neutralBtn" title="Set electrons = protons">neutral</button>
+            </div>
+        </div>
+
+        <div class="sec-title">Nucleus <span class="aside" id="nucSource"></span></div>
+        <div class="verdict" id="nucVerdict"></div>
+        <dl class="stats" id="nucStats"></dl>
+        <canvas id="chartCanvas" class="chart"></canvas>
+        <div class="chart-hover" id="chartHover">Click any square to build that nucleus.</div>
+        <div class="chart-key">
+            <span><i style="background:#e6ebf2"></i>stable</span>
+            <span><i style="background:#3f82e8"></i>&beta;&minus;</span>
+            <span><i style="background:#e5527d"></i>&beta;+ / EC</span>
+            <span><i style="background:#e9c43b"></i>&alpha;</span>
+            <span><i style="background:#3fc07a"></i>fission</span>
+            <span><i style="background:#f08c3c"></i>p</span>
+            <span><i style="background:#9b6dff"></i>n</span>
+            <span><i style="background:#3b2f4d"></i>unbound</span>
+        </div>
+
+        <div class="sec-title">Electrons <span class="aside" id="scfStatus"></span></div>
+        <div class="verdict" id="elVerdict"></div>
+        <div class="config" id="config"></div>
+        <dl class="stats" id="elStats"></dl>
+        <div class="box-diagram" id="boxDiagram"></div>
+
+        <div class="sec-title">Where the electrons are <span class="aside">probability per log-radius</span></div>
+        <canvas id="radialCanvas" class="radial"></canvas>
+
+        <div class="sec-title">How this works</div>
+        <div class="about">
+            <p><b>Every orbital is computed, not drawn from a picture.</b> Each atom is solved as a self-consistent field: guess the electrons' potential, solve the Schr&ouml;dinger equation for every occupied shell in it, rebuild the potential from where those electrons then sit, and repeat until nothing changes. This is density-functional theory in the local density approximation, and it matches NIST's reference calculations to about a millionth of a hartree.</p>
+            <p><b>An atom is round.</b> Filled subshells add up to a sphere, so &ldquo;All electrons&rdquo; is a fuzzy ball with shells inside it (try <i>Cutaway</i> with <i>Shells</i>). The famous lobes appear when you pick one subshell or one orbital out of it, from the chips above the view or the boxes below.</p>
+            <p><b>The nucleus is tens of thousands of times smaller than the atom</b>, which is why it gets a view of its own. Whether it holds together is looked up in the IAEA chart of every nucleus ever observed. Anything not on the chart has never been made, and a liquid-drop model then says whether it could exist.</p>
+            <p><b>What is left out:</b> relativity (gold&rsquo;s 6s shell comes out roughly a fifth too large here, which is also why this gold would not look gold), spin&ndash;orbit splitting, and anything molecular. Molecules are next.</p>
+        </div>
+    </aside>
+</main>
+
+<script src="elements.js?v=1.0"></script>
+<script src="nuclides.js?v=1.0"></script>
+<script src="nucleus.js?v=1.0"></script>
+<script src="scf.js?v=1.0"></script>
+<script src="orbitals.js?v=1.0"></script>
+<script src="volume.js?v=1.0"></script>
+<script src="nucleusview.js?v=1.0"></script>
+<script src="panels.js?v=1.0"></script>
+<script src="main.js?v=1.0"></script>
+</body>
+</html>
