@@ -3,29 +3,19 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Silly Little Wrestlers</title>
+  <title>SLWF — Silly Little Wrestling Federation</title>
   <link rel="icon" type="image/svg+xml" href="content/favicon.svg">
-  <style>
-    body {
-      margin: 0;
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 20px;
-      background: #0f1117;
-      color: #666;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    }
-    img { width: min(420px, 80vw); border-radius: 12px; }
-    p { font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.08em; }
-    a { color: #555; font-size: 0.8rem; }
-  </style>
+  <link rel="stylesheet" href="slwf.css?v=0.1.1">
 </head>
 <body>
-  <img src="content/logo.svg" alt="Silly Little Wrestlers">
-  <p>In dev — nothing here yet</p>
-  <a href="/">&larr; Back to the playground</a>
+  <canvas id="game"></canvas>
+
+  <script src="core.js?v=0.1.1"></script>
+  <script src="ring.js?v=0.1.1"></script>
+  <script src="wrestler.js?v=0.1.1"></script>
+  <script src="combat.js?v=0.1.1"></script>
+  <script src="ai.js?v=0.1.1"></script>
+  <script src="ui.js?v=0.1.1"></script>
+  <script src="main.js?v=0.1.1"></script>
 </body>
 </html>
