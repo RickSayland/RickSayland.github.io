@@ -17,13 +17,15 @@
     /* ------------------------------------------------------------- tuning */
 
     var C = combat.TUNE = {
-        GRAPPLE_RANGE: 26,        // px between bodies to start a tie-up
+        GRAPPLE_RANGE: 32,        // px between bodies to start a tie-up
+        LUNGE_RANGE: 62,          // ...and the range you will step in from
+        LUNGE_SPEED: 430,         // the step itself
         STRIKE_SLOP: 4,           // hitbox generosity, px
 
-        TIE_FRAMES: 110,          // length of the tie-up contest
+        TIE_FRAMES: 90,           // length of the tie-up contest
         TIE_GRACE: 4,             // frames before a press counts as a lock-in
         TIE_COOLDOWN: 45,         // lockout after a clean break
-        TIE_SPEED: 7,             // cursor units per frame (of 256)
+        TIE_SPEED: 5,             // cursor units per frame (of 256)
         TIE_ZONE_BASE: 30,        // half-width of the sweet spot
         TIE_ZONE_TECH: 4,         // ...plus this per point of technique
         TIE_ZONE_TIRED: 12,       // ...minus this much when exhausted
@@ -116,10 +118,32 @@
 
     // The single place a button press becomes an action. Called for every
     // wrestler every frame, before wrestlers.update.
+    // Step toward somebody you tried to grab from just outside range. The
+    // buffered press stays alive while this runs, so the tie-up fires the
+    // moment the gap closes -- which is the difference between "I pressed
+    // grapple and nothing happened" and a wrestling game.
+    combat.lunge = function (w, opp) {
+        var d = ring.facing(w, opp);
+        var v = core.DIRVEC[d] || core.DIRVEC[0];
+        w.dir = d;
+        w.vx = core.fmul(v[0], C.LUNGE_SPEED);
+        w.vy = core.fmul(core.fmul(v[1], C.LUNGE_SPEED), 150);
+        if (w.st === 'idle') wrestlers.setState(w, 'walking');
+        wrestlers.setPose(w, 'walk');
+    };
+
     combat.handleIntent = function (w, m) {
         var i = w.in;
         var opp = combat.nearestOpponent(w, m.wrestlers);
         w.opp = opp;
+
+        // Buffered presses rather than this frame's raw edges. A button hit
+        // during hitstun or the tail of a move is remembered and acted on the
+        // instant the wrestler can move again. has() tests, consume() spends,
+        // so a branch that cannot act leaves the press for the next one.
+        var H = wrestlers.has, K = wrestlers.consume;
+        var bA = H(w, 'A'), bB = H(w, 'B'), bC = H(w, 'C');
+        var bX = H(w, 'X'), bY = H(w, 'Y'), bZ = H(w, 'Z');
 
         // ---- paired states read their own intent elsewhere
         if (w.st === 'grappling') return;
@@ -130,22 +154,27 @@
         // ---- holding somebody: direction + button picks the move
         if (w.hold && w.st === 'idle') {
             var set = w.holdSide === 'rear' ? 'grappleRear' : 'grappleFront';
-            if (i.A || i.B) {
-                var id = moves.pick(w.char, set, dirKey(w), i.A ? 'A' : 'B');
-                if (id) { combat.executeHold(w, id); return; }
+            if (bZ && w.spirit >= 1000) {
+                K(w, 'Z'); combat.flashFinisher(w);
+                combat.executeHold(w, w.char.finisher); return;
             }
             // Grapple + run is the Irish whip, in both reference games.
-            if (i.C) { combat.irishWhip(w); return; }
-            if (i.Z && w.spirit >= 1000) { combat.executeHold(w, w.char.finisher); return; }
+            if (bC) { K(w, 'C'); combat.irishWhip(w); return; }
+            if (bA || bB) {
+                var id = moves.pick(w.char, set, dirKey(w), bA ? 'A' : 'B');
+                if (id) { K(w, bA ? 'A' : 'B'); combat.executeHold(w, id); return; }
+            }
             return;
         }
 
         // ---- on the top rope
         if (w.st === 'onTurnbuckle') {
-            if (i.A || i.B) {
-                var aid = moves.pick(w.char, 'aerial', dirKey(w), i.A ? 'A' : 'B');
+            if (bA || bB) {
+                var aid = moves.pick(w.char, 'aerial', dirKey(w), bA ? 'A' : 'B');
+                K(w, bA ? 'A' : 'B');
                 combat.launchDive(w, aid);
-            } else if (i.C) {           // climb back down
+            } else if (bC) {            // climb back down
+                K(w, 'C');
                 w.onTop = false;
                 wrestlers.setState(w, 'idle');
                 wrestlers.setPose(w, 'idle', true);
@@ -156,29 +185,36 @@
         if (!wrestlers.canAct(w)) return;
 
         // ---- running attacks
-        if (w.st === 'running' && (i.A || i.B)) {
-            var rid = moves.pick(w.char, 'run', 'N', i.A ? 'A' : 'B');
-            if (rid) { wrestlers.startMove(w, rid); return; }
+        if (w.st === 'running' && (bA || bB)) {
+            var rid = moves.pick(w.char, 'run', 'N', bA ? 'A' : 'B');
+            if (rid) { K(w, bA ? 'A' : 'B'); wrestlers.startMove(w, rid); return; }
         }
 
         // ---- finisher and signature
-        if (i.Z) {
-            if (w.spirit >= 1000 && opp && opp._dist < 46) {
-                combat.flashFinisher(w);
-                wrestlers.startMove(w, w.char.finisher);
+        if (bZ && opp) {
+            if (opp._dist < 56) {
+                K(w, 'Z');
+                w.dir = ring.facing(w, opp);
+                if (w.spirit >= 1000) {
+                    combat.flashFinisher(w);
+                    wrestlers.startMove(w, w.char.finisher);
+                } else {
+                    wrestlers.startMove(w, w.char.signature);
+                }
                 return;
             }
-            if (opp && opp._dist < 46) { wrestlers.startMove(w, w.char.signature); return; }
+            if (opp._dist < C.LUNGE_RANGE + 20) combat.lunge(w, opp);
         }
 
         // ---- weapons
-        if (i.Y) {
-            if (w.weapon) { combat.swingWeapon(w); return; }
-            if (combat.tryPickUp(w)) return;
+        if (bY) {
+            if (w.weapon) { K(w, 'Y'); combat.swingWeapon(w); return; }
+            if (combat.tryPickUp(w)) { K(w, 'Y'); return; }
         }
 
         // ---- taunt
-        if (i.X) {
+        if (bX) {
+            K(w, 'X');
             wrestlers.setState(w, 'taunting', 48);
             wrestlers.setPose(w, 'taunt', true);
             if (window.sound) sound.sfx('crowdPop');
@@ -186,9 +222,10 @@
         }
 
         // ---- climb a turnbuckle / step to the apron
-        if (i.C && !i.dx && !i.dy) {
+        if (bC && !i.dx && !i.dy) {
             var corner = ring.inCorner(w.x, w.y);
             if (corner && w.surface === ring.RING) {
+                K(w, 'C');
                 wrestlers.setState(w, 'climbing', 34);
                 wrestlers.setPose(w, 'climb', true);
                 w.x = corner.x; w.y = corner.y;
@@ -198,39 +235,45 @@
         }
 
         // ---- ground game
-        if (opp && wrestlers.isDown(opp) && opp._dist < 34) {
-            if (i.B) { combat.startPin(w, opp); return; }
-            if (i.A) {
+        if (opp && wrestlers.isDown(opp) && opp._dist < 36) {
+            if (bB) { K(w, 'B'); combat.startPin(w, opp); return; }
+            if (bA) {
+                w.dir = ring.facing(w, opp);
                 var gid = moves.pick(w.char, 'ground', dirKey(w), 'A');
-                if (gid) { w.dir = ring.facing(w, opp); wrestlers.startMove(w, gid); return; }
+                if (gid) { K(w, 'A'); wrestlers.startMove(w, gid); return; }
             }
-            if (i.C) {
+            if (bC) {
                 // A submission targets whatever is already hurt most, which is
                 // how a leg injury turns into a broken leg.
                 var part = worstLimb(opp);
                 var sid = moves.pick(w.char, 'sub', partKey(part), 'C');
-                if (sid) { combat.startSubmission(w, opp, sid); return; }
+                if (sid) { K(w, 'C'); combat.startSubmission(w, opp, sid); return; }
             }
         }
 
         // ---- grapple attempt
         if (w.tieCd > 0) w.tieCd--;
         if (w.pinCd > 0) w.pinCd--;
-        if (i.B && opp && !wrestlers.isDown(opp) && !w.tieCd && !opp.tieCd) {
+        if (bB && opp && !wrestlers.isDown(opp) && !w.tieCd && !opp.tieCd) {
             if (opp._dist <= C.GRAPPLE_RANGE && wrestlers.canAct(opp)) {
+                K(w, 'B');
                 combat.startTieUp(w, opp);
                 return;
             }
+            // Just out of reach: step in and let the buffer finish the job.
+            if (opp._dist <= C.LUNGE_RANGE) { combat.lunge(w, opp); return; }
         }
 
         // ---- strike
-        if (i.A) {
+        if (bA) {
+            // Square up FIRST, then read the direction. Computing the move
+            // off the old facing and then turning means that holding toward
+            // an opponent behind you selects the back attack and then throws
+            // it forwards -- the direction you pressed has to mean the same
+            // thing as the direction you are about to be looking.
+            if (opp && opp._dist < 70) w.dir = ring.facing(w, opp);
             var sidk = moves.pick(w.char, 'strike', dirKey(w), 'A');
-            if (sidk) {
-                if (opp && opp._dist < 60) w.dir = ring.facing(w, opp);
-                wrestlers.startMove(w, sidk);
-                return;
-            }
+            if (sidk) { K(w, 'A'); wrestlers.startMove(w, sidk); return; }
         }
     };
 
@@ -290,6 +333,18 @@
         if (mv.freeze) core.freeze(mv.freeze);
         if (window.sound) sound.sfx(mv.sfx || 'punch');
         if (window.art && mv.fx) combat.spawnFx(mv.fx, vic.x, vic.y, vic.z + fp(mv.part === 'leg' ? 10 : 30), vic.surface);
+
+        // Anything that puts a body on the mat kicks up a ring of dust from
+        // where it landed, and anything genuinely heavy blows the palette out
+        // for two frames. A single white frame is the cheapest and most
+        // era-correct way to say "that one hurt".
+        if (mv.knock >= 2) {
+            combat.spawnFx('shockRing', vic.x, vic.y, 0, vic.surface);
+        }
+        if (dmg >= 45) {
+            pal.flash(5, [7, 7, 7], 150);
+            if (m) m.crowdPop(mv.dmg >= 90 ? 40 : 24);
+        }
 
         if (vic.bleeding && core.chance(0.5)) combat.spawnBlood(vic, 3);
         if (vic.hp <= 0 && m) m.onKO(vic, atk);
@@ -610,6 +665,7 @@
             p.mash = 0;
             if (window.sound) sound.sfx('count');
             m.onRefCount(p.count);
+            if (p.count === 2) m.crowdPop(34);
             if (p.count >= 3) { endPin(m, true); return; }
         }
     };

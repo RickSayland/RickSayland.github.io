@@ -452,9 +452,12 @@
             F.textCentred(W, 6, 'COUNT ' + ((match.outCount / 60) | 0), F.RED);
         }
 
-        // Move name flash.
+        // Move name flash: big, and it pulses for the first half-second so
+        // the eye catches it without having to be looking at that row.
         if (match.lastMoveTimer > 0 && match.lastMove) {
-            F.textCentred(W, 22, match.lastMove.toUpperCase(), F.ORANGE);
+            var mink = (match.lastMoveTimer > 60 && ((match.lastMoveTimer >> 2) & 1))
+                ? F.WHITE : F.ORANGE;
+            F.bigCentred(W, 21, match.lastMove.toUpperCase().substring(0, 18), mink);
         }
 
         // Announcements: rope breaks, eliminations, broken limbs.
@@ -497,24 +500,48 @@
     // The grapple contest. A bar with two zones and a sweeping cursor: the
     // cursor is a sprite because it has to move at pixel precision, everything
     // else is cells.
+    // The grapple contest, drawn as a track rather than a row of hashes.
+    // Each side gets a solid band in its own colour so a player can see which
+    // half of the bar is theirs at a glance, and the cursor is a caret sprite
+    // riding above and below it at pixel precision -- cells alone cannot move
+    // smoothly enough for a timing game.
     function drawTieBar() {
         var t = combat.tie;
-        // Row 24 puts the bar on the arena floor below the apron rather
-        // than across the SLWF lettering, and below where the wrestlers
-        // actually stand.
         var col = 8, row = 24, cells = 24;
         for (var c = 0; c < cells; c++) {
-            // Shade the two sweet spots so each player can see their own.
             var v = (c * 256 / cells) | 0;
             var inA = Math.abs(v - t.ca) <= t.ha;
             var inB = Math.abs(v - t.cb) <= t.hb;
-            var ink = inA && inB ? F.MAGENTA : (inA ? F.GREEN : (inB ? F.RED : F.GREY));
-            gfx.cell(W, col + c, row, font.tile(inA || inB ? '#' : '-', ink || F.GREY), pal.UI, 0);
+            var tile;
+            if (inA && inB) tile = BAR.spirit + 8;
+            else if (inA) tile = BAR.green + 8;
+            else if (inB) tile = BAR.red + 8;
+            else tile = BAR.green + 0;
+            gfx.cell(W, col + c, row, tile, pal.UI, 0);
         }
         F.text(W, col - 1, row - 1, 'TIE UP', F.WHITE);
         var cx = (col * 8) + ((t.cursor * cells * 8) >> 8);
-        var tile = font.tile('+', F.WHITE);
-        gfx.sprite(cx - 4, row * 8 - 8, tile, pal.UI, 1, 1, 0);
+        gfx.sprite(cx - 4, row * 8 - 8, caretTile(false), pal.UI, 1, 1, 0);
+        gfx.sprite(cx - 4, row * 8 + 8, caretTile(true), pal.UI, 1, 1, 0);
+    }
+
+    // A caret, generated once: pointing down above the bar and up below it,
+    // so the cursor brackets the track instead of covering it.
+    var caretUp = -1, caretDown = -1;
+    function caretTile(up) {
+        if (caretDown < 0) {
+            var a = new Uint8Array(64), b = new Uint8Array(64);
+            for (var y = 0; y < 5; y++) {
+                for (var x = 3 - y; x <= 4 + y; x++) {
+                    if (x < 0 || x > 7) continue;
+                    a[(4 - y) * 8 + x] = (y === 4) ? F.WHITE : F.YELLOW;
+                    b[(3 + y) * 8 + x] = (y === 4) ? F.WHITE : F.YELLOW;
+                }
+            }
+            caretDown = gfx.defineTiles(a, 1, 1);
+            caretUp = gfx.defineTiles(b, 1, 1);
+        }
+        return up ? caretUp : caretDown;
     }
 
     /* ---------------------------------------------------------------- pause */

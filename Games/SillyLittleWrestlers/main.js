@@ -49,6 +49,9 @@
     // drives the simulation; ui.js only paints its HUD.
     var matchScene = {
         enter: function () {
+            // The entrance left the player out by the tunnel; the bell brings
+            // everybody back to their marks.
+            match.takePositions();
             if (window.sound) sound.music('match');
         },
         update: function () {

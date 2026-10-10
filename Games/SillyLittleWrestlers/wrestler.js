@@ -26,8 +26,12 @@
         WALK: 272,            // 1.06 px/frame at speed 5
         RUN: 600,             // 2.34 px/frame
         SPEED_PER_PT: 26,     // added per point of the speed stat
-        DEPTH_SCALE: 150,     // depth moves slower than width: the camera
-        // compresses y, so equal world speed looks faster
+        // Depth moves slower than width, because the camera compresses y and
+        // equal world speed would look faster going up the screen. But not
+        // THIS much slower: at 150 the on-screen vertical rate was a quarter
+        // of the horizontal one and walking up and down the ring felt like
+        // wading.
+        DEPTH_SCALE: 210,
         ACCEL: 96,
         STOP: 128,
 
@@ -46,6 +50,10 @@
         DOWN_BASE: 42,        // frames down after a knockdown...
         DOWN_PER_DMG: 90,     // ...plus this scaled by how hurt you are
         GETUP_INVULN: 14,     // frames of invulnerability off the mat
+        BUFFER: 8,            // frames an unusable button press is remembered
+        BUFFER_B: 14,         // ...and longer for grapple, which also lunges
+        DTAP: 15,             // double-tap window for a run
+        ROPE_EXIT: 26,        // frames leaning on a rope before you go over it
         MASH_HELP: 3,         // frames shaved per button press while down
 
         KNOCK_VX: 420,
@@ -115,7 +123,8 @@
 
             onTop: false, onApron: false,
             stun: 0, invuln: 0, downTimer: 0, mashCount: 0,
-            rebound: 0, lastRope: 0,
+            rebound: 0, lastRope: 0, pushRope: 0, exiting: 0,
+            tieCd: 0, pinCd: 0,
             weapon: null,
             out: false, eliminated: false, dead: false,
 
@@ -126,6 +135,14 @@
                 A: 0, B: 0, C: 0, X: 0, Y: 0, Z: 0,
                 Ah: 0, Bh: 0, Ch: 0, mash: 0
             },
+
+            // Buffered presses. A button pushed during hitstun or the tail of
+            // a move is remembered for a few frames and fires the moment the
+            // wrestler can act again. Without this every input that lands a
+            // frame early is simply discarded, which is the single biggest
+            // reason a game like this feels unresponsive.
+            buf: { A: 0, B: 0, C: 0, X: 0, Y: 0, Z: 0 },
+            tapDir: -1, tapAge: 0, heldDir: -1, dashRun: 0, sweatTick: 0,
 
             // per-frame scratch used by combat.js
             hitbox: null, hurtbox: null,
@@ -161,6 +178,9 @@
         w.onTop = w.onApron = false;
         w.stun = w.invuln = w.downTimer = w.mashCount = 0;
         w.rebound = 0; w.weapon = null;
+        w.pushRope = 0; w.exiting = 0; w.tieCd = 0; w.pinCd = 0;
+        w.buf.A = w.buf.B = w.buf.C = w.buf.X = w.buf.Y = w.buf.Z = 0;
+        w.tapDir = -1; w.tapAge = 0; w.heldDir = -1; w.dashRun = 0; w.sweatTick = 0;
         w.out = false; w.eliminated = false;
         w.flash = 0; w.comboCount = 0;
         wrestlers.setPose(w, 'idle');
@@ -207,6 +227,40 @@
     };
 
     wrestlers.isTired = function (w) { return w.stam < T.STAM_TIRED; };
+
+    /* ---------------------------------------------------------- input buffer */
+
+    var BUFKEYS = ['A', 'B', 'C', 'X', 'Y', 'Z'];
+
+    // Called once per frame for every wrestler, after its intent is written
+    // and before combat reads it. Player and CPU both go through here.
+    wrestlers.bufferIntent = function (w) {
+        var i = w.in, b = w.buf, k;
+        for (var n = 0; n < BUFKEYS.length; n++) {
+            k = BUFKEYS[n];
+            if (i[k]) b[k] = (k === 'B') ? T.BUFFER_B : T.BUFFER;
+            else if (b[k] > 0) b[k]--;
+        }
+        // Double-tap a direction to run, which is how both reference games do
+        // it and how anyone actually plays. Holding C still works.
+        if (w.tapAge > 0) w.tapAge--;
+        var d = (i.dx || i.dy) ? core.dirFromVec(i.dx, i.dy) : -1;
+        if (d >= 0 && d !== w.heldDir) {
+            if (w.tapAge > 0 && w.tapDir === d) { w.dashRun = 1; w.tapAge = 0; }
+            else { w.tapDir = d; w.tapAge = T.DTAP; }
+        }
+        if (d < 0) w.dashRun = 0;
+        w.heldDir = d;
+    };
+
+    // Is a press pending? consume() spends it. Two calls so a branch can test
+    // without eating the input when it turns out it cannot act on it.
+    wrestlers.has = function (w, k) { return w.buf[k] > 0; };
+    wrestlers.consume = function (w, k) { w.buf[k] = 0; };
+    wrestlers.took = function (w, k) {
+        if (w.buf[k] > 0) { w.buf[k] = 0; return true; }
+        return false;
+    };
 
     /* -------------------------------------------------------------- movement */
 
@@ -361,9 +415,13 @@
                 if (i.dx || i.dy) {
                     if (w.st !== 'walking') wrestlers.setState(w, 'walking');
                     wrestlers.setPose(w, wrestlers.isTired(w) ? 'limp' : 'walk');
-                    if (i.Ch && w.stam > 40) {
+                    if ((i.Ch || w.dashRun) && w.stam > 40) {
                         wrestlers.setState(w, 'running');
                         wrestlers.setPose(w, 'run', true);
+                        // A puff off the back foot as you take off.
+                        if (window.combat) {
+                            combat.spawnFx('dust', w.x, w.y, w.z, w.surface);
+                        }
                     }
                 } else {
                     if (w.st !== 'idle') wrestlers.setState(w, 'idle');
@@ -374,7 +432,7 @@
             case 'running':
                 applyMove(w);
                 wrestlers.setPose(w, 'run');
-                if (!i.Ch || w.stam <= 0) {
+                if ((!i.Ch && !w.dashRun) || w.stam <= 0) {
                     wrestlers.setState(w, 'walking');
                 } else if (!i.dx && !i.dy && w.rebound === 0) {
                     wrestlers.setState(w, 'walking');
@@ -510,6 +568,29 @@
 
         if (ev.rope) {
             w.lastRope = ev.rope;
+            // Lean on the ropes long enough and you go over them. Both
+            // reference games work this way, and without it a wrestler can
+            // never follow an opponent to the floor: a walker is blocked by
+            // the ropes and a runner bounces off them, so a brawl that gets
+            // outside can never be joined.
+            // ev.rope fires whenever containment clamps, which includes
+            // merely sliding along a rope. Going OVER one has to be something
+            // you chose: the intent has to point outward through the rope you
+            // are against, for the whole count.
+            var pushing = false;
+            switch (ev.rope) {
+                case 1: pushing = i.dy < 0; break;   // far side
+                case 2: pushing = i.dx > 0; break;   // right
+                case 3: pushing = i.dy > 0; break;   // near side
+                case 4: pushing = i.dx < 0; break;   // left
+            }
+            if (pushing && (w.st === 'walking' || w.st === 'idle') && !ring.cage) {
+                if (++w.pushRope >= T.ROPE_EXIT) {
+                    w.pushRope = 0;
+                    w.ropeMode = 'through';
+                    w.exiting = 22;
+                }
+            }
             if (w.st === 'running' || w.st === 'whipped') {
                 w.rebound = 18;
                 if (window.sound) sound.sfx('ropeTwang');
@@ -522,6 +603,11 @@
             }
         }
 
+        if (!ev.rope) w.pushRope = 0;
+        if (w.exiting > 0 && --w.exiting === 0 && w.ropeMode === 'through') {
+            w.ropeMode = 'block';
+        }
+
         if (ev.landed) {
             if (w.st === 'falling') {
                 wrestlers.setState(w, 'down', 0);
@@ -529,11 +615,25 @@
                 w.mashCount = 0;
                 wrestlers.setPose(w, core.chance(0.5) ? 'downBack' : 'downFace', true);
                 if (window.sound) sound.sfx('bodyDrop');
+                if (window.combat) combat.spawnFx('slamDust', w.x, w.y, w.z, w.surface);
                 core.shake(2, 6);
             } else if (w.st === 'airborne') {
                 combat.resolveDiveLanding(w, ev.impact);
             }
         }
+
+        // A spent wrestler visibly sweats. Stamina has no meter by design, so
+        // every channel that leaks it -- the limp, the slow getup, this --
+        // is doing real work.
+        if (wrestlers.isTired(w) && !wrestlers.isDown(w) && !wrestlers.isBusy(w)) {
+            if (++w.sweatTick >= 44) {
+                w.sweatTick = 0;
+                if (window.combat) {
+                    combat.spawnFx('sweat', w.x + (core.rnd(9) - 4) * 256,
+                        w.y, w.z + fp(34), w.surface);
+                }
+            }
+        } else { w.sweatTick = 0; }
 
         advancePose(w);
     };
@@ -618,6 +718,24 @@
         return core.DIRVIEW[w.dir < 0 ? 0 : w.dir];
     }
 
+    // Drawn first, on the surface rather than at the body, so a wrestler in
+    // the air has a shadow on the mat beneath him. With no sprite scaling the
+    // size steps instead of shrinking, which at three sizes is enough to read
+    // a dive off the top rope as height rather than as walking up the screen.
+    wrestlers.drawShadow = function (w) {
+        if (!window.art || !art.shadowRom) return;
+        if (w.out && w.eliminated) return;
+        var zp = px(w.z);
+        var st = w.char.style.build;
+        var big = (st === 'heavy' || st === 'super');
+        var size = zp > 30 ? 0 : (zp > 12 ? 1 : (wrestlers.isDown(w) || big ? 2 : 1));
+        var rom = art.shadowRom(w.surface, size);
+        if (!rom) return;
+        var fr = gfx.stream(rom);
+        gfx.frame(ring.screenX(w.x), ring.screenY(w.y, 0, w.surface), fr,
+            pal.UI, false, false);
+    };
+
     wrestlers.draw = function (w) {
         if (w.out && w.eliminated) return;
         var v = viewOf(w);
@@ -655,6 +773,8 @@
             while (b >= 0 && ring.depthKey(sortBuf[b]) > k) { sortBuf[b + 1] = sortBuf[b]; b--; }
             sortBuf[b + 1] = cur;
         }
+        // Every shadow first, so no wrestler is ever drawn under another one.
+        for (var sh = 0; sh < sortBuf.length; sh++) wrestlers.drawShadow(sortBuf[sh]);
         for (var d = 0; d < sortBuf.length; d++) wrestlers.draw(sortBuf[d]);
     };
 

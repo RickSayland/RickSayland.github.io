@@ -326,25 +326,58 @@ renderer, the pose list or the move table.
 
 ## Current state
 
-Everything in this document is built and running. `tools/check.mjs` passes 79
+Everything in this document is built and running. `tools/check.mjs` passes 93
 checks, including a full CPU-vs-CPU match that replays identically from a seed.
-A hard-difficulty match between two CPUs finishes by pinfall in roughly three
-to eight minutes with near-falls, submissions, finishers and visible fatigue.
+Matches between two hard CPUs finish by pinfall in about three to four minutes
+with near-falls; an easy pair can go ten with blood and a knockout.
 
-Known rough edges, in the order they are worth looking at:
+### What the 0.2.0 polish pass changed, and why
+
+- **Input is buffered.** A press during hitstun or the tail of a move is
+  remembered for eight frames (fourteen for grapple) and fires the instant the
+  wrestler can act. Nothing else about the controls mattered as much: before
+  it, every input that landed a frame early was simply discarded.
+- **Grapple lunges.** Pressing grapple from just outside range steps you in
+  and the buffered press completes the tie-up when the gap closes, instead of
+  doing nothing at all.
+- **Strikes square up first.** The facing snaps to the opponent *before* the
+  direction is read, so "toward them" always means the same move.
+- **Double-tap a direction to run**, as well as holding C.
+- **Depth movement was a quarter of the horizontal rate on screen** and felt
+  like wading; `DEPTH_SCALE` went 150 → 210.
+- **Shadows.** Three sizes, picked by height off the ground, because the
+  hardware cannot scale a sprite and without one a jump and a step toward the
+  camera look identical. Drawn in the UI palette: the arena's only mid grey is
+  the tone the canvas weave uses, so an arena-palette shadow is invisible on
+  the surface it most needs to show up on.
+- **Eighteen of twenty-eight named effects did not exist**, and eleven of
+  sixteen named sounds did not either. `moves.js`, `art.js` and `audio.js` were
+  written against each other by string equality and nothing checked it, so
+  most hits landed silently and invisibly. Both files now carry an alias table
+  and the harness asserts every name resolves.
+- **Crowd pops** on a big move and a near-fall, via three palette entries.
+- A **white frame** on anything over 45 damage, a **shock ring** on every
+  knockdown, dust on landings and run starts, and sweat when a wrestler is
+  spent.
+- **The CPU knows to beat the count.** Two CPUs who spilled outside used to
+  brawl there until the referee counted them both out, which is a real finish
+  and a dreadful one to get every match.
+- **Going over the ropes requires pushing into them**, not merely sliding
+  along them, for a full 26 frames.
+
+### Known rough edges, in the order they are worth looking at
 
 1. **The entrance is thin.** The wrestler walks in under player control and
    their name and taunt appear; there is no per-character entrance animation
    yet, and `char.entranceAnim` is carried through the roster but unused.
 2. **Stipulations past Exhibition and Hardcore are only partly exercised.**
    Tables, Ladder, Cage, 3-Way and Rumble all start and run, but the table and
-   ladder props are scenery rather than interactive, and nothing yet puts a
-   wrestler *through* a table.
-3. **Blood is rare.** `BLEED_AT` is 340 against roughly 300 head damage in a
-   typical match, so it shows up in the hard ones. Tune it in `wrestler.js`.
-4. **The roster editor cannot really type a name.** It appends and deletes
+   ladder props are scenery and nothing yet puts a wrestler *through* one.
+3. **The roster editor cannot really type a name.** It appends and deletes
    characters rather than letting you pick each one, which is worse than the
    console-era wheel it is imitating.
-5. **Audio is written but barely exercised.** The FM/PSG engine is in
-   `audio.js` with its own patch and pattern tables; it has not been listened
-   to at length, and the music may want rebalancing against the SFX.
+4. **Blood is still rare** outside long matches. `BLEED_AT` is 340 in
+   `wrestler.js` against roughly 300 head damage in a three-minute match.
+5. **No rope flex.** A wrestler rebounding off the ropes gets a sound and a
+   velocity reversal but the ropes themselves do not move; doing it properly
+   means swapping tile content the way the crowd animation does.

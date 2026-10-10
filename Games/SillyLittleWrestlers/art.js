@@ -1094,7 +1094,10 @@
         star: { frames: 4, w: 3, h: 3, ax: 12, ay: 12, draw: fxStar },
         spark: { frames: 3, w: 1, h: 1, ax: 4, ay: 4, draw: fxSpark },
         bloodSpray: { frames: 3, w: 2, h: 2, ax: 8, ay: 12, draw: fxBloodSpray },
-        whoosh: { frames: 3, w: 4, h: 2, ax: 16, ay: 8, draw: fxWhoosh }
+        whoosh: { frames: 3, w: 4, h: 2, ax: 16, ay: 8, draw: fxWhoosh },
+        shockRing: { frames: 4, w: 5, h: 3, ax: 20, ay: 12, draw: fxShockRing },
+        slamDust: { frames: 4, w: 6, h: 2, ax: 24, ay: 15, draw: fxSlamDust },
+        strain: { frames: 3, w: 2, h: 2, ax: 8, ay: 8, draw: fxStrain }
     };
 
     var fxRoms = null;
@@ -1119,7 +1122,83 @@
         }
     }
 
+    /* ----------------------------------------------------------------------
+       An expanding shock ring, for the moves that are supposed to feel like
+       the mat bounced. Thin, bright and gone in four frames.
+       ---------------------------------------------------------------------- */
+    function fxShockRing(p, w, h, f) {
+        var cx = w >> 1, cy = (h >> 1) + 2;
+        var R = [3, 8, 13, 17][f];
+        var tone = [UI_WHITE, UI_CYAN, UI_MID, UI_DARK][f];
+        // Flattened: it is a ring on the canvas, seen from the WrestleFest
+        // angle, so its vertical radius is PERSP times its horizontal one.
+        for (var a = 0; a < 256; a += 4) {
+            var x = cx + ((core.COS[a] * R) >> 8);
+            var y = cy + ((core.SIN[a] * R * 45 / 100) >> 8);
+            px(p, w, h, x, y, tone);
+            if (f < 2) px(p, w, h, x, y + 1, tone);
+        }
+    }
+
+    /* A wide, low dust cloud: somebody went down hard. Distinct from `dust`,
+       which is the little puff a pair of boots makes. */
+    function fxSlamDust(p, w, h, f) {
+        var cy = h - 5;
+        var spread = [5, 11, 16, 20][f];
+        var tone = [UI_LIGHT, UI_LIGHT, UI_MID, UI_DARK][f];
+        for (var i = 0; i < 16; i++) {
+            var hs = hash2(i * 53 + 7, 3);
+            var dir = (i & 1) ? 1 : -1;
+            var t = ((hs & 15) + 1) / 16;
+            var x = (w >> 1) + dir * ((spread * t) | 0);
+            var y = cy - (((hs >> 5) & 3) + ((f * t * 4) | 0));
+            var r = f < 2 ? 2 : 1;
+            disc(p, w, h, x, y, r, tone);
+        }
+    }
+
+    /* A strain burst: the little radiating ticks a hold puts over somebody's
+       head when it is really being cranked on. */
+    function fxStrain(p, w, h, f) {
+        var cx = w >> 1, cy = h >> 1;
+        var tone = [UI_WHITE, UI_YELLOW, UI_ORANGE][f];
+        for (var i = 0; i < 6; i++) {
+            var a = i * 42 + 10 + f * 6;
+            ray(p, w, h, cx, cy, a, 3 + f * 2, 6 + f * 3, 2, 1, tone);
+        }
+    }
+
+    /* ----------------------------------------------------------------------
+       FX ALIASES
+       moves.js names 28 effects; this file draws ten of them. Rather than
+       rewrite either table, every name the move table uses is mapped here to
+       something that exists. Without this map eighteen of those names resolve
+       to null and the move lands with no effect drawn at all -- which is
+       exactly what shipped, and exactly why most hits looked like nothing.
+       ---------------------------------------------------------------------- */
+    var FX_ALIAS = {
+        // light strikes
+        punch: 'impactS', chop: 'impactS', kick: 'impactS', boot: 'impactS',
+        headbutt: 'impactS', grab: 'impactS', impactM: 'impactS',
+        metal: 'spark', chair: 'spark',
+        // heavy impacts
+        slam: 'impactL', slamHeavy: 'impactL', splash: 'impactL',
+        mat: 'slamDust',
+        // flourishes
+        flashWhite: 'star', sparkle: 'star',
+        taunt: 'strain',
+        whip: 'whoosh',
+        // claret
+        bone: 'bloodSpray',
+        // and the explicit nothing
+        none: null
+    };
+
     art.fxRom = function (name, frame) {
+        if (FX_ALIAS.hasOwnProperty(name)) {
+            name = FX_ALIAS[name];
+            if (!name) return null;
+        }
         var list = fxRoms && fxRoms[name];
         if (!list) return null;
         frame = frame | 0;
@@ -1127,6 +1206,76 @@
         if (frame >= list.length) frame = list.length - 1;
         return list[frame];
     };
+
+    // Resolve an alias for callers that need the frame count (combat.js picks
+    // which frame to show from it).
+    art.fxName = function (name) {
+        if (FX_ALIAS.hasOwnProperty(name)) return FX_ALIAS[name];
+        return name;
+    };
+
+    /* ----------------------------------------------------------------------
+       SHADOWS
+       The single biggest thing a pseudo-3D scene with no sprite scaling can do
+       for legibility: a body with no shadow has no position on the floor, and
+       at this camera angle a jump and a step toward the camera look identical
+       without one.
+
+       Three sizes rather than scaling (the hardware cannot scale), picked by
+       height off the ground, so a wrestler coming off the top rope has a
+       shadow that visibly shrinks as he rises. Two palettes' worth, because a
+       grey ellipse is invisible on the arena floor and a black one is a hole
+       in the white canvas.
+       ---------------------------------------------------------------------- */
+    var shadowRoms = null;
+    var SHADOW_RX = [7, 11, 14];
+
+    function buildShadows() {
+        // Drawn in the UI palette, not the arena one. The arena's only mid
+        // grey is the same tone the canvas weave uses, so a shadow made of it
+        // is invisible on the surface it most needs to show up on. UI index 2
+        // is properly dark, and checkerboard dithering the whole ellipse --
+        // rather than just its rim -- takes it back to something like a half
+        // tone, which is exactly how this was done on the hardware.
+        shadowRoms = [];
+        for (var surf = 0; surf < 2; surf++) {
+            var tone = surf === 0 ? UI_DARK : UI_BLACK;
+            var dither = surf === 0;
+            var row = [];
+            for (var s = 0; s < 3; s++) {
+                var rx = SHADOW_RX[s], ry = Math.max(2, (rx * 45 / 100) | 0);
+                var tw = ((rx * 2 + 9) >> 3), th = 1;
+                var pw = tw * 8, ph = th * 8;
+                var p = buf(pw, ph);
+                var cx = pw >> 1, cy = ph >> 1;
+                for (var y = -ry; y <= ry; y++) {
+                    for (var x = -rx; x <= rx; x++) {
+                        var d = (x * x) / (rx * rx) + (y * y) / (ry * ry);
+                        if (d > 1) continue;
+                        if (dither) {
+                            // Half tone across the whole ellipse.
+                            if ((x + y) & 1) continue;
+                        } else if (d > 0.62 && ((x + y) & 1)) {
+                            // Solid, with just a dithered rim.
+                            continue;
+                        }
+                        px(p, pw, ph, cx + x, cy + y, tone);
+                    }
+                }
+                row.push(gfx.romFrame(p, tw, th, cx, cy));
+            }
+            shadowRoms.push(row);
+        }
+    }
+
+    // surface: ring.RING (0) uses the canvas tone, anything else the dark one.
+    // size: 0 small (high in the air) .. 2 big (a heavyweight on the ground).
+    art.shadowRom = function (surface, size) {
+        if (!shadowRoms) return null;
+        var row = shadowRoms[surface === 0 ? 0 : 1];
+        return row[core.clamp(size | 0, 0, 2)];
+    };
+
 
 
     /* ======================================================================
@@ -1519,6 +1668,7 @@
         buildFx();
         buildWeapons();
         buildRef();
+        buildShadows();
 
         art.T = {
             crowd: crowdBase,

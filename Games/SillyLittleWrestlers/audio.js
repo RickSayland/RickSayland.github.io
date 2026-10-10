@@ -2202,7 +2202,44 @@
 
     /* ---- effects ----------------------------------------------------- */
 
+    /* ----------------------------------------------------------------------
+       moves.js names its sounds independently of this file, and most of the
+       names it uses are not ones defined above: boot, chop, grab, headbutt,
+       mat, metal, slamHeavy, splash, strain and taunt all resolved to nothing,
+       so eleven of the sixteen move sounds in the game were silent. Rather
+       than rename entries in either table, every name a caller might use is
+       mapped here onto one that exists.
+       ---------------------------------------------------------------------- */
+    var SFX_ALIAS = {
+        boot: 'kick',
+        chop: 'punch',
+        grab: 'woosh',
+        headbutt: 'bigHit',
+        mat: 'bodyDrop',
+        metal: 'metalClang',
+        chair: 'chairShot',
+        slamHeavy: 'bigHit',
+        splash: 'slam',
+        strain: 'crowdGasp',
+        taunt: 'crowdPop',
+        whoosh: 'woosh',
+        none: null
+    };
+
+    // Exposed so tools/check.mjs can assert that every sound any other table
+    // asks for actually exists -- the check that would have caught this.
+    sound.SFX_NAMES = Object.keys(SFX).concat(Object.keys(SFX_ALIAS));
+
+    sound.resolveSfx = function (name) {
+        if (SFX_ALIAS.hasOwnProperty(name)) return SFX_ALIAS[name];
+        return name;
+    };
+
     sound.sfx = function (name, opts) {
+        if (SFX_ALIAS.hasOwnProperty(name)) {
+            name = SFX_ALIAS[name];
+            if (!name) return;
+        }
         if (!sound.ready || failed) return;
         if (!SFX[name]) return;
         var t = nowMs();

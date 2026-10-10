@@ -80,6 +80,16 @@
             return;
         }
 
+        // Beat the count. Nothing else in the AI knows the ring exists as a
+        // place you are supposed to be, so without this two CPUs who spill
+        // outside simply brawl there until the referee counts them both out
+        // -- which is a real finish, and a dreadful one to get every match.
+        if (m && w.surface !== ring.RING && m.stip.ringOut &&
+            m.outCount > 60 * 5) {
+            a.state = 'returnRing';
+            return;
+        }
+
         // Catch your breath. The CPU respects stamina, which is what stops it
         // sprinting into every exchange and makes the back half of a match
         // slow down the way it should.
@@ -193,6 +203,15 @@
                 // Strafe: perpendicular to the line between them.
                 moveDir(i, (toward + 2 * a.circleDir + 8) & 7);
                 if (core.chance(0.02)) a.circleDir = -a.circleDir;
+                break;
+
+            case 'returnRing':
+                // Head for the middle of the ring. The rope-exit rule works
+                // in both directions, so walking into the apron takes them
+                // back over.
+                moveDir(i, core.dirFromVec(-w.x, -w.y));
+                i.Ch = 1;
+                if (w.surface === ring.RING) a.state = 'approach';
                 break;
 
             case 'recover':

@@ -123,6 +123,29 @@
         gfx.frame(ring.screenX(ref.x), ring.screenY(ref.y, 0, ring.RING), fr, pal.ARENA, ref.x > 0, false);
     }
 
+    /* ------------------------------------------------------------ crowd pop */
+
+    // The crowd lights up on a big move. Three palette entries, pushed toward
+    // warm and eased back, which is a free and entirely period-correct way to
+    // make eighteen thousand pixels react to something.
+    var popTimer = 0, POP_MAX = 40;
+
+    match.crowdPop = function (n) {
+        n = n || 24;
+        if (n > popTimer) popTimer = Math.min(POP_MAX, n);
+    };
+
+    function updateCrowdPop() {
+        if (popTimer <= 0) return;
+        popTimer--;
+        var t = (popTimer * 256 / POP_MAX) | 0;
+        for (var i = 11; i <= 13; i++) {
+            var base = pal.hex(pal.ARENA_COLORS[i]);
+            if (popTimer === 0) pal.setRGB(pal.ARENA, i, base);
+            else pal.setRGB(pal.ARENA, i, pal.mix(base, [7, 6, 4], t >> 1));
+        }
+    }
+
     /* ------------------------------------------------------- canvas staining */
 
     // Blood on the white canvas. A small pool of tiles is set aside; a stain
@@ -199,14 +222,7 @@
             if (opts.cpu[i]) ai.attach(w, ai.difficulty);
         }
 
-        // Spread them out: two face off, more than two start in the corners.
-        var spots = n === 2
-            ? [[-70, 20], [70, 20]]
-            : [[-120, 40], [120, 40], [-120, -40], [120, -40], [0, 60], [0, -60]];
-        for (var j = 0; j < match.wrestlers.length; j++) {
-            var s = spots[j % spots.length];
-            wrestlers.reset(match.wrestlers[j], s[0], s[1], s[0] < 0 ? core.DIR.R : core.DIR.L);
-        }
+        match.takePositions();
         // Only the first two can hold their own palette; the rest borrow.
         for (var k = 0; k < Math.min(2, match.wrestlers.length); k++) {
             wrestlers.applyPalette(match.wrestlers[k]);
@@ -228,6 +244,22 @@
         ref.x = fp(60); ref.y = -fp(50); ref.pose = 'stand';
 
         if (window.sound) { sound.music('match'); sound.crowd(0.5); sound.sfx('bell'); }
+    };
+
+    // Put everybody in the ring on their marks. Called at the start of a
+    // match and again when the bell rings, because the entrance walks the
+    // player out to the tunnel and nothing else would ever bring them back --
+    // the first build started every match with the player stranded on the
+    // ramp and the CPU jogging into the ropes trying to reach them.
+    match.takePositions = function () {
+        var n = match.wrestlers.length;
+        var spots = n === 2
+            ? [[-70, 20], [70, 20]]
+            : [[-120, 40], [120, 40], [-120, -40], [120, -40], [0, 60], [0, -60]];
+        for (var j = 0; j < n; j++) {
+            var s = spots[j % spots.length];
+            wrestlers.reset(match.wrestlers[j], s[0], s[1], s[0] < 0 ? core.DIR.R : core.DIR.L);
+        }
     };
 
     function scatterWeapons() {
@@ -343,6 +375,9 @@
             if (match.phase !== 'wrestling') { wrestlers.clearIntent(w); continue; }
             if (w.cpu) ai.update(w, match);
             else wrestlers.readPad(w, core.pads[w.padIndex < 0 ? 0 : w.padIndex]);
+            // Age the input buffer for both kinds of wrestler, immediately
+            // after the intent is written and before combat reads it.
+            wrestlers.bufferIntent(w);
         }
 
         // 2. what the intent means
@@ -367,6 +402,7 @@
         }
 
         updateRef();
+        updateCrowdPop();
         ring.updateCamera(list);
         ring.applyScroll();
 

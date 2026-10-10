@@ -71,7 +71,7 @@ vm.createContext(sandbox);
 
 // main.js boots on load, so it is deliberately not in this list.
 const FILES = ['core', 'palette', 'gfx', 'font', 'art', 'poser', 'roster',
-    'moves', 'ring', 'wrestler', 'combat', 'ai', 'match', 'ui'];
+    'moves', 'ring', 'wrestler', 'combat', 'ai', 'audio', 'match', 'ui'];
 
 for (const f of FILES) {
     const src = readFileSync(join(ROOT, f + '.js'), 'utf8');
@@ -84,7 +84,7 @@ for (const f of FILES) {
 }
 
 const { core, pal, gfx, font, art, poser, roster, moves, ring, wrestlers,
-    combat, ai, match, ui } = sandbox;
+    combat, ai, match, ui, sound } = sandbox;
 
 console.log('SLWF check  (version ' + core.GAME_VERSION + ')\n');
 
@@ -252,6 +252,50 @@ console.log('SLWF check  (version ' + core.GAME_VERSION + ')\n');
         unresolved.slice(0, 4).join(', '));
 }
 
+/* ------------------------------------------------- names across the tables */
+
+{
+    // moves.js names effects and sounds; art.js and audio.js provide them.
+    // Nothing connects the three but string equality, and when they disagree
+    // the move still lands -- it just lands silently and invisibly. The first
+    // build named 28 effects against 10 that existed, so eighteen of them
+    // drew nothing at all and it took playing the game to notice.
+    const badFx = [], badSfx = [];
+    for (const id of moves.ids()) {
+        const m = moves.TABLE[id];
+        if (m.fx) {
+            const resolved = art.fxName ? art.fxName(m.fx) : m.fx;
+            if (resolved !== null && !art.FX[resolved]) badFx.push(id + ' -> ' + m.fx);
+        }
+        if (m.sfx && sound && sound.SFX_NAMES &&
+            sound.SFX_NAMES.indexOf(m.sfx) < 0) badSfx.push(id + ' -> ' + m.sfx);
+    }
+    ok('every move effect resolves to art that exists', badFx.length === 0,
+        badFx.length + ' missing: ' + badFx.slice(0, 5).join(', '));
+    if (sound && sound.SFX_NAMES) {
+        ok('every move sound resolves to a real SFX', badSfx.length === 0,
+            badSfx.length + ' missing: ' + badSfx.slice(0, 5).join(', '));
+    }
+
+    // Same hazard between the roster and the poser.
+    const badStyle = [];
+    for (const c of roster.CHARS) {
+        const k = poser.styleKey(c.style);
+        if (!k || k.indexOf('undefined') >= 0) badStyle.push(c.name + ' -> ' + k);
+    }
+    ok('every character has a style the poser understands', badStyle.length === 0,
+        badStyle.join(', '));
+
+    // And the shadows, which are new and which every wrestler draws.
+    let shadows = 0;
+    for (let surf = 0; surf < 3; surf++) {
+        for (let size = 0; size < 3; size++) {
+            if (art.shadowRom(surf, size)) shadows++;
+        }
+    }
+    eq('every shadow size exists for every surface', shadows, 9);
+}
+
 /* ------------------------------------------------------------------ roster */
 
 {
@@ -359,6 +403,84 @@ console.log('SLWF check  (version ' + core.GAME_VERSION + ')\n');
     gfx.beginFrame();
     gfx.sprite(-400, 100, 1, 0, 2, 2, 0);
     eq('off-screen sprites cost nothing', gfx.spriteCount(), 0);
+}
+
+/* --------------------------------------------------------- taking positions */
+
+{
+    match.start({
+        chars: [roster.CHARS[0], roster.CHARS[1]],
+        cpu: [false, true], pads: [0, -1],
+        stip: match.STIPS[0], difficulty: 'normal', showBars: false, seed: 9
+    });
+    // Walk somebody out to the entrance ramp the way ui.entrance does, then
+    // ring the bell. Everyone must be back on their marks: the first build
+    // started the match with the player stranded outside and the CPU jogging
+    // into the ropes trying to reach them, and nothing in the sim noticed.
+    const p1 = match.wrestlers[0];
+    wrestlers.reset(p1, -(core.ARENA.FLOOR_HX - 10), core.ARENA.RING_HY + 60, core.DIR.R);
+    wrestlers.setState(p1, 'entrance');
+    ok('the entrance really does leave the ring', p1.surface !== ring.RING);
+
+    match.takePositions();
+    let allIn = true, allIdle = true;
+    for (const w of match.wrestlers) {
+        if (w.surface !== ring.RING || !ring.inRing(w.x, w.y)) allIn = false;
+        if (w.st !== 'idle') allIdle = false;
+    }
+    ok('the bell puts everybody back in the ring', allIn,
+        match.wrestlers.map(w => core.px(w.x) + '/' + w.surface).join(' '));
+    ok('and on their feet', allIdle,
+        match.wrestlers.map(w => w.st).join(' '));
+
+    // A wrestler leaning on the ropes must eventually get over them, or a
+    // brawl that reaches the floor can never be joined.
+    const w0 = match.wrestlers[0];
+    wrestlers.reset(w0, 0, 0, core.DIR.D);
+    wrestlers.setState(w0, 'walking');
+    let frames = 0;
+    for (; frames < 300 && w0.surface === ring.RING; frames++) {
+        w0.in.dy = 1; w0.in.dx = 0;
+        wrestlers.update(w0);
+    }
+    ok('leaning on the ropes gets you over them', w0.surface !== ring.RING,
+        'still in the ring after ' + frames + ' frames');
+    ok('and it takes a moment, not instantly', frames > 20, frames + ' frames');
+}
+
+/* ------------------------------------------------------------ input buffer */
+
+{
+    match.start({
+        chars: [roster.CHARS[0], roster.CHARS[1]],
+        cpu: [false, true], pads: [0, -1],
+        stip: match.STIPS[0], difficulty: 'normal', showBars: false, seed: 11
+    });
+    const w = match.wrestlers[0];
+    wrestlers.clearIntent(w);
+
+    // A press is remembered for a few frames and then forgotten.
+    w.in.A = 1;
+    wrestlers.bufferIntent(w);
+    ok('a press enters the buffer', wrestlers.has(w, 'A'));
+    w.in.A = 0;
+    let life = 0;
+    while (wrestlers.has(w, 'A') && life < 60) { wrestlers.bufferIntent(w); life++; }
+    ok('and expires', life < 60, 'never expired');
+    ok('after a usable window', life >= 5 && life <= 20, life + ' frames');
+
+    // Consuming it means it cannot fire twice -- a buffered strike that is
+    // not spent would throw the same move every frame of its own recovery.
+    w.in.A = 1; wrestlers.bufferIntent(w); w.in.A = 0;
+    wrestlers.consume(w, 'A');
+    ok('consuming spends the press', !wrestlers.has(w, 'A'));
+
+    // Grapple buffers longer than the rest, because it also lunges.
+    w.in.B = 1; wrestlers.bufferIntent(w); w.in.B = 0;
+    const bLife = w.buf.B;
+    w.in.C = 1; wrestlers.bufferIntent(w); w.in.C = 0;
+    ok('grapple is buffered longer than the other buttons', bLife > w.buf.C,
+        'B ' + bLife + ' vs C ' + w.buf.C);
 }
 
 /* ------------------------------------------------------------ a whole match */
