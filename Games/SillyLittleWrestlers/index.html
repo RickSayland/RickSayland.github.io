@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>SLWF - Silly Little Wrestling Federation</title>
+    <link rel="icon" type="image/svg+xml" href="content/favicon.svg">
+    <link rel="stylesheet" href="slwf.css?v=010">
+</head>
+<body>
+    <!-- The whole game is 320x224 indexed pixels, integer-scaled and
+         letterboxed by gfx.js. The canvas is sized in CSS and its backing
+         store follows the device pixel ratio. -->
+    <canvas id="screen"></canvas>
+
+    <noscript><p class="nojs">SLWF needs JavaScript.</p></noscript>
+
+    <!-- Load order IS the dependency order. Only main.js boots. -->
+    <script src="core.js?v=010"></script>
+    <script src="palette.js?v=010"></script>
+    <script src="gfx.js?v=010"></script>
+    <script src="font.js?v=010"></script>
+    <script src="art.js?v=010"></script>
+    <script src="poser.js?v=010"></script>
+    <script src="roster.js?v=010"></script>
+    <script src="moves.js?v=010"></script>
+    <script src="ring.js?v=010"></script>
+    <script src="wrestler.js?v=010"></script>
+    <script src="combat.js?v=010"></script>
+    <script src="ai.js?v=010"></script>
+    <script src="audio.js?v=010"></script>
+    <script src="match.js?v=010"></script>
+    <script src="ui.js?v=010"></script>
+    <script src="main.js?v=010"></script>
+</body>
+</html>

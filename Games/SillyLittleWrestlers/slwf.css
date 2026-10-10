@@ -1,0 +1,48 @@
+/* =============================================================================
+   SLWF - slwf.css
+   There is almost nothing to style: the game is a single canvas holding a
+   320x224 indexed framebuffer, and gfx.js does the integer scaling and the
+   letterboxing itself. The only job here is to give that canvas the whole
+   window and keep the browser from smoothing it.
+   ============================================================================= */
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: #000;
+    /* The letterbox bars are part of the picture, so the page behind the
+       canvas must be the same black the renderer fills with. */
+    color: #b6dbff;
+    font-family: "Courier New", monospace;
+}
+
+body {
+    display: block;
+    /* Stop the page scrolling or rubber-banding when the arrow keys and
+       space are held down on a touch device. */
+    touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+#screen {
+    display: block;
+    width: 100vw;
+    height: 100vh;
+    /* Nearest-neighbour, every vendor. A smoothed 8x8 tile is not a Genesis
+       pixel, it is a smudge. */
+    image-rendering: pixelated;
+    image-rendering: -moz-crisp-edges;
+    image-rendering: crisp-edges;
+    background: #000;
+    cursor: none;
+}
+
+.nojs {
+    padding: 2rem;
+    font-size: 1rem;
+    text-align: center;
+}
