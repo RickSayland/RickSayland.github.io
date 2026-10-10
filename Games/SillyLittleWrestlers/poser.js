@@ -1453,6 +1453,17 @@
         }
     }
 
+    // A band across a limb: perpendicular to the axis (ax,ay)->(bx,by), so a
+    // waistband stays horizontal on a standing wrestler and tilts with a
+    // suplexed one instead of sliding off.
+    function band(cx, cy, ax, ay, bx, by, halfW, r, v) {
+        var ux = bx - ax, uy = by - ay;
+        var ul = Math.sqrt(ux * ux + uy * uy) || 1;
+        var px0 = -uy / ul, py0 = ux / ul;
+        stroke(cx - px0 * halfW, cy - py0 * halfW,
+            cx + px0 * halfW, cy + py0 * halfW, r, v);
+    }
+
     function stroke(x0, y0, x1, y1, r, v) {
         var dx = x1 - x0, dy = y1 - y0;
         var n = Math.max(1, Math.ceil(Math.max(Math.abs(dx), Math.abs(dy))));
@@ -1707,6 +1718,16 @@
         var dir = (ft[0] - hi[0]) >= 0 ? 1 : -1;
         capsule(ft[0], ft[1], R.foot * bs, tx + dir * R.toeLen * bs, ft[1] + 0.4,
             R.toe * bs, BOOT);
+
+        // Detail that only exists above about 64px: a cuff where the boot
+        // ends and a dark sole under it. At 48 both were a single pixel and
+        // read as dirt.
+        if (bs >= 1.4) {
+            band(top[0], top[1], ft[0], ft[1], kn[0], kn[1],
+                R.shinBot * 1.35 * bs, Math.max(0.7, 0.26 * bs), ACC.base);
+            band(ft[0], ft[1] + R.foot * 0.72 * bs, hi[0], hi[1], ft[0], ft[1],
+                R.foot * 1.1 * bs, Math.max(0.7, 0.3 * bs), OUTL);
+        }
     }
 
     function drawArm(S, sh, el, ha, sc, fatS, fatE) {
@@ -1715,7 +1736,14 @@
         capsule(el[0], el[1], R.foreTop * bs, ha[0], ha[1], R.foreBot * bs, SKIN, fatE);
         // The fist is deliberately oversized. A correctly-proportioned fist at
         // this scale is two pixels and a punch reads as an arm twitching.
-        blob(ha[0], ha[1], R.fist * bs * (fatE || 1), R.fist * bs * (fatE || 1), SKIN);
+        var fr = R.fist * bs * (fatE || 1);
+        blob(ha[0], ha[1], fr, fr, SKIN);
+        // A knuckle line across the back of it, square to the forearm. This
+        // is the difference between a fist and a ball on a stick.
+        if (bs >= 1.4) {
+            band(ha[0], ha[1], el[0], el[1], ha[0], ha[1],
+                fr * 0.72, Math.max(0.6, 0.22 * bs), SKIN.sh);
+        }
     }
 
     /* Build one frame's pixels. */
@@ -1767,6 +1795,27 @@
             // Trunks waistband, so the two materials do not just abut.
             capsule(P.hiA[0], P.hiA[1], R.thighTop * 0.9 * bs,
                 P.hiB[0], P.hiB[1], R.thighTop * 0.9 * bs, TRUNK);
+
+            // Costume and anatomy that needs the extra pixels to read.
+            if (bs >= 1.4) {
+                // The belt: a line of the character's accent at the widest
+                // point of the body, which is the one place a fifth colour
+                // shows from across the ring.
+                band(P.wst[0], P.wst[1], P.pel[0], P.pel[1], P.cst[0], P.cst[1],
+                    R.torsoPel * 1.02 * bs, Math.max(0.8, 0.3 * bs), ACC.base);
+                // Sternum and the line under the ribs: two short shadows that
+                // stop the chest reading as one flat slab.
+                stroke(P.cst[0], P.cst[1] + R.torsoCst * 0.15 * bs,
+                    P.wst[0], P.wst[1] - R.torsoPel * 0.35 * bs,
+                    Math.max(0.6, 0.22 * bs), SKIN.sh);
+                band((P.cst[0] + P.wst[0]) * 0.5, (P.cst[1] + P.wst[1]) * 0.5,
+                    P.pel[0], P.pel[1], P.cst[0], P.cst[1],
+                    R.torsoCst * 0.52 * bs, Math.max(0.6, 0.2 * bs), SKIN.sh);
+                // Collarbone, just under the neck.
+                band(P.cst[0], P.cst[1] - R.torsoCst * 0.42 * bs,
+                    P.shA[0], P.shA[1], P.shB[0], P.shB[1],
+                    R.shoulder * 1.15 * bs, Math.max(0.6, 0.2 * bs), SKIN.sh);
+            }
         });
 
         // --- limbs, each sorted on its own depth

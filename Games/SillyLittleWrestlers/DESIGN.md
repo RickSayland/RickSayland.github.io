@@ -373,17 +373,35 @@ Things that bit, and are worth not repeating:
   not have to be renumbered and the text is the same size relative to the
   screen as it was.
 
+### 0.3.1 -- spending what the upgrade bought
+
+**The character select shows the whole roster in colour**, nine abreast, each
+in its own palette. Nine figures at a 34-pixel pitch overlap only in the empty
+margins of their 48-wide frames, so the bodies stand clear and it reads as a
+line-up rather than a row of boxes. With four palettes this screen could show
+two wrestlers and a grid of name plates; this is what the other twenty-eight
+were for.
+
+**Costume and anatomy detail that only works above about 64 pixels**, all
+gated on `bs >= 1.4` so the 48px path is unchanged: a belt in the character's
+accent colour at the waist (the one place a fifth colour reads from across the
+ring), boot cuffs and soles, a knuckle line across the fist, and collarbone,
+sternum and rib shadows that stop the chest being one flat slab.
+
+The helper that makes those possible is `band()`: it draws across a limb
+*perpendicular to that limb's axis*, so a waistband stays square to the body
+when the pose is rotated instead of sliding off a suplexed wrestler.
+
 ### Known rough edges, in the order they are worth looking at
 
-1. **The character select still shows two wrestlers in colour**, not nine.
-   Thirty-two palettes make the whole roster possible; the screen has not been
-   redesigned to use them yet. This is the biggest unclaimed payoff of the
-   palette work.
-2. **The figures are smoother, not more detailed.** The rasterizer is analytic
-   so 96x96 gave cleaner silhouettes and real shading for free, but the pose
-   tables and the costume model are the ones written for 48px. Hands, boot
-   detail, trunk trim and facial features are where the remaining quality is.
-3. **The entrance is thin** -- no per-character animation; `char.entranceAnim`
-   is carried but unused.
-4. **Tables and ladders are scenery.** Nothing puts a wrestler through one.
-5. **The roster editor cannot really type a name.**
+1. **The entrance is thin** -- no per-character animation; `char.entranceAnim`
+   is carried through the roster but unused.
+2. **Tables and ladders are scenery.** Nothing puts a wrestler through one,
+   which is most of the point of those two stipulations.
+3. **The roster editor cannot really type a name.** It appends and deletes
+   characters rather than letting you pick each one.
+4. **The pose tables are still the ones authored for 48px.** The detail added
+   in 0.3.1 is costume and shading; the *poses themselves* -- how far a leg
+   extends in a suplex, where a hand lands in a hold -- have the resolution
+   they always had.
+5. **Blood is rare** outside long matches (`BLEED_AT` in `wrestler.js`).

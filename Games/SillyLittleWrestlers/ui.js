@@ -298,31 +298,38 @@
 
     /* ------------------------------------------------------ character select */
 
+    // The whole roster, in colour, at once. This is what thirty-two palettes
+    // bought: with four, the screen could show two wrestlers and had to make
+    // do with a grid of name plates for the rest.
+    //
+    // Nine figures at a 34-pixel pitch overlap only in the empty margins of
+    // their 48-wide frames, so the bodies stand clear of each other and it
+    // reads as a line-up rather than a row of boxes.
+    var LINE_PITCH = 34, LINE_Y = 100, LINE_X0 = 160 - 4 * 34;
+
     ui.select = {
         cur: 0, p1: -1, p2: -1, t: 0,
         enter: function () {
             this.cur = 0; this.p1 = -1; this.p2 = -1; this.t = 0;
             ui.menuBackdrop('#120024');
             ui.clear();
-            // Palettes 1 and 2 are all zeros until somebody fills them, and a
-            // wrestler drawn in an unset palette is a black silhouette on a
-            // dark backdrop -- which looks exactly like nothing rendering.
             this.refresh();
             if (window.sound) sound.music('select');
         },
         update: function (ctx) {
             this.t++;
             var p = core.pads[0], B = core.BTN;
-            var n = roster.CHARS.length, cols = 3;
-            if (p.just[B.R]) { this.cur = (this.cur + 1) % n; beep(); this.refresh(); }
-            if (p.just[B.L]) { this.cur = (this.cur + n - 1) % n; beep(); this.refresh(); }
-            if (p.just[B.D]) { this.cur = (this.cur + cols) % n; beep(); this.refresh(); }
-            if (p.just[B.U]) { this.cur = (this.cur + n - cols) % n; beep(); this.refresh(); }
+            var n = roster.CHARS.length;
+            if (p.just[B.R]) { this.cur = (this.cur + 1) % n; beep(); }
+            if (p.just[B.L]) { this.cur = (this.cur + n - 1) % n; beep(); }
+            // Up and down jump three along, which is how the roster used to
+            // be arranged and is still the fastest way across nine.
+            if (p.just[B.D]) { this.cur = (this.cur + 3) % n; beep(); }
+            if (p.just[B.U]) { this.cur = (this.cur + n - 3) % n; beep(); }
             if (p.just[B.A] || p.just[B.C] || p.just[B.START]) {
                 select();
                 if (this.p1 < 0) {
                     this.p1 = this.cur;
-                    this.refresh();
                 } else {
                     this.p2 = this.cur;
                     ctx.picks = [this.p1, this.p2];
@@ -334,60 +341,70 @@
                     ctx.go('vs');
                 }
             }
-            if (p.just[B.B] && this.p1 >= 0) { this.p1 = -1; this.refresh(); beep(); }
+            if (p.just[B.B] && this.p1 >= 0) { this.p1 = -1; beep(); }
         },
+
+        // One palette per character, held for as long as the screen is up.
         refresh: function () {
-            // Only two wrestler palettes exist, so apply them to whoever is
-            // being previewed right now.
-            var a = this.p1 >= 0 ? roster.CHARS[this.p1] : roster.CHARS[this.cur];
-            roster.applyPalette(pal.P1, a);
-            roster.applyPalette(pal.P2, roster.CHARS[this.cur]);
+            for (var i = 0; i < roster.CHARS.length; i++) {
+                roster.applyPalette(pal.ROSTER + i, roster.CHARS[i]);
+            }
         },
+
         draw: function (ctx) {
             ui.clear();
-            TC(0, this.p1 < 0 ? 'SELECT YOUR WRESTLER' : 'SELECT YOUR OPPONENT', F.YELLOW);
-
-            // The grid: name plates, three across.
-            for (var i = 0; i < roster.CHARS.length; i++) {
-                var c = roster.CHARS[i];
-                var col = 1 + (i % 3) * 13, row = 3 + ((i / 3) | 0) * 2;
-                var ink = F.WHITE;
-                if (i === this.p1) ink = F.GREEN;
-                else if (i === this.cur) ink = ((this.t >> 3) & 1) ? F.YELLOW : F.ORANGE;
-                T(col, row, F.pad('', 12, ' '), ink);
-                T(col, row, c.name, ink);
-            }
+            TC(0, this.p1 < 0 ? 'SELECT YOUR WRESTLER' : 'SELECT YOUR OPPONENT',
+                F.YELLOW);
 
             var sel = roster.CHARS[this.cur];
-            TC(11, sel.nick || '', F.CYAN);
-            T(2, 13, sel.wclass.toUpperCase(), F.WHITE);
-            TR(38, 13, sel.heightCm + 'CM ' + sel.weightKg + 'KG', F.WHITE);
+            var i, c, x;
 
-            // Stats as bars, which is the only place in the game bars are
-            // unambiguously the right answer.
+            // --- the line-up. The highlighted wrestler breathes a frame
+            // ahead of the rest and stands a little taller, so the eye finds
+            // it without needing a box drawn round it.
+            for (i = 0; i < roster.CHARS.length; i++) {
+                c = roster.CHARS[i];
+                x = LINE_X0 + i * LINE_PITCH;
+                var picked = (i === this.p1);
+                var here = (i === this.cur);
+                var lift = here ? 2 : 0;
+                var frame = ((this.t / (here ? 10 : 16)) | 0 + i) % 4;
+                drawPreview(x, LINE_Y - lift, c, pal.ROSTER + i,
+                    x > 160, 'idle', frame);
+            }
+
+            // Markers under the feet: a solid bar under whoever is already
+            // chosen, a flashing one under the cursor. A caret glyph was too
+            // small to pick out of a row of nine.
+            for (i = 0; i < roster.CHARS.length; i++) {
+                var mcol = Math.round((LINE_X0 + i * LINE_PITCH) / 8) - 1;
+                var mbar = -1;
+                if (i === this.p1) mbar = BAR.green;
+                else if (i === this.cur && ((this.t >> 2) & 1)) mbar = BAR.yellow;
+                if (mbar < 0) continue;
+                for (var mc = 0; mc < 3; mc++) CELL(mcol + mc, 13, mbar + 8, pal.UI, 0);
+            }
+
+            // --- the panel for whoever the cursor is on
+            HC(15, sel.name, this.p1 === this.cur ? F.GREEN : F.WHITE);
+            TC(19, sel.nick || '', F.CYAN);
+            T(2, 21, sel.wclass.toUpperCase(), F.WHITE);
+            TR(38, 21, sel.heightCm + 'CM ' + sel.weightKg + 'KG', F.WHITE);
+
             var st = sel.stats, names = ['POW', 'SPD', 'STA', 'TEC'];
             var vals = [st.power, st.speed, st.stamina, st.technique];
-            for (var s = 0; s < 4; s++) {
-                T(2, 15 + s, names[s], F.GREY);
-                drawBar(6, 15 + s, 10, vals[s] / 10);
-                T(17, 15 + s, String(vals[s]), F.WHITE);
+            for (var sidx = 0; sidx < 4; sidx++) {
+                T(2, 22 + sidx, names[sidx], F.GREY);
+                drawBar(6, 22 + sidx, 8, vals[sidx] / 10);
+                T(15, 22 + sidx, String(vals[sidx]), F.WHITE);
             }
-            T(19, 15, 'SIG', F.GREY);
-            T(23, 15, nameOf(sel.signature), F.CYAN);
-            T(19, 16, 'FIN', F.GREY);
-            T(23, 16, nameOf(sel.finisher), F.ORANGE);
-            T(19, 18, (sel.taunt || '').substring(0, 20), F.YELLOW);
+            T(18, 22, 'SIG', F.GREY);
+            T(22, 22, nameOf(sel.signature), F.CYAN);
+            T(18, 23, 'FIN', F.GREY);
+            T(22, 23, nameOf(sel.finisher), F.ORANGE);
+            T(18, 25, (sel.taunt || '').substring(0, 22), F.YELLOW);
 
-            TC(26, this.p1 < 0 ? 'ENTER PICK' : 'ENTER PICK    X BACK', F.GREY);
-
-            // The two previews, in the only two palettes there are. Anchored
-            // at the feet on the bottom row and kept out of the centre
-            // columns, because the window plane draws over sprites and the
-            // hint line lives there.
-            var fa = ((this.t / 14) | 0) % 4, fb = (((this.t + 28) / 14) | 0) % 4;
-            drawPreview(52, 216, this.p1 >= 0 ? roster.CHARS[this.p1] : sel,
-                pal.P1, false, 'idle', fa);
-            drawPreview(268, 216, sel, pal.P2, true, 'idle', fb);
+            TC(27, this.p1 < 0 ? 'ENTER PICK' : 'ENTER PICK    X BACK', F.GREY);
         }
     };
 
@@ -395,10 +412,8 @@
         var m = window.moves && moves.get ? moves.get(id) : null;
         // Columns 25..39 of a 40-cell plane: fifteen, not thirteen. At 13
         // the longer finishers lost their last letters ("BOARDROOM BOM").
-        // Columns 23..39 of a 40-cell plane: seventeen. The stat bars end
-        // at column 17, so this is all the room there is and the longest
-        // finisher name fits it exactly.
-        return m ? m.name.toUpperCase().substring(0, 17) : '?';
+        // Columns 22..39 of a 40-cell logical plane: eighteen.
+        return m ? m.name.toUpperCase().substring(0, 18) : '?';
     }
 
     function drawPreview(sx, sy, char, palId, flip, pose, frame, view) {
