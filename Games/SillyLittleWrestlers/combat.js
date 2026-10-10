@@ -342,8 +342,13 @@
             combat.spawnFx('shockRing', vic.x, vic.y, 0, vic.surface);
         }
         if (dmg >= 45) {
-            pal.flash(5, [7, 7, 7], 150);
+            pal.flash(5, [31, 31, 31], 150);
             if (m) m.crowdPop(mv.dmg >= 90 ? 40 : 24);
+        }
+        // A finisher connecting is the one moment worth slowing down for.
+        if (mv.tags && mv.tags.indexOf('finisher') >= 0) {
+            core.slowmo(54, 3);
+            pal.flash(16, [31, 31, 26], 220);
         }
 
         if (vic.bleeding && core.chance(0.5)) combat.spawnBlood(vic, 3);
@@ -781,7 +786,7 @@
         wrestlers.setPose(vic, 'downFace', true);
         core.freeze(22);
         core.shake(4, 24);
-        pal.flash(10, [7, 0, 0], 200);
+        pal.flash(10, [31, 0, 0], 200);
         if (window.sound) { sound.sfx('bone'); sound.sfx('crowdGasp'); }
         m.onInjuryStop(vic, part, atk);
     };
@@ -925,7 +930,7 @@
     /* ------------------------------------------------------------- finishers */
 
     combat.flashFinisher = function (w) {
-        pal.flash(14, [7, 7, 7], 256);
+        pal.flash(14, [31, 31, 31], 256);
         core.freeze(10);
         core.shake(3, 14);
         if (window.sound) { sound.sfx('finisherHit'); sound.music('finisher'); }

@@ -105,7 +105,7 @@
     roster.STYLE_RANGE = {
         build: roster.CLASSES,
         tall: [-1, 1],
-        hair: [0, 7],
+        hair: [0, 8],
         mask: [0, 3],
         beard: [0, 2],
         boots: [0, 2]
@@ -143,7 +143,7 @@
     };
 
     // pal.shade() quantizes, and a derived shade can therefore land back on its
-    // base: a near-black skin has nowhere darker to go on an eight-level
+    // base: a near-black skin has nowhere darker to go at the bottom of a
     // channel, and a near-white one has nowhere lighter. When that happens,
     // nudge every channel one step instead, so a ramp always reads as a ramp
     // after quantization rather than flattening into one colour.
@@ -156,7 +156,7 @@
         var out = [base[0], base[1], base[2]], moved = false;
         for (var i = 0; i < 3; i++) {
             if (dir < 0 && out[i] > 0) { out[i]--; moved = true; }
-            else if (dir > 0 && out[i] < 7) { out[i]++; moved = true; }
+            else if (dir > 0 && out[i] < pal.MAX) { out[i]++; moved = true; }
         }
         return moved ? out : d;
     }
@@ -215,13 +215,15 @@
             {
                 id: 'quasar',
                 name: 'QUASAR', fullName: 'QUASAR',
-                nick: 'The Cosmic Collision',
+                nick: 'The Black Swordsman',
                 wclass: 'super',
                 heightCm: 206, weightKg: 172,
                 // Purple-skinned, cyan-mohawked, indigo-trunked. Nothing else
                 // on the roster is in this corner of the colour space.
-                colors: { skin: '#6d4992', hair: '#24dbff', trunk: '#2400b6', boot: '#000024', accent: '#ffdb00' },
-                style: { build: 'super', tall: 1, hair: 4, mask: 3, beard: 0, boots: 2 },
+                // Avatar: the Berserk panel -- spiky black hair, a heavy cloak,
+                // ink-black and white. Hair style 7 is the wild one.
+                colors: { skin: '#dbb692', hair: '#242424', trunk: '#242424', boot: '#492400', accent: '#dbdbdb' },
+                style: { build: 'super', tall: 0, hair: 7, mask: 0, beard: 1, boots: 2 },
                 stats: { power: 10, speed: 3, stamina: 8, technique: 5 },
                 moveset: {
                     'grappleFront.F.s': 'piledriver',
@@ -238,11 +240,13 @@
             {
                 id: 'dks',
                 name: 'DKS', fullName: 'DKS',
-                nick: 'Three Letters, One Nap',
+                nick: 'The Monument',
                 wclass: 'heavy',
                 heightCm: 188, weightKg: 118,
-                colors: { skin: '#db926d', hair: '#492400', trunk: '#920000', boot: '#242424', accent: '#ffffff' },
-                style: { build: 'heavy', tall: 0, hair: 1, mask: 0, beard: 2, boots: 1 },
+                // Avatar: a weathered dark bust flecked with gold: a living statue, so stone
+                // skin, no hair, face paint for the erosion, and gold trim.
+                colors: { skin: '#92928f', hair: '#242424', trunk: '#494949', boot: '#000000', accent: '#db9200' },
+                style: { build: 'heavy', tall: 0, hair: 0, mask: 3, beard: 0, boots: 2 },
                 stats: { power: 8, speed: 4, stamina: 6, technique: 8 },
                 moveset: {
                     'grappleFront.F.s': 'brainbuster',
@@ -258,13 +262,14 @@
             {
                 id: 'flye',
                 name: 'FLYE', fullName: 'FLYE',
-                nick: 'Zero Fear, Zero Brakes',
+                nick: 'Treeline',
                 wclass: 'cruiser',
                 heightCm: 173, weightKg: 79,
                 // Full luchador mask, so the trunk green and the orange trim
                 // are doing all the identifying work.
-                colors: { skin: '#b66d49', hair: '#240024', trunk: '#00db49', boot: '#ffffff', accent: '#ff9200' },
-                style: { build: 'cruiser', tall: -1, hair: 0, mask: 1, beard: 0, boots: 0 },
+                // Avatar: a photo in a grey hoodie and a tan cap, out among the pines.
+                colors: { skin: '#db926d', hair: '#492400', trunk: '#494955', boot: '#242424', accent: '#dbb66d' },
+                style: { build: 'cruiser', tall: 0, hair: 1, mask: 0, beard: 1, boots: 1 },
                 stats: { power: 4, speed: 9, stamina: 6, technique: 7 },
                 moveset: {
                     'aerial.F.s': 'splash450',
@@ -280,11 +285,13 @@
             {
                 id: 'samantha',
                 name: 'SAMANTHA', fullName: 'SAMANTHA',
-                nick: 'The Closing Argument',
+                nick: 'Just Says Hey',
                 wclass: 'cruiser',
                 heightCm: 168, weightKg: 68,
-                colors: { skin: '#ffb692', hair: '#ffdb24', trunk: '#db0092', boot: '#492449', accent: '#00dbdb' },
-                style: { build: 'cruiser', tall: 0, hair: 3, mask: 0, beard: 0, boots: 1 },
+                // Avatar: a 3-D avatar with long dark hair and a pink hoodie, waving, captioned
+                // "hey." -- which was too good a taunt to pass up.
+                colors: { skin: '#ffdbb6', hair: '#492424', trunk: '#ffb6c4', boot: '#ffffff', accent: '#db6d92' },
+                style: { build: 'cruiser', tall: 0, hair: 2, mask: 0, beard: 0, boots: 0 },
                 stats: { power: 5, speed: 7, stamina: 5, technique: 9 },
                 moveset: {
                     'grappleRear.N.s': 'germanSuplex',
@@ -300,11 +307,13 @@
             {
                 id: 'scorp',
                 name: 'SCORP', fullName: 'SCORP',
-                nick: 'Eight Legs Of Trouble',
+                nick: 'Bunny From Hell',
                 wclass: 'light',
                 heightCm: 170, weightKg: 72,
-                colors: { skin: '#6d4924', hair: '#002424', trunk: '#49db00', boot: '#242400', accent: '#db00db' },
-                style: { build: 'light', tall: -1, hair: 7, mask: 3, beard: 0, boots: 0 },
+                // Avatar: a chihuahua in a pink bunny hood, covered in sparkles. The hood is the
+                // full mask, which the poser draws in the trunk colour.
+                colors: { skin: '#ffdbb6', hair: '#db2492', trunk: '#ff6ddb', boot: '#ffffff', accent: '#db0092' },
+                style: { build: 'light', tall: -1, hair: 8, mask: 1, beard: 0, boots: 1 },
                 stats: { power: 4, speed: 8, stamina: 6, technique: 8 },
                 moveset: {
                     'sub.N.w': 'crossFace',
@@ -320,11 +329,13 @@
             {
                 id: 'sharon',
                 name: 'SHARON', fullName: 'SHARON',
-                nick: 'Quarterly Earnings',
+                nick: 'Full Volume',
                 wclass: 'heavy',
                 heightCm: 183, weightKg: 102,
-                colors: { skin: '#ffdbb6', hair: '#490024', trunk: '#000092', boot: '#6d6d92', accent: '#ffdb00' },
-                style: { build: 'heavy', tall: 1, hair: 2, mask: 0, beard: 0, boots: 2 },
+                // Avatar: a punk in profile with an enormous pink mohawk and a studded jacket,
+                // shushing the camera. Hair style 4 is the mohawk.
+                colors: { skin: '#ff92b6', hair: '#ff24db', trunk: '#490049', boot: '#242424', accent: '#00dbdb' },
+                style: { build: 'heavy', tall: 0, hair: 4, mask: 3, beard: 0, boots: 2 },
                 stats: { power: 9, speed: 4, stamina: 7, technique: 6 },
                 moveset: {
                     'grappleFront.N.s': 'firemansCarry',
@@ -340,11 +351,13 @@
             {
                 id: 'spoopy',
                 name: 'SPOOPY', fullName: 'SPOOPY',
-                nick: 'Mostly Harmless, Mostly',
+                nick: 'Two Stingers',
                 wclass: 'cruiser',
                 heightCm: 180, weightKg: 81,
-                colors: { skin: '#dbdbff', hair: '#242449', trunk: '#240049', boot: '#000024', accent: '#92ff92' },
-                style: { build: 'cruiser', tall: 1, hair: 6, mask: 3, beard: 0, boots: 0 },
+                // Avatar: Mega Beedrill: yellow and black stripes, white lances, cyan wings on
+                // navy. Yellow skin, black trunks, a visor for the compound eyes.
+                colors: { skin: '#ffdb24', hair: '#242424', trunk: '#242424', boot: '#ffdb00', accent: '#00dbdb' },
+                style: { build: 'cruiser', tall: 1, hair: 0, mask: 2, beard: 0, boots: 2 },
                 stats: { power: 5, speed: 7, stamina: 7, technique: 7 },
                 moveset: {
                     'grappleFront.N.s': 'ddt',
@@ -360,11 +373,12 @@
             {
                 id: 'bree',
                 name: 'BREE', fullName: 'BREE',
-                nick: 'Category Five',
+                nick: 'Red At The Throat',
                 wclass: 'light',
                 heightCm: 165, weightKg: 61,
-                colors: { skin: '#926d49', hair: '#db4900', trunk: '#00b6db', boot: '#ffdbdb', accent: '#db0000' },
-                style: { build: 'light', tall: -1, hair: 5, mask: 0, beard: 0, boots: 0 },
+                // Avatar: black hair, a black-and-white striped top and a red choker.
+                colors: { skin: '#ffdbdb', hair: '#242424', trunk: '#dbdbdb', boot: '#242424', accent: '#db0000' },
+                style: { build: 'light', tall: 0, hair: 2, mask: 0, beard: 0, boots: 1 },
                 stats: { power: 4, speed: 10, stamina: 6, technique: 6 },
                 moveset: {
                     'run.N.w': 'runningKnee',
@@ -754,8 +768,10 @@
                 build: wclass,
                 tall: rint(-1, 1),
                 // A full luchador mask covers the hair, so do not also roll a
-                // mohawk underneath it -- poser.js would draw both.
-                hair: mask === 1 ? 0 : rint(0, 7),
+                // mohawk underneath it -- poser.js would draw both. Style 8 is
+                // ears rather than hair and sits happily ON a hood, so it is
+                // the one thing a masked wrestler may still roll.
+                hair: mask === 1 ? (core.chance(0.3) ? 8 : 0) : rint(0, 8),
                 mask: mask,
                 beard: wclass === 'light' ? rint(0, 1) : rint(0, 2),
                 boots: rint(0, 2)

@@ -16,13 +16,22 @@
 
     /* ---------------------------------------------------------------- version */
 
-    core.GAME_VERSION = '0.2.0';
+    core.GAME_VERSION = '0.3.0';
 
     /* ------------------------------------------------------- screen geometry */
 
-    // NTSC H40 mode. 320x224 is the real thing, not a stylistic approximation.
-    core.VW = 320;
-    core.VH = 224;
+    // 640x448: exactly twice the Mega Drive's 320x224, which is the 32-bit
+    // step up (Saturn hi-res, PlayStation) and keeps every ratio in the game
+    // intact.
+    //
+    // VIEW is screen pixels per LOGICAL pixel. The world -- speeds, ranges,
+    // gravity, hitboxes, the whole move table and all of core.ARENA -- stays
+    // in logical pixels and is unchanged by this. Only projection, the
+    // framebuffer and the art layout scale. Doubling the world instead would
+    // have invalidated two rounds of combat tuning.
+    core.VIEW = 2;
+    core.VW = 320 * core.VIEW;
+    core.VH = 224 * core.VIEW;
 
     /* -------------------------------------------------- arena geometry (px) */
 
@@ -61,6 +70,21 @@
         CROWD_H: 40,      // screen rows of crowd above it
 
         CAM_MARGIN: 56    // keep wrestlers this far inside the screen edge
+    };
+
+    // core.ARENA in SCREEN pixels. art.js lays the arena into the tile planes
+    // and therefore needs the scaled numbers, while ring.js collides in
+    // logical ones -- same table, two coordinate systems, one conversion.
+    // PERSP is a ratio and ROPE_Z is a list, so both need their own handling.
+    core.arenaScaled = function () {
+        var out = {}, v = core.VIEW, k;
+        for (k in core.ARENA) {
+            var val = core.ARENA[k];
+            if (k === 'PERSP') out[k] = val;
+            else if (val instanceof Array) out[k] = val.map(function (n) { return n * v; });
+            else out[k] = val * v;
+        }
+        return out;
     };
 
     /* ----------------------------------------------------------- fixed point */
@@ -322,6 +346,32 @@
         flashFrames: 0
     };
 
+    // Slow motion. Distinct from hit-freeze: freeze stops the world dead for
+    // a few frames to sell an impact, slow-mo runs it at a fraction of speed
+    // for most of a second so there is time to watch what happened. A
+    // finisher landing is the one moment in a match that earns it.
+    core.slow = 0;
+    core.slowFactor = 3;
+    core._slowPhase = 0;
+
+    core.slowmo = function (frames, factor) {
+        if (frames > core.slow) core.slow = frames;
+        core.slowFactor = factor || 3;
+    };
+
+    // Should the simulation advance on this display frame? Both the real loop
+    // and the debug stepper go through here, so they cannot disagree.
+    core.tickGate = function () {
+        if (core.fx.freeze > 0) { core.fx.freeze--; return false; }
+        if (core.slow > 0) {
+            core.slow--;
+            core._slowPhase++;
+            if (core._slowPhase < core.slowFactor) return false;
+            core._slowPhase = 0;
+        }
+        return true;
+    };
+
     core.shake = function (amp, frames) {
         if (amp > core.fx.shakeAmp) { core.fx.shakeAmp = amp; core.fx.shakeTime = frames; }
     };
@@ -382,14 +432,10 @@
                 c.acc -= STEP_MS;
                 steps++;
                 core.updateInput();
-                if (core.fx.freeze > 0) {
-                    // Hit-freeze: the world holds still, but effects and the
-                    // input edge buffer must keep advancing or a buffered
-                    // press would be eaten by the pause.
-                    core.fx.freeze--;
-                } else {
-                    update();
-                }
+                // Hit-freeze and slow motion both hold the world still while
+                // effects and the input edge buffer keep advancing, or a
+                // buffered press would be eaten by the pause.
+                if (core.tickGate()) update();
                 core.updateFx();
                 c.frames++;
                 if (performance.now() - t0 > FRAME_BUDGET_MS) break;

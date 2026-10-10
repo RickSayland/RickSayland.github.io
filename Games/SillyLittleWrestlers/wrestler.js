@@ -591,8 +591,21 @@
                     w.exiting = 22;
                 }
             }
+            // Make the rope take the weight. Near and far ropes displace
+            // their own cells; the side ropes share a deduplicated diagonal
+            // zone with the canvas edge and cannot, so they get the dust.
+            if (window.art && art.flexRope) {
+                var sp = core.abs(px(w.vx)) + core.abs(px(w.vy));
+                var power = core.clamp(60 + sp * 55, 60, 256);
+                if (ev.rope === 1 || ev.rope === 3) {
+                    art.flexRope(ev.rope, ring.planeX(w.x), power);
+                } else if (w.st === 'running' || w.st === 'whipped') {
+                    combat.spawnFx('dust', w.x, w.y, w.z, w.surface);
+                }
+            }
             if (w.st === 'running' || w.st === 'whipped') {
                 w.rebound = 18;
+                core.shake(1, 4);
                 if (window.sound) sound.sfx('ropeTwang');
                 // A rebound hands the wrestler back their momentum, which is
                 // what makes a whip into a lariat the bread-and-butter

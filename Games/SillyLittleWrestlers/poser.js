@@ -75,17 +75,23 @@
     /* GEOMETRY CONTRACT                                                     */
     /* ===================================================================== */
 
-    poser.FW = 48;            // frame width in pixels
-    poser.FH = 48;            // frame height
-    poser.AX = 24;            // anchor x: centre of the feet
-    poser.AY = 47;            // anchor y: the soles
+    // 96x96. The skeleton below is still authored in the same body units --
+    // one unit was one pixel at 48 -- and SCALE is applied once, in
+    // scalesOf(), so every radius and every joint position follows without a
+    // single pose number changing. The rasterizer is analytic, so this is
+    // genuinely more detail rather than a pixel-doubling.
+    poser.SCALE = core.VIEW;
+    poser.FW = 48 * poser.SCALE;
+    poser.FH = 48 * poser.SCALE;
+    poser.AX = 24 * poser.SCALE;
+    poser.AY = poser.FH - 1;
 
     var FW = 48, FH = 48, AX = 24;
 
     // Body pixels bottom out one row ABOVE the anchor so the outline pass has
     // somewhere to put the sole's own outline -- the figure's visible bottom,
     // outline included, then lands exactly on the anchor row.
-    var GY = 46;
+    var GY = poser.FH - 2;
 
     /* ===================================================================== */
     /* TUNABLES -- projection                                                */
@@ -217,7 +223,7 @@
         return {
             build: b,
             tall: clampI(st.tall, -1, 1, 0),
-            hair: clampI(st.hair, 0, 7, DEF_STYLE.hair),
+            hair: clampI(st.hair, 0, 8, DEF_STYLE.hair),
             mask: clampI(st.mask, 0, 3, 0),
             beard: clampI(st.beard, 0, 2, 0),
             boots: clampI(st.boots, 0, 2, DEF_STYLE.boots)
@@ -242,14 +248,17 @@
         var k = s.build + ':' + s.tall;
         var c = scaleCache[k];
         if (c) return c;
-        var b = BUILDS[s.build];
+        var b = BUILDS[s.build], S = poser.SCALE;
+        // SCALE rides on all four, which is the whole of the resolution
+        // change as far as the figure is concerned: positions and radii both
+        // come through here.
         c = {
-            ms: b.ms,
-            hs: b.hs + s.tall * TALL_STEP,
-            bs: b.bs,
+            ms: b.ms * S,
+            hs: (b.hs + s.tall * TALL_STEP) * S,
+            bs: b.bs * S,
             // Heads stay round: scaling them by ms would give a super a head
             // wider than it is tall.
-            hd: 1 + (b.bs - 1) * 0.35
+            hd: (1 + (b.bs - 1) * 0.35) * S
         };
         scaleCache[k] = c;
         return c;
@@ -1427,6 +1436,29 @@
         }
     }
 
+    // Flat, single-index primitives. The shaded capsule() and blob() take a
+    // material; face details are too small to shade and want a hard edge in
+    // one colour, so these take a palette index directly.
+    function dot(cx, cy, r, v) {
+        var x0 = Math.floor(cx - r), x1 = Math.ceil(cx + r);
+        var y0 = Math.floor(cy - r), y1 = Math.ceil(cy + r);
+        if (x0 < 0) x0 = 0; if (y0 < 0) y0 = 0;
+        if (x1 > FW - 1) x1 = FW - 1; if (y1 > FH - 1) y1 = FH - 1;
+        var rr = r * r;
+        for (var y = y0; y <= y1; y++) {
+            for (var x = x0; x <= x1; x++) {
+                var dx = x + 0.5 - cx, dy = y + 0.5 - cy;
+                if (dx * dx + dy * dy <= rr) pix[y * FW + x] = v;
+            }
+        }
+    }
+
+    function stroke(x0, y0, x1, y1, r, v) {
+        var dx = x1 - x0, dy = y1 - y0;
+        var n = Math.max(1, Math.ceil(Math.max(Math.abs(dx), Math.abs(dy))));
+        for (var i = 0; i <= n; i++) dot(x0 + dx * i / n, y0 + dy * i / n, r, v);
+    }
+
     // Deterministic 2-D hash. No Math.random anywhere in this file: the same
     // style must generate the same pixels on every load or the gfx tile cache
     // hands out frames that disagree with each other.
@@ -1464,8 +1496,13 @@
        are silhouettes, not hairdos: the only thing that survives is the
        outline, so each one changes the head's profile rather than its texture.
          0 bald  1 short  2 long  3 ponytail  4 mohawk  5 afro  6 topknot
-         7 wild */
-    function drawHair(cx, cy, rx, ry, style, fx, fy, key) {
+         7 wild  8 ears
+
+       8 is a hood or a beast head rather than a hairstyle: two tall ears over
+       a skull cap. It exists because a cartoon federation wants animal
+       gimmicks, and because a pink bunny hood is not expressible any other
+       way. */
+    function drawHair(cx, cy, rx, ry, style, fx, key, view) {
         var h = style.hair;
         if (h === 0) return;                                  // bald
         var M = HAIR;
@@ -1482,13 +1519,29 @@
                 break;
             case 3:                                            // ponytail
                 blob(cx, cy - ry * 0.40, rx * 1.04, ry * 0.66, M);
-                capsule(cx - fx * rx * 0.9, cy - ry * 0.3, rx * 0.40,
-                    cx - fx * rx * 2.3, cy + ry * 0.5, rx * 0.30, M);
+                if (fx) {
+                    capsule(cx - fx * rx * 0.9, cy - ry * 0.3, rx * 0.40,
+                        cx - fx * rx * 2.3, cy + ry * 0.5, rx * 0.30, M);
+                } else if (view === 'back') {
+                    // From behind the tail hangs down the middle.
+                    capsule(cx, cy + ry * 0.2, rx * 0.36,
+                        cx, cy + ry * 1.5, rx * 0.26, M);
+                }
                 break;
             case 4:                                            // mohawk
-                capsule(cx - fx * rx * 0.55, cy - ry * 1.45, rx * 0.30,
-                    cx + fx * rx * 0.55, cy - ry * 1.20, rx * 0.42, M);
-                blob(cx, cy - ry * 0.70, rx * 0.95, ry * 0.34, M);
+                if (fx) {
+                    // Profile: the crest runs front to back along the skull.
+                    capsule(cx - fx * rx * 0.55, cy - ry * 1.45, rx * 0.30,
+                        cx + fx * rx * 0.55, cy - ry * 1.20, rx * 0.42, M);
+                    blob(cx, cy - ry * 0.70, rx * 0.95, ry * 0.34, M);
+                } else {
+                    // Head on, a mohawk is a narrow vertical crest. Drawing
+                    // the profile shape here put a wide slab across the top of
+                    // the skull that read as a hat.
+                    capsule(cx, cy - ry * 1.55, rx * 0.22,
+                        cx, cy - ry * 0.55, rx * 0.34, M);
+                    blob(cx, cy - ry * 0.55, rx * 0.40, ry * 0.42, M);
+                }
                 break;
             case 5:                                            // afro
                 blob(cx, cy - ry * 0.46, rx * 1.42, ry * 1.02, M);
@@ -1497,12 +1550,40 @@
                 blob(cx, cy - ry * 0.44, rx * 1.00, ry * 0.60, M);
                 blob(cx - fx * rx * 0.25, cy - ry * 1.42, rx * 0.46, ry * 0.46, M);
                 break;
+            case 8: {                                          // ears
+                var earW = rx * 0.30;
+                if (fx) {
+                    // Profile: both ears swept back, the near one lower and
+                    // fuller so they read as two rather than one thick one.
+                    capsule(cx - fx * rx * 0.05, cy - ry * 0.9, earW,
+                        cx - fx * rx * 0.55, cy - ry * 2.25, earW * 0.62, M);
+                    capsule(cx + fx * rx * 0.35, cy - ry * 0.85, earW * 0.85,
+                        cx + fx * rx * 0.02, cy - ry * 2.0, earW * 0.55, M);
+                } else {
+                    capsule(cx - rx * 0.48, cy - ry * 0.8, earW,
+                        cx - rx * 0.66, cy - ry * 2.3, earW * 0.62, M);
+                    capsule(cx + rx * 0.48, cy - ry * 0.8, earW,
+                        cx + rx * 0.66, cy - ry * 2.3, earW * 0.62, M);
+                }
+                // The skull cap is the hood itself. With a full mask the
+                // mask has already drawn it, and capping again paints hair
+                // over the whole face.
+                if (style.mask !== 1) {
+                    blob(cx, cy - ry * 0.42, rx * 1.0, ry * 0.58, M);
+                }
+                break;
+            }
+
             default:                                           // wild / metal
                 blob(cx, cy - ry * 0.30, rx * 1.16, ry * 0.86, M);
+                // Spike length is capped so the tallest build at tall=+1
+                // still fits: at rx*2.2 a super heavyweight's hair ran off the
+                // top of its own 48px box and the outline pass had nowhere to
+                // put the silhouette.
                 for (var i = 0; i < 7; i++) {
                     var hs = hash2(key + i * 37, 11);
                     var a = (i / 7) * Math.PI - 0.25 + ((hs & 15) - 8) * 0.012;
-                    var L = rx * (1.5 + ((hs >> 5) & 7) * 0.10);
+                    var L = rx * (1.18 + ((hs >> 5) & 7) * 0.07);
                     capsule(cx - Math.cos(a) * rx * 0.8, cy - Math.sin(a) * ry * 0.8, 1.3,
                         cx - Math.cos(a) * L, cy - Math.sin(a) * L * 0.95, 0.9, M);
                 }
@@ -1516,32 +1597,63 @@
         if (!toward) return;                 // back of the head: nothing
         var ex = fx ? fx * rx * 0.42 : 0;
         var ey = cy - ry * 0.10;
+        // A head is nine pixels across. A trim line of radius 1.1 is a
+        // quarter of it, and two of them plus the eyes left no face at all --
+        // every masked wrestler came out as a solid slab of accent colour.
+        // These are hairlines on purpose.
         if (style.mask === 1) {
             // Full luchador: the mask IS the head, with an accent trim and
             // two eye holes cut back to white.
             blob(cx, cy - ry * 0.12, rx * 1.02, ry * 0.92, TRUNK);
-            capsule(cx - rx, cy - ry * 0.34, 1.1, cx + rx, cy - ry * 0.34, 1.1, ACC);
-            capsule(cx - rx * 0.7, cy + ry * 0.55, 1.0, cx + rx * 0.7, cy + ry * 0.55, 1.0, ACC);
+            // Trim widths are a FRACTION OF THE HEAD, not a pixel count:
+            // absolute radii were tuned against a 48px figure and came out
+            // half-weight the moment the view scale doubled.
+            var tw = rx * 0.13;
+            capsule(cx - rx * 0.95, cy - ry * 0.52, tw,
+                cx + rx * 0.95, cy - ry * 0.52, tw, ACC);
+            capsule(cx - rx * 0.55, cy + ry * 0.62, tw,
+                cx + rx * 0.55, cy + ry * 0.62, tw, ACC);
+            // A blaze down the centre, which is what makes a mask a mask
+            // rather than a bucket.
+            capsule(cx, cy - ry * 0.45, tw, cx, cy + ry * 0.35, tw, ACC);
         } else if (style.mask === 2) {
-            capsule(cx - rx, cy - ry * 0.22, 1.5, cx + rx, cy - ry * 0.22, 1.5, ACC);
+            // A visor wraps the whole eye line and you cannot see through it.
+            // Solid, and the eyes are suppressed below -- which is the only
+            // thing that stops it reading identically to face paint at this
+            // size.
+            capsule(cx - rx, cy - ry * 0.20, rx * 0.28, cx + rx, cy - ry * 0.20, rx * 0.28, ACC);
         } else if (style.mask === 3) {
-            // Paint around the eyes, which at this size is a band.
-            capsule(cx - rx * 0.9, cy - ry * 0.08, 1.9, cx + rx * 0.9, cy - ry * 0.08, 1.9, ACC);
+            // Paint as two vertical streaks through the eyes, not a band.
+            // Horizontally it was indistinguishable from the visor; this way
+            // it reads as war paint on one and erosion on the other.
+            var pw = rx * 0.19;
+            capsule(cx - rx * 0.42, cy - ry * 0.95, pw,
+                cx - rx * 0.42, cy + ry * 0.55, pw, ACC);
+            capsule(cx + rx * 0.42, cy - ry * 0.95, pw,
+                cx + rx * 0.42, cy + ry * 0.55, pw, ACC);
         }
-        if (fx) {
-            pset(cx + ex, ey, WHITE);
-            pset(cx + ex, ey + 1, OUTL);
+        var blind = (style.mask === 2);
+        if (blind) {
+            // Nothing to draw: the visor is the face.
+        } else if (fx) {
+            // Eyes scale with the head too. A single pixel was an eye at 48;
+            // at 96 it is a speck.
+            var er = Math.max(0.5, rx * 0.14);
+            dot(cx + ex, ey, er, WHITE);
+            dot(cx + ex, ey + er + 0.5, er * 0.8, OUTL);
             // Brow and jaw line give the profile some attitude.
-            pset(cx + ex + fx, ey - 1, OUTL);
-            pset(cx + fx * rx * 0.6, cy + ry * 0.45, OUTL);
+            stroke(cx + ex - er, ey - er * 1.8,
+                cx + ex + er * 1.6, ey - er * 2.1, er * 0.7, OUTL);
+            stroke(cx + fx * rx * 0.35, cy + ry * 0.48,
+                cx + fx * rx * 0.72, cy + ry * 0.42, er * 0.6, OUTL);
         } else {
-            pset(cx - rx * 0.40, ey, WHITE);
-            pset(cx + rx * 0.40, ey, WHITE);
-            pset(cx - rx * 0.40, ey + 1, OUTL);
-            pset(cx + rx * 0.40, ey + 1, OUTL);
-            pset(cx - 1, cy + ry * 0.52, OUTL);
-            pset(cx, cy + ry * 0.52, OUTL);
-            pset(cx + 1, cy + ry * 0.52, OUTL);
+            var er2 = Math.max(0.5, rx * 0.14);
+            dot(cx - rx * 0.40, ey, er2, WHITE);
+            dot(cx + rx * 0.40, ey, er2, WHITE);
+            dot(cx - rx * 0.40, ey + er2 + 0.5, er2 * 0.8, OUTL);
+            dot(cx + rx * 0.40, ey + er2 + 0.5, er2 * 0.8, OUTL);
+            stroke(cx - rx * 0.30, cy + ry * 0.52,
+                cx + rx * 0.30, cy + ry * 0.52, er2 * 0.6, OUTL);
         }
         if (style.beard) {
             var bm = style.beard === 1 ? { sh: HAIR.sh, base: HAIR.sh, lt: HAIR.sh } : HAIR;
@@ -1687,8 +1799,11 @@
                 fx = 0; toward = false;
             }
             drawFace(hd[0], hd[1], rx, ry, S, fx, toward);
-            drawHair(hd[0], hd[1], rx, ry, S, fx || 1, 0,
-                S.hair * 97 + S.build.charCodeAt(0));
+            // fx is 0 head-on, +-1 in profile. Hair needs to know which --
+            // passing `fx || 1` threw that away and drew every profile-shaped
+            // hairstyle from the front.
+            drawHair(hd[0], hd[1], rx, ry, S, fx,
+                S.hair * 97 + S.build.charCodeAt(0), view);
         });
 
         // Painter's algorithm, far to near. Stable: equal depths keep their

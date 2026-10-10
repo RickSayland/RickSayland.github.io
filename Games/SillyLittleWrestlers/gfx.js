@@ -28,24 +28,36 @@
 
     var gfx = {};
 
-    var VW = 320, VH = 224;
+    // Taken from core, never redeclared: gfx holding its own copy of the
+    // screen size is how the renderer ended up drawing a 320x224 framebuffer
+    // while everything else projected into 640x448.
+    var VW = core.VW, VH = core.VH;
     gfx.VW = VW; gfx.VH = VH;
 
     /* -------------------------------------------------------------- limits */
 
-    gfx.MAX_TILES = 2048;        // 11-bit tile index, as on the hardware
-    gfx.STATIC_TILES = 1024;     // arena, font, FX, weapons: uploaded once
-    gfx.MAX_SPRITES = 80;        // sprites per frame
-    gfx.MAX_PER_LINE = 20;       // sprites per scanline
-    gfx.DMA_BUDGET = 234;        // tiles uploadable per frame (~7.5KB vblank)
+    // Neo Geo-class budgets rather than Mega Drive ones: four times the
+    // pixels need four times the tiles, and a 96px wrestler is nine hardware
+    // sprites where a 48px one was four.
+    gfx.MAX_TILES = 8192;        // 13-bit tile index
+    gfx.STATIC_TILES = 4096;     // arena, font, FX, weapons: uploaded once
+    gfx.MAX_SPRITES = 384;       // sprites per frame
+    gfx.MAX_PER_LINE = 96;       // sprites per scanline
+    gfx.DMA_BUDGET = 1024;       // tiles uploadable per frame
 
     gfx.flicker = true;          // emulate sprite dropout when over budget
     gfx.scanlines = false;       // optional CRT line darkening at blit time
 
-    // Cell word layout: tile 0..10 | pal 11..12 | hflip 13 | vflip 14 | prio 15
-    gfx.HF = 1 << 13;
-    gfx.VF = 1 << 14;
-    gfx.PRIO = 1 << 15;
+    // Cell word layout: tile 0..12 | pal 13..17 | hflip 18 | vflip 19 | prio 20
+    //
+    // Thirteen tile bits and five palette bits. The word no longer fits in a
+    // Uint16, so the plane maps are Uint32Array -- more memory, for the single
+    // biggest visual unlock in the renderer.
+    gfx.TILE_MASK = 0x1FFF;
+    gfx.PAL_SHIFT = 13;
+    gfx.HF = 1 << 18;
+    gfx.VF = 1 << 19;
+    gfx.PRIO = 1 << 20;
 
     /* ---------------------------------------------------------- tile memory */
 
@@ -182,14 +194,14 @@
 
     /* --------------------------------------------------------------- planes */
 
-    // 128x32 cells = 1024x256 pixels, a real VDP plane size. The arena is
-    // about 700 pixels wide, so the camera pans inside one plane with room to
+    // 256x64 cells = 2048x512 pixels. The arena is about 1150 pixels wide at
+    // the new view scale, so the camera pans inside one plane with room to
     // spare and no wrap seam ever reaches the screen.
-    var PW = 128, PH = 32;
+    var PW = 256, PH = 64;
     gfx.PW = PW; gfx.PH = PH;
 
     function makePlane() {
-        return { map: new Uint16Array(PW * PH), sx: 0, sy: 0, hs: null };
+        return { map: new Uint32Array(PW * PH), sx: 0, sy: 0, hs: null };
     }
     // Allocate the per-line scroll table for a plane and seed it from sx.
     gfx.enableLineScroll = function (plane) {
@@ -202,13 +214,16 @@
     // The window plane does not scroll and is exactly the screen. The HUD
     // lives here, which is what keeps name plates and the match clock off the
     // sprite budget entirely.
-    gfx.planeW = { map: new Uint16Array(40 * 28), sx: 0, sy: 0, w: 40, h: 28 };
+    // The window plane is exactly the screen, in cells.
+    var WW = VW >> 3, WH = VH >> 3;
+    gfx.planeW = { map: new Uint32Array(WW * WH), sx: 0, sy: 0, w: WW, h: WH };
 
     gfx.cell = function (plane, col, row, tile, palId, flags) {
         var w = (plane === gfx.planeW) ? plane.w : PW;
         var h = (plane === gfx.planeW) ? plane.h : PH;
         if (col < 0 || row < 0 || col >= w || row >= h) return;
-        plane.map[row * w + col] = (tile & 0x7FF) | ((palId & 3) << 11) | (flags || 0);
+        plane.map[row * w + col] =
+            (tile & gfx.TILE_MASK) | ((palId & 31) << gfx.PAL_SHIFT) | (flags || 0);
     };
 
     gfx.fillCells = function (plane, col, row, w, h, tile, palId, flags) {
@@ -238,6 +253,9 @@
     var MS = gfx.MAX_SPRITES;
     var spX = new Int16Array(MS), spY = new Int16Array(MS);
     var spBase = new Uint16Array(MS), spW = new Uint8Array(MS), spH = new Uint8Array(MS);
+    // spFlags holds a three-bit code (1 hflip | 2 vflip | 4 priority) rather
+    // than the raw flag word, which no longer fits in a byte now that the
+    // flags live at bits 16..18.
     var spPal = new Uint8Array(MS), spFlags = new Uint8Array(MS);
     var spMask = new Uint32Array(MS);       // which of its pixel rows survived
     var spCount = 0;
@@ -259,7 +277,10 @@
         if (x >= VW || y >= VH || x + wt * 8 <= 0 || y + ht * 8 <= 0) return false;
         var i = spCount++;
         spX[i] = x; spY[i] = y; spBase[i] = base;
-        spW[i] = wt; spH[i] = ht; spPal[i] = palId & 3; spFlags[i] = (flags || 0) >> 8;
+        var f = flags || 0;
+        spW[i] = wt; spH[i] = ht; spPal[i] = palId & 31;
+        spFlags[i] = ((f & gfx.HF) ? 1 : 0) | ((f & gfx.VF) ? 2 : 0) |
+            ((f & gfx.PRIO) ? 4 : 0);
         return true;
     };
 
@@ -282,9 +303,10 @@
 
     /* ---------------------------------------------------------- framebuffer */
 
-    // One byte per pixel: (pal << 4) | index, with 0xFF meaning "nothing drew
-    // here, show the backdrop". Colour happens once, in present().
-    var fb = new Uint8Array(VW * VH);
+    // One WORD per pixel: (pal << 4) | index, with pal.BACKDROP meaning
+    // "nothing drew here". Nine bits of palette+index no longer fit in a byte.
+    // Colour happens once, in present().
+    var fb = new Uint16Array(VW * VH);
     gfx.fb = fb;
 
     var canvas = null, ctx = null, off = null, octx = null, img = null, img32 = null;
@@ -349,10 +371,10 @@
                 var word = map[row + col];
                 var run = 8 - tx;
                 if (sx + run > VW) run = VW - sx;
-                var tile = word & 0x7FF;
-                if (tile && ((word >>> 15) & 1) === prio) {
-                    var palByte = ((word >>> 11) & 3) << 4;
-                    var hf = (word >>> 13) & 1, vf = (word >>> 14) & 1;
+                var tile = word & 0x1FFF;
+                if (tile && ((word >>> 20) & 1) === prio) {
+                    var palByte = ((word >>> 13) & 31) << 4;
+                    var hf = (word >>> 18) & 1, vf = (word >>> 19) & 1;
                     var srcY = vf ? 7 - ty : ty;
                     var tbase = tile * 64 + srcY * 8;
                     var o = fbRow + sx;
@@ -380,10 +402,10 @@
         for (var row = 0; row < plane.h; row++) {
             for (var col = 0; col < plane.w; col++) {
                 var word = map[row * plane.w + col];
-                var tile = word & 0x7FF;
+                var tile = word & 0x1FFF;
                 if (!tile) continue;
-                var palByte = ((word >>> 11) & 3) << 4;
-                var hf = (word >>> 13) & 1, vf = (word >>> 14) & 1;
+                var palByte = ((word >>> 13) & 31) << 4;
+                var hf = (word >>> 18) & 1, vf = (word >>> 19) & 1;
                 var tb = tile * 64;
                 for (var y = 0; y < 8; y++) {
                     var sy = row * 8 + y;
@@ -430,14 +452,14 @@
     function drawSprites(prio) {
         var tiles = gfx.tiles;
         for (var i = 0; i < spCount; i++) {
-            var fl = spFlags[i] << 8;
-            if ((((fl & gfx.PRIO) ? 1 : 0)) !== prio) continue;
+            var fl = spFlags[i];
+            if ((((fl & 4) ? 1 : 0)) !== prio) continue;
             var mask = spMask[i];
             if (!mask) continue;
             var x = spX[i], y = spY[i];
             var wt = spW[i], ht = spH[i];
             var pw = wt * 8, ph = ht * 8;
-            var hf = (fl & gfx.HF) ? 1 : 0, vf = (fl & gfx.VF) ? 1 : 0;
+            var hf = (fl & 1) ? 1 : 0, vf = (fl & 2) ? 1 : 0;
             var palByte = spPal[i] << 4;
             var base = spBase[i];
 
@@ -470,7 +492,7 @@
 
     gfx.present = function () {
         if (!ctx) return;
-        fb.fill(0xFF);
+        fb.fill(pal.BACKDROP);
         budgetSprites();
         drawPlane(gfx.planeB, 0);
         drawPlane(gfx.planeA, 0);

@@ -110,7 +110,8 @@
 
     var small = Object.create(null);   // key "ch|ink"  -> tile index
     var big = Object.create(null);     // key "ch|ink"  -> base of 2x2 tiles
-    var px = new Uint8Array(16 * 16);  // scratch
+    var huge = Object.create(null);    // key "ch|ink"  -> base of 4x4 tiles
+    var px = new Uint8Array(32 * 32);  // scratch
 
     function glyphMask(ch) {
         var m = masks[ch];
@@ -168,6 +169,35 @@
         return t;
     };
 
+    // Four cells square. Headings only: sixteen tiles a glyph is not
+    // something to spend on body text.
+    font.hugeTile = function (ch, ink) {
+        ch = norm(ch);
+        ink = ink || font.WHITE;
+        var key = ch + '|' + ink;
+        var t = huge[key];
+        if (t !== undefined) return t;
+        rasterize(ch, ink, 4);
+        t = gfx.defineTiles(px, 4, 4);
+        huge[key] = t;
+        return t;
+    };
+
+    font.hugeText = function (plane, col, row, str, ink, palId) {
+        str = String(str);
+        if (palId === undefined) palId = pal.UI;
+        for (var i = 0; i < str.length; i++) {
+            var ch = str.charAt(i);
+            if (ch === ' ') { gfx.fillCells(plane, col + i * 4, row, 4, 4, 0, palId, 0); continue; }
+            gfx.blitCells(plane, col + i * 4, row, font.hugeTile(ch, ink), 4, 4, palId, 0);
+        }
+        return col + str.length * 4;
+    };
+
+    font.hugeCentred = function (plane, row, str, ink, palId, cols) {
+        return font.hugeText(plane, font.centreHuge(str, cols), row, str, ink, palId);
+    };
+
     font.bigTile = function (ch, ink) {
         ch = norm(ch);
         ink = ink || font.WHITE;
@@ -211,12 +241,18 @@
         return col + str.length * 2;
     };
 
-    // Centre in a plane of `cols` columns (40 for the window plane).
+    // Centre in a plane of `cols` columns, defaulting to the window plane's
+    // actual width rather than a baked 40 -- the plane is 80 cells wide now.
+    function planeCols() { return (window.gfx && gfx.planeW) ? gfx.planeW.w : 40; }
+
     font.centre = function (str, cols) {
-        return ((cols || 40) - String(str).length) >> 1;
+        return ((cols || planeCols()) - String(str).length) >> 1;
     };
     font.centreBig = function (str, cols) {
-        return ((cols || 40) - String(str).length * 2) >> 1;
+        return ((cols || planeCols()) - String(str).length * 2) >> 1;
+    };
+    font.centreHuge = function (str, cols) {
+        return ((cols || planeCols()) - String(str).length * 4) >> 1;
     };
 
     font.textCentred = function (plane, row, str, ink, palId, cols) {

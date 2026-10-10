@@ -142,7 +142,7 @@
         for (var i = 11; i <= 13; i++) {
             var base = pal.hex(pal.ARENA_COLORS[i]);
             if (popTimer === 0) pal.setRGB(pal.ARENA, i, base);
-            else pal.setRGB(pal.ARENA, i, pal.mix(base, [7, 6, 4], t >> 1));
+            else pal.setRGB(pal.ARENA, i, pal.mix(base, [31, 26, 18], t >> 1));
         }
     }
 
@@ -169,7 +169,11 @@
     match.stainCanvas = function (wx, wy) {
         if (stainBase < 0) return;
         if (!ring.inRing(wx, wy)) return;
-        var sxp = ring.screenX(wx) + ring.camX;     // plane-space, not screen
+        // Plane space. screenX plus the camera is NOT plane space -- the
+        // arena is laid out around art.ORIGIN_X, not around the middle of the
+        // screen, so this was staining cells 352 pixels from where the blood
+        // actually landed.
+        var sxp = ring.planeX(wx);
         var syp = ring.screenY(wy, 0, ring.RING);
         var col = (sxp >> 3) & (gfx.PW - 1);
         var row = (syp >> 3) & (gfx.PH - 1);
@@ -182,7 +186,7 @@
         } else {
             dst = stainBase + (stainNext % STAIN_POOL);
             stainNext++;
-            stainCells.push({ col: col, row: row, tile: src, pal: (word >>> 11) & 3, flags: word & (gfx.HF | gfx.VF | gfx.PRIO) });
+            stainCells.push({ col: col, row: row, tile: src, pal: (word >>> 11) & 31, flags: word & (gfx.HF | gfx.VF | gfx.PRIO) });
             // Copy the canvas tile we are replacing so the weave survives.
             for (var k = 0; k < 64; k++) gfx.tiles[dst * 64 + k] = gfx.tiles[src * 64 + k];
         }
@@ -212,9 +216,9 @@
         var chars = opts.chars;
         var n = chars.length;
         for (var i = 0; i < n; i++) {
-            // Palettes 1 and 2 are all there is, so a three-way shares them.
-            // That is the hardware, not a shortcut.
-            var palId = (i % 2) === 0 ? pal.P1 : pal.P2;
+            // Every wrestler gets its own palette now. Six of them exist, so
+            // even a rumble never makes two people wear the same colours.
+            var palId = pal.wrestlerSlot(i);
             var w = wrestlers.create(chars[i], i, palId, {
                 cpu: opts.cpu[i], padIndex: opts.pads[i], team: i
             });
@@ -223,8 +227,7 @@
         }
 
         match.takePositions();
-        // Only the first two can hold their own palette; the rest borrow.
-        for (var k = 0; k < Math.min(2, match.wrestlers.length); k++) {
+        for (var k = 0; k < match.wrestlers.length; k++) {
             wrestlers.applyPalette(match.wrestlers[k]);
         }
 
@@ -403,6 +406,7 @@
 
         updateRef();
         updateCrowdPop();
+        if (window.art && art.updateRopes) art.updateRopes();
         ring.updateCamera(list);
         ring.applyScroll();
 

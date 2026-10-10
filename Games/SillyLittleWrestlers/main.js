@@ -248,7 +248,7 @@
             n = n || 1;
             for (var i = 0; i < n; i++) {
                 core.updateInput();
-                if (core.fx.freeze > 0) core.fx.freeze--; else update();
+                if (core.tickGate()) update();
                 core.updateFx();
                 core.clock.frames++;
             }

@@ -34,6 +34,14 @@
 
     var art = {};
 
+    // Art unit: screen pixels per authored pixel. Everything hand-authored in
+    // this file was drawn against a 320x224 screen, so it is either scaled by
+    // U (where crispness matters -- the logo, the apron lettering, the ring
+    // furniture) or authored at 1x and doubled on upload (the small sprite
+    // art, where a doubled 1px highlight is exactly the 2px highlight the
+    // higher resolution wants and re-authoring forty drawings buys nothing).
+    var U = core.VIEW;
+
     /* ======================================================================
        Plane layout constants
        ====================================================================== */
@@ -41,13 +49,13 @@
     // Plane pixel x of world x = 0. The planes are 1024px wide and the arena is
     // about 600, so the camera pans inside one plane and no wrap seam is ever
     // on screen. 512 is both the plane centre and cell-aligned.
-    var ORIGIN_X = 512;
+    var ORIGIN_X = 1024;
     // Published because ring.js has to turn the camera into a plane scroll
     // value and the two must agree about where world x = 0 sits in the plane.
     art.ORIGIN_X = ORIGIN_X;
 
     // Mirror of column c is MIRROR_COL - c. See the header.
-    var MIRROR_COL = 127;
+    var MIRROR_COL = 255;
 
     var CROWD_BANDS = 3;        // far / mid / near rows of spectators
     var CROWD_VARIANTS = 4;     // distinct tiles per band
@@ -84,7 +92,10 @@
     var PRIO_SPLIT;
 
     function geom() {
-        A = core.ARENA;
+        // The SCALED table: art.js works in screen pixels while ring.js
+        // collides in logical ones. Everything below is unchanged by the view
+        // scale because this one line absorbs it.
+        A = core.arenaScaled();
 
         // Snap the canvas to cell rows. The unrounded far edge is one pixel
         // above the snapped one (79 vs 80 at the shipped constants); a single
@@ -144,6 +155,17 @@
        ====================================================================== */
 
     function buf(w, h) { return new Uint8Array(w * h); }
+
+    // Nearest-neighbour upscale by U. See the note on `U` above.
+    function up(p, w, h) {
+        if (U === 1) return p;
+        var W = w * U, H = h * U, o = buf(W, H);
+        for (var y = 0; y < H; y++) {
+            var sy = ((y / U) | 0) * w;
+            for (var x = 0; x < W; x++) o[y * W + x] = p[sy + ((x / U) | 0)];
+        }
+        return o;
+    }
 
     function px(p, w, h, x, y, v) {
         if (x < 0 || y < 0 || x >= w || y >= h) return;
@@ -315,8 +337,11 @@
        the only affordable way to make thousands of pixels seethe.
        ====================================================================== */
 
-    var CROWD_HEADS = [3, 3, 2];   // heads per tile, per band
-    var CROWD_HR = [1, 1, 2];   // head radius, per band
+    // Per 8x8 tile. At the higher view scale there are U*U times as many
+    // tiles over the same crowd, so the count per tile comes down as the head
+    // radius goes up and the crowd keeps its density.
+    var CROWD_HEADS = [2, 2, 1];   // heads per tile, per band
+    var CROWD_HR = [1 * U, 1 * U, 2 * U];   // head radius, per band
     var crowdBase = 0;
     var crowdPix = null;           // [band*VARIANTS + variant][phase] -> 64 bytes
 
@@ -393,11 +418,11 @@
        Three 8x16 variants, authored side by side in one buffer.
        ====================================================================== */
 
-    var BARR_RAIL_H = 2;
+    var BARR_RAIL_H = 2 * U;
     var barrGrid = null;
 
     function buildBarricade() {
-        var W = 24, H = 16, p = buf(W, H);
+        var W = 24 * U, H = 16 * U, p = buf(W, H);
         for (var v = 0; v < 3; v++) {
             var x0 = v * 8;
             // Top rail, lit.
@@ -552,7 +577,7 @@
        then the ring's side skirt, then a black frame, then canvas.
        ====================================================================== */
 
-    var SKIRT_W = 3;            // px of blue side skirt along the diagonal
+    var SKIRT_W = 3 * U;        // px of blue side skirt along the diagonal
     var edgeGrid = null;
 
     function buildCanvasEdge() {
@@ -597,7 +622,10 @@
        ====================================================================== */
 
     var apronPlain = null, apronText = null;
-    var APRON_TEXT_COLS = 12;   // 96px of SLWF, centred on the ring
+    // Wide enough to hold the lettering at the current view scale -- at 12
+    // the 2x letters ran off the end of their own buffer and the apron read
+    // "LW".
+    var APRON_TEXT_COLS = 12 * U;
 
     // Colour of apron pixel `dy` rows below the near canvas edge.
     function apronColor(dy) {
@@ -690,10 +718,10 @@
 
         // 3 bars of 3 plus two 2px gaps fits in 13; 14 gives the S a little
         // air. A 4px stroke in 12 rows has no gap at all.
-        var LH = 14, T = 3;
-        var widths = [18, 14, 22, 16];
-        var total = 18 + 14 + 22 + 16 + 3 * 6;
-        var m = slwfMask(W, H, (W - total) >> 1, 3, 6, LH, T, widths);
+        var LH = 14 * U, T = 3 * U;
+        var widths = [18 * U, 14 * U, 22 * U, 16 * U];
+        var total = (18 + 14 + 22 + 16 + 3 * 6) * U;
+        var m = slwfMask(W, H, (W - total) >> 1, 3 * U, 6 * U, LH, T, widths);
         var ol = dilate(m, W, H, 1);
         for (var i = 0; i < m.length; i++) {
             if (!ol[i]) continue;
@@ -715,44 +743,45 @@
        canvas edge is 81 rows apart on screen.
        ====================================================================== */
 
-    var PAD_H = 8;              // turnbuckle pad height, centred on the rope
-    var postBase = 0;
+    var PAD_H = 8 * U;          // turnbuckle pad height, centred on the rope
+    var postBase = 0, POST_COLS = 1;
 
     function buildPost() {
-        var H = POST_H_PX, p = buf(8, H);
+        // The post is one authored 8px-wide column pattern widened by U, so
+        // the chrome highlight stays a highlight instead of becoming a stripe.
+        var PW8 = 8 * U, H = POST_H_PX, p = buf(PW8, H);
+        var PAT = [0, FLOOR_D, BLACK, CSHADOW, BLACK, BLACK, FLOOR_D, 0];
         for (var y = 0; y < H; y++) {
             var z = H - y;
-            // Round black post with a chrome highlight down one side.
-            px(p, 8, H, 1, y, FLOOR_D);
-            px(p, 8, H, 2, y, BLACK);
-            px(p, 8, H, 3, y, CSHADOW);
-            px(p, 8, H, 4, y, BLACK);
-            px(p, 8, H, 5, y, BLACK);
-            px(p, 8, H, 6, y, FLOOR_D);
-            if (z > A.POST_H) {         // above the post: nothing
-                for (var x = 0; x < 8; x++) px(p, 8, H, x, y, 0);
+            if (z > A.POST_H) continue;        // above the post: nothing
+            for (var x = 0; x < PW8; x++) {
+                var c = PAT[(x / U) | 0];
+                if (c) px(p, PW8, H, x, y, c);
             }
         }
         // Cap.
         var capY = H - A.POST_H;
-        rect(p, 8, H, 1, capY, 6, 1, CSHADOW);
-        rect(p, 8, H, 1, capY + 1, 6, 1, BLACK);
+        rect(p, PW8, H, 1 * U, capY, 6 * U, 1 * U, CSHADOW);
+        rect(p, PW8, H, 1 * U, capY + 1 * U, 6 * U, 1 * U, BLACK);
 
         // Yellow pads at the rope heights.
         for (var i = 0; i < A.ROPE_Z.length; i++) {
             var y0 = H - A.ROPE_Z[i] - (PAD_H >> 1);
-            rect(p, 8, H, 0, y0, 8, PAD_H, YEL);
-            rect(p, 8, H, 0, y0, 8, 1, YEL_D);
-            rect(p, 8, H, 0, y0 + PAD_H - 1, 8, 1, YEL_D);
-            vline(p, 8, H, 6, y0, y0 + PAD_H - 1, YEL_D);
-            vline(p, 8, H, 7, y0, y0 + PAD_H - 1, BLACK);
-            vline(p, 8, H, 1, y0 + 1, y0 + PAD_H - 2, CWHITE);
+            rect(p, PW8, H, 0, y0, PW8, PAD_H, YEL);
+            rect(p, PW8, H, 0, y0, PW8, U, YEL_D);
+            rect(p, PW8, H, 0, y0 + PAD_H - U, PW8, U, YEL_D);
+            rect(p, PW8, H, 6 * U, y0, U, PAD_H, YEL_D);
+            rect(p, PW8, H, 7 * U, y0, U, PAD_H, BLACK);
+            rect(p, PW8, H, 1 * U, y0 + U, U, PAD_H - 2 * U, CWHITE);
         }
         // Contiguous, not deduped: T.post is a base the integrator can blit.
-        postBase = alloc(POST_ROWS);
-        tilesUsed -= POST_ROWS;                 // alloc() already counted it
-        tilesUsed += POST_ROWS;
-        for (var r = 0; r < POST_ROWS; r++) gfx.uploadTile(postBase + r, p, 8, 0, r * 8);
+        POST_COLS = U;
+        postBase = alloc(POST_ROWS * POST_COLS);
+        for (var r = 0; r < POST_ROWS; r++) {
+            for (var c2 = 0; c2 < POST_COLS; c2++) {
+                gfx.uploadTile(postBase + r * POST_COLS + c2, p, PW8, c2 * 8, r * 8);
+            }
+        }
     }
 
     /* ======================================================================
@@ -778,16 +807,119 @@
         for (var k in offs) {
             var o = k | 0;
             var p = buf(8, 8);
-            if (o <= 6) {
-                hline(p, 8, 8, 0, 7, o, BLACK);
-                hline(p, 8, 8, 0, 7, o + 1, CSHADOW);
+            // A rope is U pixels of black with a U-pixel highlight under
+            // it, so it stays a rope rather than a hairline.
+            if (o <= 8 - 2 * U) {
+                rect(p, 8, 8, 0, o, 8, U, BLACK);
+                rect(p, 8, 8, 0, o + U, 8, U, CSHADOW);
             } else {
-                hline(p, 8, 8, 0, 7, 6, CSHADOW);
-                hline(p, 8, 8, 0, 7, 7, BLACK);
+                rect(p, 8, 8, 0, 8 - 2 * U, 8, U, CSHADOW);
+                rect(p, 8, 8, 0, 8 - U, 8, U, BLACK);
             }
             ropeH[o] = defTile(p, 8, 0, 0);
         }
+        buildRopeFlexTiles();
     }
+
+    /* ----------------------------------------------------------------------
+       ROPE FLEX
+       A rope you have just been thrown into should visibly take the weight.
+       The displaced rope is not a sprite -- it is the same cell pointed at a
+       tile with the line drawn lower, which is the trick the crowd animation
+       uses and costs nothing per frame. Four steps of displacement per rope
+       height, and a cell keeps its own straight tile so it can be put back.
+
+       Only the near and far ropes flex. The side ropes are a deduplicated
+       diagonal run sharing a four-cell zone with the canvas edge, and
+       displacing those correctly means regenerating the whole zone; they get
+       the sound, the shake and the dust instead.
+       ---------------------------------------------------------------------- */
+
+    var ROPE_FLEX_MAX = 4;          // px of displacement at the contact point
+    var ropeFlexTiles = null;       // ropeFlexTiles[offset][disp] -> tile
+
+    function buildRopeFlexTiles() {
+        ropeFlexTiles = Object.create(null);
+        for (var k in ropeH) {
+            var o = k | 0;
+            var row = new Array(ROPE_FLEX_MAX + 1);
+            row[0] = ropeH[o];
+            for (var d = 1; d <= ROPE_FLEX_MAX; d++) {
+                var p2 = buf(8, 8);
+                var y = o + d;
+                // Past the bottom of the cell the rope belongs to the next
+                // one down; clamping keeps it inside rather than vanishing,
+                // which at four pixels is close enough and needs no second
+                // cell row.
+                if (y > 8 - 2 * U) y = 8 - 2 * U;
+                rect(p2, 8, 8, 0, y, 8, U, BLACK);
+                rect(p2, 8, 8, 0, y + U, 8, U, CSHADOW);
+                row[d] = defTile(p2, 8, 0, 0);
+            }
+            ropeFlexTiles[o] = row;
+        }
+    }
+
+    // Recorded by buildArena so a flex knows which cells are rope and what
+    // they looked like before it touched them.
+    var ropeRuns = null;            // [{side, row, offset, c0, c1, prio}]
+    var activeFlex = [];
+
+    /* side: 1 far / 3 near, as ring.step reports it.
+       planeX: where the body hit, in plane pixels.
+       power:  0..256, how hard. */
+    art.flexRope = function (side, planeX, power) {
+        if (!ropeRuns) return;
+        power = core.clamp(power === undefined ? 256 : power, 0, 256);
+        var reach = 40;             // px either side of the contact point
+        for (var r = 0; r < ropeRuns.length; r++) {
+            var run = ropeRuns[r];
+            if (run.side !== side) continue;
+            var tiles = ropeFlexTiles[run.offset];
+            if (!tiles) continue;
+            var cc = planeX >> 3;
+            for (var c = cc - (reach >> 3); c <= cc + (reach >> 3); c++) {
+                if (c < run.c0 || c > run.c1) continue;
+                var dist = Math.abs((c << 3) + 4 - planeX);
+                if (dist > reach) continue;
+                // A triangular bulge: deepest at the contact, tapering out.
+                var d = Math.round(ROPE_FLEX_MAX * (1 - dist / reach) * power / 256);
+                // The far rope bulges away from the camera, which on screen
+                // is the same direction the tile displaces, so only the near
+                // rope needs its sign thinking about -- and both read as
+                // "pushed outward" because the camera is above.
+                if (d <= 0) continue;
+                activeFlex.push({
+                    col: c, row: run.row, base: tiles[0], tiles: tiles,
+                    d: d, t: 0, life: 16 + (d << 1), prio: run.prio
+                });
+            }
+        }
+    };
+
+    // Decay every live flex by one frame. Call once per game frame.
+    art.updateRopes = function () {
+        if (!activeFlex.length) return;
+        var PA = gfx.planeA;
+        for (var i = activeFlex.length - 1; i >= 0; i--) {
+            var f = activeFlex[i];
+            f.t++;
+            // Snap out, spring back: the displacement decays and overshoots
+            // once, which is what a rope does and what a linear fade does not.
+            var k = f.t / f.life;
+            var amp = (1 - k) * Math.cos(k * 7.2);
+            var d = Math.round(f.d * amp);
+            if (d < 0) d = 0;
+            if (d > ROPE_FLEX_MAX) d = ROPE_FLEX_MAX;
+            gfx.cell(PA, f.col, f.row, f.tiles[d], pal.ARENA, f.prio);
+            if (f.t >= f.life) {
+                gfx.cell(PA, f.col, f.row, f.base, pal.ARENA, f.prio);
+                activeFlex.splice(i, 1);
+            }
+        }
+    };
+
+    art.clearRopeFlex = function () { activeFlex.length = 0; };
 
     // Plane x of the left side rope at height z on plane row py.
     function sideRopeX(py, z) {
@@ -825,7 +957,7 @@
     var stepsGrid = null, skirtGrid = null;
 
     function buildSteps() {
-        var W = 32, H = 32, p = buf(W, H);
+        var W = 32 * U, H = 32 * U, p = buf(W, H);
         // Floor behind and below.
         for (var y = 0; y < H; y++) {
             for (var x = 0; x < W; x++) {
@@ -849,8 +981,8 @@
 
     function buildSkirt() {
         var aprRows = R_APR1 - R_APR0 + 1;
-        var W = 40, H = aprRows * 8, p = buf(W, H);
-        var baseX = ORIGIN_X - 128;
+        var W = 40 * U, H = aprRows * 8, p = buf(W, H);
+        var baseX = ORIGIN_X - 128 * U;
         for (var y = 0; y < H; y++) {
             for (var x = 0; x < W; x++) apronPixel(p, W, H, x, y, y, baseX + x);
         }
@@ -894,7 +1026,7 @@
     }
 
     function buildLadderProp() {
-        var W = 16, H = 48, p = buf(W, H);
+        var W = 16 * U, H = 48 * U, p = buf(W, H);
         for (var y = 0; y < H; y++) {
             // Rails.
             px(p, W, H, 1, y, BLACK); px(p, W, H, 2, y, CSHADOW); px(p, W, H, 3, y, FLOOR_M);
@@ -914,16 +1046,16 @@
        Authored in the UI palette (3) indices.
        ====================================================================== */
 
-    var LOGO_PXW = 120, LOGO_PXH = 40;
-    var LOGO_T = 7, LOGO_LH = 32, LOGO_DROP = 4, LOGO_OUT = 2;
+    var LOGO_PXW = 120 * U, LOGO_PXH = 40 * U;
+    var LOGO_T = 7 * U, LOGO_LH = 32 * U, LOGO_DROP = 4 * U, LOGO_OUT = 2 * U;
     var logoGrid = null;
 
     function buildLogo() {
         var W = LOGO_PXW, H = LOGO_PXH;
-        var widths = [24, 20, 34, 22];
-        var gaps = 2;
+        var widths = [24 * U, 20 * U, 34 * U, 22 * U];
+        var gaps = 2 * U;
         var total = widths[0] + widths[1] + widths[2] + widths[3] + gaps * 3;
-        var m = slwfMask(W, H, (W - total - LOGO_DROP) >> 1, 3, gaps,
+        var m = slwfMask(W, H, (W - total - LOGO_DROP) >> 1, 3 * U, gaps,
             LOGO_LH, LOGO_T, widths);
         var ol = dilate(m, W, H, LOGO_OUT);
 
@@ -1112,12 +1244,13 @@
             for (var f = 0; f < d.frames; f++) {
                 var p = buf(pw, ph);
                 d.draw(p, pw, ph, f);
-                list[f] = gfx.romFrame(p, d.w, d.h, d.ax, d.ay);
+                list[f] = gfx.romFrame(up(p, pw, ph), d.w * U, d.h * U,
+                    d.ax * U, d.ay * U);
             }
             fxRoms[name] = list;
             art.FX[name] = {
-                frames: d.frames, w: d.w, h: d.h,
-                ax: d.ax, ay: d.ay, pal: pal.UI
+                frames: d.frames, w: d.w * U, h: d.h * U,
+                ax: d.ax * U, ay: d.ay * U, pal: pal.UI
             };
         }
     }
@@ -1228,7 +1361,7 @@
        in the white canvas.
        ---------------------------------------------------------------------- */
     var shadowRoms = null;
-    var SHADOW_RX = [7, 11, 14];
+    var SHADOW_RX = [7 * U, 11 * U, 14 * U];
 
     function buildShadows() {
         // Drawn in the UI palette, not the arena one. The arena's only mid
@@ -1494,12 +1627,13 @@
             for (var i = 0; i < states.length; i++) {
                 var p = buf(pw, ph);
                 d.draw(p, pw, ph, states[i]);
-                set[states[i]] = gfx.romFrame(p, d.w, d.h, d.ax, d.ay);
+                set[states[i]] = gfx.romFrame(up(p, pw, ph), d.w * U, d.h * U,
+                    d.ax * U, d.ay * U);
             }
             weaponRoms[id] = set;
             art.WEAPONS[id] = {
                 id: id, mult: d.mult, part: d.part,
-                breakable: !!d.breakable, w: d.w, h: d.h, pal: pal.UI
+                breakable: !!d.breakable, w: d.w * U, h: d.h * U, pal: pal.UI
             };
         }
     }
@@ -1619,7 +1753,8 @@
             for (var f = 0; f < n; f++) {
                 var p = buf(REF_PW, REF_PH);
                 refDraw(p, pose, f);
-                list[f] = gfx.romFrame(p, REF_W, REF_H, REF_AX, REF_AY);
+                list[f] = gfx.romFrame(up(p, REF_PW, REF_PH), REF_W * U, REF_H * U,
+                    REF_AX * U, REF_AY * U);
             }
             refRoms[pose] = list;
         }
@@ -1785,26 +1920,33 @@
             putGrid(B, C_NEAR_L - stepsGrid.cols, R_APR0, stepsGrid, P0, 0, true);
         }
         if (skirtGrid) {
-            // Authored against plane x ORIGIN_X-128, so it has to go back at
-            // that column or its apron shading does not line up -- and at
-            // -12 cells it sat on top of the S of SLWF.
-            putGrid(B, (ORIGIN_X - 128) >> 3, R_APR0, skirtGrid, P0, 0, false);
+            // Authored against plane x ORIGIN_X - 128*U, so it has to go back
+            // at that column or its apron shading does not line up. The
+            // offset scales with the view: left unscaled it crept inward and
+            // sat on top of the S of SLWF again.
+            putGrid(B, (ORIGIN_X - 128 * U) >> 3, R_APR0, skirtGrid, P0, 0, false);
         }
 
         /* ---- horizontal ropes */
+        ropeRuns = [];
+        activeFlex.length = 0;
         for (i = 0; i < A.ROPE_Z.length; i++) {
             z = A.ROPE_Z[i];
             var pyNear = CAN_BOT - z, pyFar = CAN_TOP - z;
             var tNear = ropeH[pyNear & 7], tFar = ropeH[pyFar & 7];
             var rowNear = pyNear >> 3, rowFar = pyFar >> 3;
+            var prioNear = rowNear >= PRIO_SPLIT ? gfx.PRIO : 0;
+            var prioFar = rowFar >= PRIO_SPLIT ? gfx.PRIO : 0;
             for (col = C_NEAR_L; col <= C_NEAR_R; col++) {
-                if (tNear) gfx.cell(PA, col, rowNear, tNear, P0,
-                    rowNear >= PRIO_SPLIT ? gfx.PRIO : 0);
+                if (tNear) gfx.cell(PA, col, rowNear, tNear, P0, prioNear);
             }
             for (col = C_FAR_L; col <= C_FAR_R; col++) {
-                if (tFar) gfx.cell(PA, col, rowFar, tFar, P0,
-                    rowFar >= PRIO_SPLIT ? gfx.PRIO : 0);
+                if (tFar) gfx.cell(PA, col, rowFar, tFar, P0, prioFar);
             }
+            if (tNear) ropeRuns.push({ side: 3, row: rowNear, offset: pyNear & 7,
+                c0: C_NEAR_L, c1: C_NEAR_R, prio: prioNear });
+            if (tFar) ropeRuns.push({ side: 1, row: rowFar, offset: pyFar & 7,
+                c0: C_FAR_L, c1: C_FAR_R, prio: prioFar });
         }
 
         /* ---- side ropes */
@@ -1819,10 +1961,14 @@
         var nearTop = (CAN_BOT >> 3) - POST_ROWS;
         var farTop = (CAN_TOP >> 3) - POST_ROWS;
         for (r = 0; r < POST_ROWS; r++) {
-            gfx.cell(PA, C_POST_NEAR, nearTop + r, postBase + r, P0, gfx.PRIO);
-            gfx.cell(PA, MIRROR_COL - C_POST_NEAR, nearTop + r, postBase + r, P0, gfx.PRIO | gfx.HF);
-            gfx.cell(PA, C_POST_FAR, farTop + r, postBase + r, P0, 0);
-            gfx.cell(PA, MIRROR_COL - C_POST_FAR, farTop + r, postBase + r, P0, gfx.HF);
+            for (var pc = 0; pc < POST_COLS; pc++) {
+                var pt = postBase + r * POST_COLS + pc;
+                gfx.cell(PA, C_POST_NEAR + pc, nearTop + r, pt, P0, gfx.PRIO);
+                gfx.cell(PA, MIRROR_COL - C_POST_NEAR - pc, nearTop + r, pt,
+                    P0, gfx.PRIO | gfx.HF);
+                gfx.cell(PA, C_POST_FAR + pc, farTop + r, pt, P0, 0);
+                gfx.cell(PA, MIRROR_COL - C_POST_FAR - pc, farTop + r, pt, P0, gfx.HF);
+            }
         }
 
         /* ---- stipulation furniture */

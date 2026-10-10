@@ -1,9 +1,16 @@
 /* =============================================================================
    SLWF - palette.js
-   The colour RAM. Four palettes of sixteen colours, every channel quantized to
-   three bits, index 0 transparent in all of them.
+   The colour RAM. Thirty-two palettes of sixteen colours, every channel
+   quantized to five bits.
 
-   The 9-bit grid is not applied as a filter at the end -- it is applied at
+   This is the Neo Geo's colour model rather than the Mega Drive's, and the
+   step up is the whole reason the game stopped looking flat. Three bits a
+   channel is 512 colours and makes every skin ramp band; five is 32,768 and
+   does not. Four palettes meant the character select could only ever show two
+   wrestlers in colour and a three-way had to share; thirty-two means every
+   wrestler on the roster can hold its own.
+
+   The 15-bit grid is not applied as a filter at the end -- it is applied at
    store time, so there is no such thing as a colour in this game that the
    hardware could not hold. Anything that wants a shade asks for one through
    shade()/mix(), which quantize on the way out too, so a derived ramp lands on
@@ -14,8 +21,17 @@
 
     var pal = {};
 
-    pal.NPAL = 4;
+    pal.NPAL = 32;
     pal.NCOL = 16;
+
+    // Bits per channel, and the largest value one can hold. Everything that
+    // builds a colour by hand works in 0..MAX, not 0..7 and not 0..255.
+    pal.DEPTH = 5;
+    pal.MAX = 31;
+
+    // The framebuffer's "nothing drew here" value. It indexes the LUT like any
+    // other pixel, which keeps a branch out of the blit loop.
+    pal.BACKDROP = pal.NPAL * pal.NCOL;
 
     // Palette roles. Named because every one of the four is spoken for and
     // running out is a design problem, not a bug to fix later.
@@ -24,14 +40,24 @@
     pal.P2 = 2;   // wrestler B
     pal.UI = 3;   // font, HUD, weapons, blood spray, impact FX
 
-    // Three bits per channel, stored as 0..7. 4*16*3 bytes is the whole CRAM.
+    // Up to six wrestlers in a match, each with its own palette -- a rumble no
+    // longer makes two of them wear the same colours.
+    pal.WREST = [1, 2, 4, 5, 6, 7];
+    // ...and a block for the character select, which can now show the whole
+    // roster in colour at once instead of two at a time.
+    pal.ROSTER = 8;
+
+    pal.wrestlerSlot = function (i) {
+        return pal.WREST[i % pal.WREST.length];
+    };
+
+    // Five bits per channel, stored as 0..31. 32*16*3 bytes is the whole CRAM.
     pal.cram = new Uint8Array(pal.NPAL * pal.NCOL * 3);
 
-    // The render LUT: 256 entries of packed RGBA, indexed by the framebuffer
-    // byte (pal<<4 | index), with 0xFF reserved for the backdrop. 256 rather
-    // than 64 so the framebuffer can carry its sentinel without a branch in
-    // the blit loop.
-    pal.lut = new Uint32Array(256);
+    // The render LUT: packed RGBA indexed by the framebuffer word
+    // (pal<<4 | index), with one entry past the end for the backdrop, so the
+    // blit loop needs no branch.
+    pal.lut = new Uint32Array(pal.NPAL * pal.NCOL + 1);
 
     // Global brightness, 0..256 in 8.8. Scene transitions fade through this
     // rather than drawing a black rectangle over the top, because that is how
@@ -40,28 +66,27 @@
     pal.brightness = 256;
 
     // A flash overrides every colour for a few frames. Finishers use it.
-    var flashFrames = 0, flashR = 7, flashG = 7, flashB = 7, flashMix = 256;
+    var flashFrames = 0, flashR = 31, flashG = 31, flashB = 31, flashMix = 256;
 
     var dirty = true;
 
     /* ----------------------------------------------------------- quantization */
 
-    // 8-bit channel -> 3-bit. Round rather than shift: >>5 would make pure
-    // white 7 but 0xF0 only 7 as well, and the rounding keeps mid tones where
-    // the eye expects them.
+    // 8-bit channel -> 5-bit. Round rather than shift: >>3 would bias every
+    // colour downward, and the rounding keeps mid tones where the eye expects
+    // them.
     function q8(v) {
         v = v < 0 ? 0 : (v > 255 ? 255 : v);
-        return Math.round(v * 7 / 255);
+        return Math.round(v * pal.MAX / 255);
     }
     pal.q8 = q8;
 
-    // 3-bit channel -> 8-bit for display. The Genesis DAC is not linear across
-    // the nine levels, but it is close enough that even spacing is the right
-    // call; what matters is that only eight values per channel exist.
-    function e8(v) { return (v * 255 / 7) | 0; }
+    // 5-bit channel -> 8-bit for display. Even spacing: what matters is that
+    // only thirty-two values per channel exist.
+    function e8(v) { return (v * 255 / pal.MAX) | 0; }
     pal.e8 = e8;
 
-    // "#rrggbb" -> [r,g,b] on the 3-bit grid. The single entry point for art
+    // "#rrggbb" -> [r,g,b] on the 5-bit grid. The single entry point for art
     // that was authored as hex.
     pal.hex = function (h) {
         if (h.charAt(0) === '#') h = h.substring(1);
@@ -72,24 +97,26 @@
 
     /* --------------------------------------------------------------- derived */
 
-    // Scale a 3-bit triple toward black (amt < 256) or white (amt > 256),
-    // staying on the grid. The wrestler palettes derive their shadow and
-    // highlight rows from one base colour this way, which is why a character
-    // is five colours and a body description rather than a spritesheet.
+    // Scale a triple toward black (amt < 256) or white (amt > 256), staying on
+    // the grid. The wrestler palettes derive their shadow and highlight rows
+    // from one base colour this way, which is why a character is five colours
+    // and a body description rather than a spritesheet. At five bits these
+    // ramps finally have somewhere to go -- at three, a shadow and its base
+    // routinely quantized to the same value.
     pal.shade = function (c, amt) {
-        var r, g, b;
+        var M = pal.MAX, r, g, b;
         if (amt <= 256) {
             r = (c[0] * amt) >> 8; g = (c[1] * amt) >> 8; b = (c[2] * amt) >> 8;
         } else {
             var t = amt - 256;
-            r = c[0] + (((7 - c[0]) * t) >> 8);
-            g = c[1] + (((7 - c[1]) * t) >> 8);
-            b = c[2] + (((7 - c[2]) * t) >> 8);
+            r = c[0] + (((M - c[0]) * t) >> 8);
+            g = c[1] + (((M - c[1]) * t) >> 8);
+            b = c[2] + (((M - c[2]) * t) >> 8);
         }
         return [
-            r < 0 ? 0 : (r > 7 ? 7 : r | 0),
-            g < 0 ? 0 : (g > 7 ? 7 : g | 0),
-            b < 0 ? 0 : (b > 7 ? 7 : b | 0)
+            r < 0 ? 0 : (r > M ? M : r | 0),
+            g < 0 ? 0 : (g > M ? M : g | 0),
+            b < 0 ? 0 : (b > M ? M : b | 0)
         ];
     };
 
@@ -104,14 +131,14 @@
 
     /* ---------------------------------------------------------------- access */
 
-    // Channels are 0..7. Anything outside clamps rather than wrapping, because
-    // a wrapped channel is a bright magenta pixel in the middle of a sprite and
-    // takes an hour to find.
+    // Channels are 0..MAX. Anything outside clamps rather than wrapping,
+    // because a wrapped channel is a bright magenta pixel in the middle of a
+    // sprite and takes an hour to find.
     pal.set = function (p, i, r, g, b) {
-        var o = (p * pal.NCOL + i) * 3;
-        pal.cram[o] = r < 0 ? 0 : (r > 7 ? 7 : r);
-        pal.cram[o + 1] = g < 0 ? 0 : (g > 7 ? 7 : g);
-        pal.cram[o + 2] = b < 0 ? 0 : (b > 7 ? 7 : b);
+        var M = pal.MAX, o = (p * pal.NCOL + i) * 3;
+        pal.cram[o] = r < 0 ? 0 : (r > M ? M : r);
+        pal.cram[o + 1] = g < 0 ? 0 : (g > M ? M : g);
+        pal.cram[o + 2] = b < 0 ? 0 : (b > M ? M : b);
         dirty = true;
     };
 
@@ -141,7 +168,7 @@
     // A separate register on the real hardware, not palette 0 index 0. It is
     // what shows where no plane and no sprite drew, and it is also the colour
     // the letterbox bars are *not* -- those stay black.
-    pal.backdrop = [0, 0, 1];
+    pal.backdrop = [0, 0, 4];
     pal.setBackdrop = function (c) {
         pal.backdrop = (typeof c === 'string') ? pal.hex(c) : c;
         dirty = true;
@@ -157,7 +184,7 @@
     // Flash the whole screen toward a colour. mix is 0..256; a finisher uses
     // 256 (full white) for two frames and then ramps out.
     pal.flash = function (frames, c, mix) {
-        c = c || [7, 7, 7];
+        c = c || [pal.MAX, pal.MAX, pal.MAX];
         flashFrames = frames;
         flashR = c[0]; flashG = c[1]; flashB = c[2];
         flashMix = (mix === undefined) ? 256 : mix;
@@ -219,7 +246,7 @@
             db = (db * u2 + flashB * fm) >> 8;
         }
         if (br2 !== 256) { dr = (dr * br2) >> 8; dg = (dg * br2) >> 8; db = (db * br2) >> 8; }
-        pal.lut[0xFF] = pack(dr, dg, db);
+        pal.lut[pal.BACKDROP] = pack(dr, dg, db);
         dirty = false;
     };
 
@@ -285,7 +312,7 @@
     pal.validate = function () {
         var bad = [];
         for (var i = 0; i < pal.cram.length; i++) {
-            if (pal.cram[i] > 7) bad.push(i);
+            if (pal.cram[i] > pal.MAX) bad.push(i);
         }
         return bad;
     };

@@ -88,13 +88,29 @@
     ring.camX = 0;
     ring.camTarget = 0;
 
-    // Screen position of a world point. No scaling -- the hardware has none,
-    // which is why a wrestler at the back of the ring is the same size as one
-    // at the front and depth is carried entirely by this vertical offset and
-    // the draw-order sort.
-    ring.screenX = function (x) { return px(x) - ring.camX + (core.VW >> 1); };
+    // Screen position of a world point. Still no per-sprite scaling -- the
+    // whole view is scaled by the same constant, so a wrestler at the back of
+    // the ring is the same size as one at the front and depth is carried
+    // entirely by the vertical offset and the draw-order sort.
+    //
+    // V converts logical pixels to screen pixels. camX is in SCREEN pixels,
+    // because it also drives the plane scroll registers.
+    var V = core.VIEW;
+
+    ring.screenX = function (x) { return px(x) * V - ring.camX + (core.VW >> 1); };
+
+    // World x to PLANE x. Not the same as screenX plus the camera: the art
+    // lays the arena around art.ORIGIN_X, not around the middle of the
+    // screen, and anything that writes cells under a world position -- blood
+    // on the canvas, a flexing rope -- has to go through here.
+    ring.planeX = function (x) {
+        return ((window.art && art.ORIGIN_X) || 1024) + px(x) * V;
+    };
+    ring.planeY = function (y, z, surface) {
+        return ring.screenY(y, z, surface);
+    };
     ring.screenY = function (y, z, surface) {
-        return A.HORIZON + ((px(y) * A.PERSP) >> 8) - px(z) + DROP[surface || 0];
+        return (A.HORIZON + ((px(y) * A.PERSP) >> 8) - px(z) + DROP[surface || 0]) * V;
     };
 
     ring.project = function (w) {
@@ -105,7 +121,7 @@
     // Depth key for the draw-order sort: the surface drop has to be in it or a
     // wrestler on the floor sorts as though he were on the mat.
     ring.depthKey = function (w) {
-        return ((px(w.y) * A.PERSP) >> 8) + DROP[w.surface || 0];
+        return (((px(w.y) * A.PERSP) >> 8) + DROP[w.surface || 0]) * V;
     };
 
     /* ------------------------------------------------------------- physics */
@@ -240,8 +256,8 @@
     // Pan horizontally to keep everyone framed, easing rather than snapping.
     // The clamp keeps the plane's wrap seam off screen; the arena is ~700px
     // wide inside a 1024px plane, so there is room either side.
-    var CAM_MIN = -(A.FLOOR_HX - (core.VW >> 1) + 20);
-    var CAM_MAX = (A.FLOOR_HX - (core.VW >> 1) + 20);
+    var CAM_MIN = -(A.FLOOR_HX * V - (core.VW >> 1) + 20 * V);
+    var CAM_MAX = (A.FLOOR_HX * V - (core.VW >> 1) + 20 * V);
 
     ring.resetCamera = function () { ring.camX = 0; ring.camTarget = 0; };
 
@@ -250,7 +266,7 @@
         for (var i = 0; i < list.length; i++) {
             var w = list[i];
             if (!w || w.out) continue;
-            var sxw = px(w.x);
+            var sxw = px(w.x) * V;
             if (sxw < lo) lo = sxw;
             if (sxw > hi) hi = sxw;
             n++;
@@ -288,7 +304,7 @@
         gfx.planeA.sx = sx;
         gfx.planeB.sx = sx;
         var hs = gfx.planeB.hs || gfx.enableLineScroll(gfx.planeB);
-        var crowdBottom = A.BARRICADE_Y + 8;
+        var crowdBottom = (A.BARRICADE_Y + 8) * V;
         for (var y = 0; y < core.VH; y++) {
             // The crowd parallaxes at half rate. Its offset is taken about the
             // same origin so the back wall stays behind the ring rather than

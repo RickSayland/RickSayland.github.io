@@ -119,7 +119,7 @@ console.log('SLWF check  (version ' + core.GAME_VERSION + ')\n');
 
 {
     pal.reset();
-    ok('palette reset leaves every channel on the 3-bit grid',
+    ok('palette reset leaves every channel on the colour grid',
         pal.validate().length === 0, pal.validate().join(','));
 
     // Quantization has to be idempotent, or a colour drifts each time it is
@@ -129,8 +129,8 @@ console.log('SLWF check  (version ' + core.GAME_VERSION + ')\n');
     const back = pal.get(0, 5);
     ok('quantized colour round trips', back.every((v, i) => v === c[i]));
 
-    const shaded = pal.shade([4, 4, 4], 128);
-    ok('shade stays on the grid', shaded.every(v => v >= 0 && v <= 7 && (v | 0) === v));
+    const shaded = pal.shade([16, 16, 16], 128);
+    ok('shade stays on the grid', shaded.every(v => v >= 0 && v <= pal.MAX && (v | 0) === v));
 
     for (let i = 0; i < roster.CHARS.length; i++) {
         roster.applyPalette(pal.P1, roster.CHARS[i]);
@@ -191,6 +191,35 @@ console.log('SLWF check  (version ' + core.GAME_VERSION + ')\n');
     ok('every pose frame is the right size and in range', oversize.length === 0,
         oversize.slice(0, 3).join('; '));
     ok('no pose frame is blank', empties.length === 0, empties.slice(0, 4).join(', '));
+
+    // Nothing standing may touch the top of its own box. The outline pass
+    // needs a free pixel all round, so a figure on row 0 is drawn with its
+    // silhouette shaved off -- which is how a super heavyweight with the wild
+    // hair shipped looking like he had a flat head.
+    //
+    // Checked on upright poses only: bottom = 47 is the feet anchor by
+    // design, and a body held horizontally overhead legitimately fills the
+    // full width of the frame.
+    const UPRIGHT = ['idle', 'walk', 'run', 'block', 'taunt', 'celebrate', 'entrance'];
+    const clipped = [];
+    for (const ch of roster.CHARS) {
+        for (const pose of UPRIGHT) {
+            if (!poses[pose]) continue;
+            for (const v of views) {
+                for (let f = 0; f < poses[pose]; f++) {
+                    const q = poser.render(ch.style, pose, v, f);
+                    let touches = false;
+                    for (let x = 0; x < poser.FW; x++) if (q[x]) { touches = true; break; }
+                    if (touches) {
+                        clipped.push(ch.name + ' ' + pose + '/' + v + '/' + f);
+                        break;
+                    }
+                }
+            }
+        }
+    }
+    ok('no standing pose is clipped by the top of its frame',
+        clipped.length === 0, clipped.slice(0, 4).join(', '));
 
     // Determinism: the same arguments must give the same pixels, or the tile
     // cache in gfx hands out stale frames.
@@ -359,7 +388,11 @@ console.log('SLWF check  (version ' + core.GAME_VERSION + ')\n');
 
     // Projection has to agree with the art, which is laid out from the same
     // constants. A mismatch here is a wrestler standing inside the apron.
-    eq('world y=0 projects to the horizon', ring.screenY(0, 0, ring.RING), A.HORIZON);
+    // core.ARENA is in LOGICAL pixels; screenY returns SCREEN pixels, so the
+    // horizon lands at HORIZON * core.VIEW. The two coordinate systems are the
+    // whole reason a resolution change did not touch the move table.
+    eq('world y=0 projects to the horizon',
+        ring.screenY(0, 0, ring.RING), A.HORIZON * core.VIEW);
     ok('the near edge projects below the far edge',
         ring.screenY(core.fp(A.RING_HY), 0, 0) > ring.screenY(-core.fp(A.RING_HY), 0, 0));
     ok('height moves a body up the screen',
@@ -386,12 +419,13 @@ console.log('SLWF check  (version ' + core.GAME_VERSION + ')\n');
     // The per-scanline budget is the one hardware limit a software renderer
     // silently ignores, so prove it is enforced rather than merely declared.
     gfx.beginFrame();
+    const tries = gfx.MAX_SPRITES + 60;
     let accepted = 0;
-    for (let i = 0; i < 140; i++) {
+    for (let i = 0; i < tries; i++) {
         if (gfx.sprite((i % 40) * 8, 100, 1, 0, 2, 2, 0)) accepted++;
     }
     eq('sprite list caps at MAX_SPRITES', accepted, gfx.MAX_SPRITES);
-    ok('the overflow is counted', gfx.spriteOverflow === 140 - gfx.MAX_SPRITES,
+    ok('the overflow is counted', gfx.spriteOverflow === tries - gfx.MAX_SPRITES,
         'overflow ' + gfx.spriteOverflow);
 
     gfx.budget();

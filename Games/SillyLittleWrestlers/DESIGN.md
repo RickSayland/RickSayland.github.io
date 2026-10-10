@@ -25,11 +25,23 @@ constraints, so almost every decision downstream is forced by them. Read the
 | Timestep | fixed 60 Hz logic, decoupled render | `core.clock` |
 | Positions | 8.8 fixed point integers | `core.FP`, all of `ring`/`wrestler` |
 
-**There is no sprite scaling.** The Genesis cannot scale a sprite, which is why
-WrestleFest's wrestlers are the same size at the back of the ring as the front —
+**There is no PER-SPRITE scaling.** The whole view is scaled by one constant,
+which is why wrestlers are the same size at the back of the ring as the front —
 depth is a vertical offset and a draw-order sort, nothing else. Do not add
-scaling to fake perspective; the ring floor trapezoid on plane B sells the angle
+per-sprite scaling to fake perspective; the ring floor trapezoid sells the angle
 on its own.
+
+**`core.VIEW` is the hinge of the whole resolution model.** The world — speeds,
+ranges, gravity, every hitbox in `moves.TABLE`, and all of `core.ARENA` — is in
+LOGICAL pixels and did not change when the screen went from 320x224 to 640x448.
+Only three things scale: projection (`ring.screenX/screenY/depthKey`), the art
+(`art.js` multiplies its authored sizes by `U`, or authors at 1x and doubles on
+upload), and the figure (`poser.SCALE`). Doubling the world instead would have
+invalidated two rounds of combat tuning for no benefit.
+
+`core.arenaScaled()` is the one conversion: `art.js` lays out in screen pixels
+and takes the scaled table, `ring.js` collides in logical ones and takes the
+raw one. Same numbers, two coordinate systems.
 
 **Priority is a real bit, not a layer hack.** Draw order is
 `planeB -> planeA(low) -> sprites(low) -> planeA(high) -> sprites(high) -> planeW`.
@@ -326,58 +338,52 @@ renderer, the pose list or the move table.
 
 ## Current state
 
-Everything in this document is built and running. `tools/check.mjs` passes 93
-checks, including a full CPU-vs-CPU match that replays identically from a seed.
-Matches between two hard CPUs finish by pinfall in about three to four minutes
-with near-falls; an easy pair can go ten with blood and a knockout.
+`tools/check.mjs` passes 94 checks, including a full CPU-vs-CPU match that
+replays identically from a seed. Hard CPUs finish by pinfall in about three to
+four minutes with near-falls; an easy pair can go ten with blood.
 
-### What the 0.2.0 polish pass changed, and why
+### 0.3.0 -- the 32-bit step up
 
-- **Input is buffered.** A press during hitstun or the tail of a move is
-  remembered for eight frames (fourteen for grapple) and fires the instant the
-  wrestler can act. Nothing else about the controls mattered as much: before
-  it, every input that landed a frame early was simply discarded.
-- **Grapple lunges.** Pressing grapple from just outside range steps you in
-  and the buffered press completes the tie-up when the gap closes, instead of
-  doing nothing at all.
-- **Strikes square up first.** The facing snaps to the opponent *before* the
-  direction is read, so "toward them" always means the same move.
-- **Double-tap a direction to run**, as well as holding C.
-- **Depth movement was a quarter of the horizontal rate on screen** and felt
-  like wading; `DEPTH_SCALE` went 150 → 210.
-- **Shadows.** Three sizes, picked by height off the ground, because the
-  hardware cannot scale a sprite and without one a jump and a step toward the
-  camera look identical. Drawn in the UI palette: the arena's only mid grey is
-  the tone the canvas weave uses, so an arena-palette shadow is invisible on
-  the surface it most needs to show up on.
-- **Eighteen of twenty-eight named effects did not exist**, and eleven of
-  sixteen named sounds did not either. `moves.js`, `art.js` and `audio.js` were
-  written against each other by string equality and nothing checked it, so
-  most hits landed silently and invisibly. Both files now carry an alias table
-  and the harness asserts every name resolves.
-- **Crowd pops** on a big move and a near-fall, via three palette entries.
-- A **white frame** on anything over 45 damage, a **shock ring** on every
-  knockdown, dust on landings and run starts, and sweat when a wrestler is
-  spent.
-- **The CPU knows to beat the count.** Two CPUs who spilled outside used to
-  brawl there until the referee counted them both out, which is a real finish
-  and a dreadful one to get every match.
-- **Going over the ropes requires pushing into them**, not merely sliding
-  along them, for a full 26 frames.
+Resolution 320x224 -> **640x448**, colour 3 -> **5 bits per channel**, palettes
+4 -> **32**, wrestlers 48x48 -> **96x96**.
+
+The resolution was never what limited detail. The Neo Geo ran its fighters at
+320x224 too; what it had was 256 palettes, 15-bit colour and characters twice
+this tall. Four palettes is why the character select could only ever show two
+wrestlers in colour and why a three-way had to share, and three bits a channel
+is why every skin ramp banded.
+
+Measured before committing to it: the renderer costs 0.43 ms a frame at
+320x224, so 640x448 projects to about 1.7 ms against a 16.7 ms budget. It
+holds 60 fps.
+
+Things that bit, and are worth not repeating:
+
+- **`gfx.js` kept its own `var VW = 320, VH = 224`.** Changing `core.VW` left
+  the renderer drawing a 320x224 framebuffer while everything else projected
+  into 640x448. It now takes both from `core`.
+- **Art authored in absolute pixels does not scale.** The apron lettering
+  overflowed a buffer that was still 96px wide, the lifted ring skirt drifted
+  back on top of the "S" because its offset was unscaled, and every face
+  marking came out half-weight because the trim radii were pixel counts. Face
+  markings are now fractions of the head, which is resolution-independent and
+  better anyway.
+- **The UI kept its 40x28 logical grid** and draws each logical cell as a 2x2
+  block with the double-size font, so several hundred layout coordinates did
+  not have to be renumbered and the text is the same size relative to the
+  screen as it was.
 
 ### Known rough edges, in the order they are worth looking at
 
-1. **The entrance is thin.** The wrestler walks in under player control and
-   their name and taunt appear; there is no per-character entrance animation
-   yet, and `char.entranceAnim` is carried through the roster but unused.
-2. **Stipulations past Exhibition and Hardcore are only partly exercised.**
-   Tables, Ladder, Cage, 3-Way and Rumble all start and run, but the table and
-   ladder props are scenery and nothing yet puts a wrestler *through* one.
-3. **The roster editor cannot really type a name.** It appends and deletes
-   characters rather than letting you pick each one, which is worse than the
-   console-era wheel it is imitating.
-4. **Blood is still rare** outside long matches. `BLEED_AT` is 340 in
-   `wrestler.js` against roughly 300 head damage in a three-minute match.
-5. **No rope flex.** A wrestler rebounding off the ropes gets a sound and a
-   velocity reversal but the ropes themselves do not move; doing it properly
-   means swapping tile content the way the crowd animation does.
+1. **The character select still shows two wrestlers in colour**, not nine.
+   Thirty-two palettes make the whole roster possible; the screen has not been
+   redesigned to use them yet. This is the biggest unclaimed payoff of the
+   palette work.
+2. **The figures are smoother, not more detailed.** The rasterizer is analytic
+   so 96x96 gave cleaner silhouettes and real shading for free, but the pose
+   tables and the costume model are the ones written for 48px. Hands, boot
+   detail, trunk trim and facial features are where the remaining quality is.
+3. **The entrance is thin** -- no per-character animation; `char.entranceAnim`
+   is carried but unused.
+4. **Tables and ladders are scenery.** Nothing puts a wrestler through one.
+5. **The roster editor cannot really type a name.**

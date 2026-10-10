@@ -20,6 +20,45 @@
 
     ui.BARW = 11;                    // health bar width in cells
 
+    /* ------------------------------------------------------- logical grid */
+
+    // Every screen in this file was laid out on a 40x28 grid, which is what
+    // 320x224 gives you at 8x8. The window plane is now 80x56, so rather than
+    // renumber several hundred coordinates, one logical cell is drawn as a
+    // 2x2 block with the double-size font. The layout numbers below are
+    // therefore the ones they always were, and the text is the same size
+    // relative to the screen as it was before the resolution doubled.
+    var LS = 2;                      // logical cells -> physical cells
+
+    function T(col, row, str, ink, pid) {
+        return F.bigText(W, col * LS, row * LS, str, ink, pid);
+    }
+    function TC(row, str, ink, pid) {
+        return F.bigCentred(W, row * LS, str, ink, pid);
+    }
+    function TR(colEnd, row, str, ink, pid) {
+        str = String(str);
+        return F.bigText(W, (colEnd - str.length) * LS, row * LS, str, ink, pid);
+    }
+    function H(col, row, str, ink, pid) {       // heading: 32x32 glyphs
+        return F.hugeText(W, col * LS, row * LS, str, ink, pid);
+    }
+    function HC(row, str, ink, pid) {
+        return F.hugeCentred(W, row * LS, str, ink, pid);
+    }
+    function CLR(col, row, w, h, pid) {
+        gfx.fillCells(W, col * LS, row * LS, w * LS, (h || 1) * LS, 0, pid || 0, 0);
+    }
+    // One logical cell as a 2x2 block of the same tile, for the bars.
+    function CELL(col, row, tile, pid, flags) {
+        for (var dy = 0; dy < LS; dy++) {
+            for (var dx = 0; dx < LS; dx++) {
+                gfx.cell(W, col * LS + dx, row * LS + dy, tile, pid, flags);
+            }
+        }
+    }
+
+
     /* ------------------------------------------------------------ bar tiles */
 
     // Nine fill levels per colour. Three colours because a bar that changes
@@ -57,7 +96,7 @@
         var filled = Math.round(frac * total);
         for (var c = 0; c < cells; c++) {
             var f = core.clamp(filled - c * 8, 0, 8);
-            gfx.cell(W, col + c, row, base + f, palId === undefined ? pal.UI : palId, 0);
+            CELL(col + c, row, base + f, palId === undefined ? pal.UI : palId, 0);
         }
     }
 
@@ -65,7 +104,7 @@
         var total = cells * 8, filled = Math.round(frac * total);
         for (var c = 0; c < cells; c++) {
             var f = core.clamp(filled - c * 8, 0, 8);
-            gfx.cell(W, col + c, row, BAR.spirit + f, pal.UI, 0);
+            CELL(col + c, row, BAR.spirit + f, pal.UI, 0);
         }
     }
 
@@ -88,32 +127,55 @@
 
     /* ---------------------------------------------------------------- title */
 
+    // The title screen is the arena, not a flat colour. The logo sits over
+    // the crowd and every line of text sits on the dark arena floor above or
+    // below the ring -- white text on a white canvas is unreadable, and the
+    // canvas occupies the middle third of the screen.
     ui.title = {
-        t: 0,
+        t: 0, a: 0, b: 1,
         enter: function () {
             this.t = 0;
-            ui.menuBackdrop('#000024');
+            // Two of the roster square up behind the logo. They change every
+            // time you come back to the title, which is free advertising for
+            // a roster the player has not met yet.
+            this.a = core.rnd(roster.CHARS.length);
+            this.b = core.rnd(roster.CHARS.length - 1);
+            if (this.b >= this.a) this.b++;
+            roster.applyPalette(pal.P1, roster.CHARS[this.a]);
+            roster.applyPalette(pal.P2, roster.CHARS[this.b]);
+            pal.setBackdrop('#000012');
+            if (window.art && art.buildArena) art.buildArena({});
+            ring.resetCamera();
+            ring.applyScroll();
             ui.clear();
             if (window.sound) sound.music('title');
         },
         update: function (ctx) {
             this.t++;
+            if (window.art && art.crowdFrame && (this.t % 10) === 0) {
+                art.crowdFrame((this.t / 10) | 0);
+            }
             if (core.anyStart()) { ctx.go('menu'); }
         },
         draw: function () {
             ui.clear();
             if (window.art && art.logo) {
-                art.logo(W, (40 - art.LOGO_W) >> 1, 3, pal.UI);
+                art.logo(W, (40 - art.LOGO_W) >> 1, 0, pal.UI);
             } else {
-                F.bigCentred(W, 4, 'SLWF', F.YELLOW);
+                HC(1, 'SLWF', F.YELLOW);
             }
-            F.textCentred(W, 11, 'SILLY LITTLE WRESTLING FEDERATION', F.CYAN);
+            TC(7, 'SILLY LITTLE WRESTLING FEDERATION', F.CYAN);
             // Flashing PRESS START, because of course.
-            if ((this.t >> 4) & 1) F.textCentred(W, 16, 'PRESS START', F.WHITE);
-            else F.clear(W, 0, 16, 40, 1);
-            F.textCentred(W, 20, 'ARROWS MOVE  Z STRIKE  X GRAPPLE  C RUN', F.GREY);
-            F.textCentred(W, 22, 'V TAUNT   B WEAPON   N FINISHER', F.GREY);
-            F.textRight(W, 39, 26, 'V' + core.GAME_VERSION, F.GREY);
+            if ((this.t >> 4) & 1) TC(23, 'PRESS START', F.WHITE);
+            else CLR(0, 23, 40, 1);
+            TC(25, 'ARROWS MOVE  Z STRIKE  X GRAPPLE  C RUN', F.GREY);
+            TC(26, 'V TAUNT   B WEAPON   N FINISHER', F.GREY);
+            TR(39, 27, 'V' + core.GAME_VERSION, F.GREY);
+
+            var f1 = ((this.t / 14) | 0) % 4;
+            var f2 = (((this.t + 28) / 14) | 0) % 4;
+            drawPreview(118, 140, roster.CHARS[this.a], pal.P1, false, 'idle', f1, 'side');
+            drawPreview(202, 140, roster.CHARS[this.b], pal.P2, true, 'idle', f2, 'side');
         }
     };
 
@@ -160,17 +222,17 @@
         },
         draw: function (ctx) {
             ui.clear();
-            F.bigCentred(W, 1, 'SLWF', F.YELLOW);
+            HC(1, 'SLWF', F.YELLOW);
             var stip = match.STIPS[ctx.stipIndex];
             for (var i = 0; i < MENU.length; i++) {
                 var row = 8 + i * 2;
                 var ink = (i === this.sel) ? F.YELLOW : F.WHITE;
-                F.text(W, 8, row, (i === this.sel ? '→' : ' ') + ' ' + MENU[i].label, ink);
-                if (MENU[i].id === 'stip') F.text(W, 24, row, stip.name, F.CYAN);
-                if (MENU[i].id === 'difficulty') F.text(W, 24, row, ctx.difficulty.toUpperCase(), F.CYAN);
+                T(8, row, (i === this.sel ? '→' : ' ') + ' ' + MENU[i].label, ink);
+                if (MENU[i].id === 'stip') T(24, row, stip.name, F.CYAN);
+                if (MENU[i].id === 'difficulty') T(24, row, ctx.difficulty.toUpperCase(), F.CYAN);
             }
-            F.textCentred(W, 20, stip.desc, F.GREY);
-            F.textCentred(W, 24, 'ENTER SELECT', F.GREY);
+            TC(20, stip.desc, F.GREY);
+            TC(24, 'ENTER SELECT', F.GREY);
         }
     };
 
@@ -215,10 +277,10 @@
         },
         draw: function (ctx) {
             ui.clear();
-            F.textCentred(W, 2, 'OPTIONS', F.YELLOW);
+            TC(2, 'OPTIONS', F.YELLOW);
             for (var i = 0; i < OPTS.length; i++) {
                 var row = 7 + i * 2, ink = (i === this.sel) ? F.YELLOW : F.WHITE;
-                F.text(W, 6, row, (i === this.sel ? '→' : ' ') + ' ' + OPTS[i].label, ink);
+                T(6, row, (i === this.sel ? '→' : ' ') + ' ' + OPTS[i].label, ink);
                 var v = '';
                 switch (OPTS[i].id) {
                     case 'bars': v = ctx.showBars ? 'ON' : 'OFF'; break;
@@ -227,10 +289,10 @@
                     case 'music': v = Math.round(ctx.musicVol * 5) + '/5'; break;
                     case 'sfx': v = Math.round(ctx.sfxVol * 5) + '/5'; break;
                 }
-                if (v) F.text(W, 28, row, v, F.CYAN);
+                if (v) T(28, row, v, F.CYAN);
             }
-            F.textCentred(W, 21, 'BARS OFF IS THE INTENDED WAY TO PLAY', F.GREY);
-            F.textCentred(W, 23, 'READ THE BODY AND WATCH THE CLOCK', F.GREY);
+            TC(21, 'BARS OFF IS THE INTENDED WAY TO PLAY', F.GREY);
+            TC(23, 'READ THE BODY AND WATCH THE CLOCK', F.GREY);
         }
     };
 
@@ -283,7 +345,7 @@
         },
         draw: function (ctx) {
             ui.clear();
-            F.textCentred(W, 0, this.p1 < 0 ? 'SELECT YOUR WRESTLER' : 'SELECT YOUR OPPONENT', F.YELLOW);
+            TC(0, this.p1 < 0 ? 'SELECT YOUR WRESTLER' : 'SELECT YOUR OPPONENT', F.YELLOW);
 
             // The grid: name plates, three across.
             for (var i = 0; i < roster.CHARS.length; i++) {
@@ -292,52 +354,60 @@
                 var ink = F.WHITE;
                 if (i === this.p1) ink = F.GREEN;
                 else if (i === this.cur) ink = ((this.t >> 3) & 1) ? F.YELLOW : F.ORANGE;
-                F.text(W, col, row, F.pad('', 12, ' '), ink);
-                F.text(W, col, row, c.name, ink);
+                T(col, row, F.pad('', 12, ' '), ink);
+                T(col, row, c.name, ink);
             }
 
             var sel = roster.CHARS[this.cur];
-            F.textCentred(W, 11, sel.nick || '', F.CYAN);
-            F.text(W, 2, 13, sel.wclass.toUpperCase(), F.WHITE);
-            F.textRight(W, 38, 13, sel.heightCm + 'CM ' + sel.weightKg + 'KG', F.WHITE);
+            TC(11, sel.nick || '', F.CYAN);
+            T(2, 13, sel.wclass.toUpperCase(), F.WHITE);
+            TR(38, 13, sel.heightCm + 'CM ' + sel.weightKg + 'KG', F.WHITE);
 
             // Stats as bars, which is the only place in the game bars are
             // unambiguously the right answer.
             var st = sel.stats, names = ['POW', 'SPD', 'STA', 'TEC'];
             var vals = [st.power, st.speed, st.stamina, st.technique];
             for (var s = 0; s < 4; s++) {
-                F.text(W, 2, 15 + s, names[s], F.GREY);
+                T(2, 15 + s, names[s], F.GREY);
                 drawBar(6, 15 + s, 10, vals[s] / 10);
-                F.text(W, 17, 15 + s, String(vals[s]), F.WHITE);
+                T(17, 15 + s, String(vals[s]), F.WHITE);
             }
-            F.text(W, 21, 15, 'SIG', F.GREY);
-            F.text(W, 25, 15, nameOf(sel.signature), F.CYAN);
-            F.text(W, 21, 16, 'FIN', F.GREY);
-            F.text(W, 25, 16, nameOf(sel.finisher), F.ORANGE);
-            F.text(W, 21, 18, sel.taunt || '', F.YELLOW);
+            T(19, 15, 'SIG', F.GREY);
+            T(23, 15, nameOf(sel.signature), F.CYAN);
+            T(19, 16, 'FIN', F.GREY);
+            T(23, 16, nameOf(sel.finisher), F.ORANGE);
+            T(19, 18, (sel.taunt || '').substring(0, 20), F.YELLOW);
 
-            F.textCentred(W, 26, this.p1 < 0 ? 'ENTER PICK' : 'ENTER PICK    X BACK', F.GREY);
+            TC(26, this.p1 < 0 ? 'ENTER PICK' : 'ENTER PICK    X BACK', F.GREY);
 
             // The two previews, in the only two palettes there are. Anchored
             // at the feet on the bottom row and kept out of the centre
             // columns, because the window plane draws over sprites and the
             // hint line lives there.
-            drawPreview(52, 216, this.p1 >= 0 ? roster.CHARS[this.p1] : sel, pal.P1, false);
-            drawPreview(268, 216, sel, pal.P2, true);
+            var fa = ((this.t / 14) | 0) % 4, fb = (((this.t + 28) / 14) | 0) % 4;
+            drawPreview(52, 216, this.p1 >= 0 ? roster.CHARS[this.p1] : sel,
+                pal.P1, false, 'idle', fa);
+            drawPreview(268, 216, sel, pal.P2, true, 'idle', fb);
         }
     };
 
     function nameOf(id) {
         var m = window.moves && moves.get ? moves.get(id) : null;
-        return m ? m.name.toUpperCase().substring(0, 13) : '?';
+        // Columns 25..39 of a 40-cell plane: fifteen, not thirteen. At 13
+        // the longer finishers lost their last letters ("BOARDROOM BOM").
+        // Columns 23..39 of a 40-cell plane: seventeen. The stat bars end
+        // at column 17, so this is all the room there is and the longest
+        // finisher name fits it exactly.
+        return m ? m.name.toUpperCase().substring(0, 17) : '?';
     }
 
-    function drawPreview(sx, sy, char, palId, flip, pose, frame) {
+    function drawPreview(sx, sy, char, palId, flip, pose, frame, view) {
         if (!window.poser || !char) return;
-        var rom = poser.rom(char.style, pose || 'idle', 'front', frame || 0);
+        var rom = poser.rom(char.style, pose || 'idle', view || 'front', frame || 0);
         if (!rom) return;
         var fr = gfx.stream(rom);
-        gfx.frame(sx, sy, fr, palId, flip, false);
+        // Call sites give 320x224-space coordinates, as they always have.
+        gfx.frame(sx * core.VIEW, sy * core.VIEW, fr, palId, flip, false);
     }
 
     /* ------------------------------------------------------------ VS screen */
@@ -360,18 +430,19 @@
             ui.clear();
             var a = roster.CHARS[ctx.picks[0]], b = roster.CHARS[ctx.picks[1]];
             var stip = match.STIPS[ctx.stipIndex];
-            F.textCentred(W, 1, stip.name, F.YELLOW);
-            F.bigText(W, 2, 4, a.name.substring(0, 8), F.WHITE);
-            F.text(W, 2, 7, a.nick || '', F.CYAN);
-            F.bigCentred(W, 11, 'VS', F.RED);
+            TC(1, stip.name, F.YELLOW);
+            H(2, 4, a.name.substring(0, 8), F.WHITE);
+            T(2, 7, a.nick || '', F.CYAN);
+            HC(11, 'VS', F.RED);
             var bn = b.name.substring(0, 8);
-            F.bigText(W, 38 - bn.length * 2, 16, bn, F.WHITE);
-            F.textRight(W, 38, 19, b.nick || '', F.CYAN);
-            if (((this.t >> 4) & 1)) F.textCentred(W, 25, 'PRESS START', F.GREY);
-            else F.clear(W, 0, 25, 40, 1);
+            H(38 - bn.length * 2, 16, bn, F.WHITE);
+            TR(38, 19, b.nick || '', F.CYAN);
+            if (((this.t >> 4) & 1)) TC(25, 'PRESS START', F.GREY);
+            else CLR(0, 25, 40, 1);
 
-            drawPreview(76, 190, a, pal.P1, false);
-            drawPreview(244, 190, b, pal.P2, true);
+            var va = ((this.t / 12) | 0) % 4, vb = (((this.t + 24) / 12) | 0) % 4;
+            drawPreview(76, 190, a, pal.P1, false, 'idle', va, 'side');
+            drawPreview(244, 190, b, pal.P2, true, 'idle', vb, 'side');
         }
     };
 
@@ -404,12 +475,12 @@
         draw: function (ctx) {
             ui.clear();
             var c = roster.CHARS[ctx.picks[0]];
-            F.bigText(W, 2, 2, c.name.substring(0, 9), F.YELLOW);
-            F.text(W, 2, 5, c.nick || '', F.CYAN);
-            F.text(W, 2, 7, c.heightCm + 'CM   ' + c.weightKg + 'KG', F.WHITE);
-            if (this.t > 50 && this.t < 170) F.text(W, 2, 9, '"' + c.taunt + '"', F.ORANGE);
-            else F.clear(W, 0, 9, 40, 1);
-            F.textCentred(W, 26, 'START TO SKIP', F.GREY);
+            H(2, 2, c.name.substring(0, 9), F.YELLOW);
+            T(2, 5, c.nick || '', F.CYAN);
+            T(2, 7, c.heightCm + 'CM   ' + c.weightKg + 'KG', F.WHITE);
+            if (this.t > 50 && this.t < 170) T(2, 9, '"' + c.taunt + '"', F.ORANGE);
+            else CLR(0, 9, 40, 1);
+            TC(26, 'START TO SKIP', F.GREY);
             match.draw();
         }
     };
@@ -422,8 +493,8 @@
         var a = list[0], b = list[1];
 
         // Name plates. Always on: you must be able to tell who is who.
-        if (a) F.text(W, 1, 1, a.name.substring(0, 12), a.eliminated ? F.GREY : F.WHITE);
-        if (b) F.textRight(W, 39, 1, b.name.substring(0, 12), b.eliminated ? F.GREY : F.WHITE);
+        if (a) T(1, 1, a.name.substring(0, 12), a.eliminated ? F.GREY : F.WHITE);
+        if (b) TR(39, 1, b.name.substring(0, 12), b.eliminated ? F.GREY : F.WHITE);
 
         if (ctx.showBars) {
             if (a) drawBar(1, 2, ui.BARW, a.hp / a.maxHp);
@@ -436,20 +507,20 @@
 
         // The clock. Counting up, always visible. With bars off this is the
         // only pacing information there is, which is the point.
-        F.textCentred(W, 1, core.timeStr(match.clock), F.YELLOW);
+        TC(1, core.timeStr(match.clock), F.YELLOW);
 
         // Extra wrestlers in a three-way or rumble get a compact line.
         for (var i = 2; i < list.length; i++) {
-            F.text(W, 14, 3 + (i - 2), list[i].name.substring(0, 10),
+            T(14, 3 + (i - 2), list[i].name.substring(0, 10),
                 list[i].eliminated ? F.GREY : F.CYAN);
         }
 
         // The referee's count, large and central.
         if (match.refCount > 0) {
-            F.bigCentred(W, 8, String(match.refCount), F.RED);
+            HC(8, String(match.refCount), F.RED);
         }
         if (match.outCount > 60) {
-            F.textCentred(W, 6, 'COUNT ' + ((match.outCount / 60) | 0), F.RED);
+            TC(6, 'COUNT ' + ((match.outCount / 60) | 0), F.RED);
         }
 
         // Move name flash: big, and it pulses for the first half-second so
@@ -457,12 +528,12 @@
         if (match.lastMoveTimer > 0 && match.lastMove) {
             var mink = (match.lastMoveTimer > 60 && ((match.lastMoveTimer >> 2) & 1))
                 ? F.WHITE : F.ORANGE;
-            F.bigCentred(W, 21, match.lastMove.toUpperCase().substring(0, 18), mink);
+            HC(21, match.lastMove.toUpperCase().substring(0, 18), mink);
         }
 
         // Announcements: rope breaks, eliminations, broken limbs.
         for (var k = 0; k < match.messages.length; k++) {
-            F.textCentred(W, 18 + k, match.messages[k].text, F.WHITE);
+            TC(18 + k, match.messages[k].text, F.WHITE);
         }
 
         // Injuries, shown only once they matter. A limp is the first warning;
@@ -473,7 +544,7 @@
         if (combat.tie.active) drawTieBar();
 
         if (match.phase === 'intro') {
-            F.bigCentred(W, 12, 'FIGHT', F.YELLOW);
+            HC(12, 'FIGHT', F.YELLOW);
         }
     };
 
@@ -482,11 +553,11 @@
         var parts = ['head', 'arm', 'leg', 'back'], label = ['HEAD', 'ARM', 'LEG', 'BACK'];
         for (var i = 0; i < 4; i++) {
             if (w.inj[parts[i]] > 600) {
-                F.text(W, col, row, label[i] + (w.inj[parts[i]] > 880 ? '!!' : '!'), F.RED);
+                T(col, row, label[i] + (w.inj[parts[i]] > 880 ? '!!' : '!'), F.RED);
                 return;
             }
         }
-        if (w.bleeding) F.text(W, col, row, 'BLEEDING', F.RED);
+        if (w.bleeding) T(col, row, 'BLEEDING', F.RED);
     }
 
     function drawSpirit(col, row, w) {
@@ -494,7 +565,7 @@
         var n = Math.min(3, (w.spirit / 334) | 0);
         var s = '';
         for (var i = 0; i < 3; i++) s += (i < n ? '*' : '-');
-        F.text(W, col, row, s, full ? (((core.clock.frames >> 2) & 1) ? F.YELLOW : F.WHITE) : F.CYAN);
+        T(col, row, s, full ? (((core.clock.frames >> 2) & 1) ? F.YELLOW : F.WHITE) : F.CYAN);
     }
 
     // The grapple contest. A bar with two zones and a sweeping cursor: the
@@ -517,31 +588,38 @@
             else if (inA) tile = BAR.green + 8;
             else if (inB) tile = BAR.red + 8;
             else tile = BAR.green + 0;
-            gfx.cell(W, col + c, row, tile, pal.UI, 0);
+            CELL(col + c, row, tile, pal.UI, 0);
         }
-        F.text(W, col - 1, row - 1, 'TIE UP', F.WHITE);
-        var cx = (col * 8) + ((t.cursor * cells * 8) >> 8);
-        gfx.sprite(cx - 4, row * 8 - 8, caretTile(false), pal.UI, 1, 1, 0);
-        gfx.sprite(cx - 4, row * 8 + 8, caretTile(true), pal.UI, 1, 1, 0);
+        T(col - 1, row - 1, 'TIE UP', F.WHITE);
+        // Logical pixels out, screen pixels in: the caret has to slide
+        // smoothly, so it is a sprite rather than a cell.
+        var V = core.VIEW;
+        var cx = ((col * 8) + ((t.cursor * cells * 8) >> 8)) * V;
+        gfx.frame(cx, (row * 8) * V, caretFrame(false), pal.UI, false, true);
+        gfx.frame(cx, (row * 8 + 8) * V, caretFrame(true), pal.UI, false, true);
     }
 
     // A caret, generated once: pointing down above the bar and up below it,
     // so the cursor brackets the track instead of covering it.
-    var caretUp = -1, caretDown = -1;
-    function caretTile(up) {
-        if (caretDown < 0) {
-            var a = new Uint8Array(64), b = new Uint8Array(64);
-            for (var y = 0; y < 5; y++) {
-                for (var x = 3 - y; x <= 4 + y; x++) {
-                    if (x < 0 || x > 7) continue;
-                    a[(4 - y) * 8 + x] = (y === 4) ? F.WHITE : F.YELLOW;
-                    b[(3 + y) * 8 + x] = (y === 4) ? F.WHITE : F.YELLOW;
+    var caretUpF = null, caretDownF = null;
+    function caretFrame(up) {
+        if (!caretDownF) {
+            var S = 8 * core.VIEW;                 // 16x16 at the new view
+            var a = new Uint8Array(S * S), b = new Uint8Array(S * S);
+            var half = S >> 1;
+            for (var y = 0; y < half + 1; y++) {
+                for (var x = half - 1 - y; x <= half + y; x++) {
+                    if (x < 0 || x >= S) continue;
+                    var edge = (y === half);
+                    a[(half - y) * S + x] = edge ? F.WHITE : F.YELLOW;
+                    b[(half - 1 + y) * S + x] = edge ? F.WHITE : F.YELLOW;
                 }
             }
-            caretDown = gfx.defineTiles(a, 1, 1);
-            caretUp = gfx.defineTiles(b, 1, 1);
+            caretDownF = gfx.romFrame(a, S >> 3, S >> 3, half, S - 1);
+            caretUpF = gfx.romFrame(b, S >> 3, S >> 3, half, 0);
         }
-        return up ? caretUp : caretDown;
+        var rom = up ? caretUpF : caretDownF;
+        return gfx.stream(rom);
     }
 
     /* ---------------------------------------------------------------- pause */
@@ -556,8 +634,8 @@
         },
         draw: function (ctx) {
             ui.drawHud(ctx);
-            F.bigCentred(W, 10, 'PAUSED', F.YELLOW);
-            F.textCentred(W, 14, 'START RESUME      X QUIT', F.WHITE);
+            HC(10, 'PAUSED', F.YELLOW);
+            TC(14, 'START RESUME      X QUIT', F.WHITE);
             match.draw();
         }
     };
@@ -588,32 +666,32 @@
         draw: function (ctx) {
             ui.clear();
             var r = match.result;
-            F.textCentred(W, 2, 'MATCH RESULT', F.GREY);
+            TC(2, 'MATCH RESULT', F.GREY);
             if (r && r.winner) {
-                F.bigCentred(W, 5, r.winner.name.substring(0, 9), F.YELLOW);
-                F.textCentred(W, 9, 'WINS ' + (HOW[r.how] || ''), F.WHITE);
+                HC(5, r.winner.name.substring(0, 9), F.YELLOW);
+                TC(9, 'WINS ' + (HOW[r.how] || ''), F.WHITE);
             } else {
-                F.bigCentred(W, 5, 'NO CONTEST', F.RED);
-                F.textCentred(W, 9, HOW[r ? r.how : ''] || '', F.WHITE);
+                HC(5, 'NO CONTEST', F.RED);
+                TC(9, HOW[r ? r.how : ''] || '', F.WHITE);
             }
-            F.textCentred(W, 12, 'TIME ' + (r ? r.clock : '00:00'), F.CYAN);
+            TC(12, 'TIME ' + (r ? r.clock : '00:00'), F.CYAN);
 
             if (r && r.loser && r.loser.broken) {
-                F.textCentred(W, 14, r.loser.name + ' WILL NOT BE WRESTLING', F.RED);
-                F.textCentred(W, 15, 'FOR A WHILE', F.RED);
+                TC(14, r.loser.name + ' WILL NOT BE WRESTLING', F.RED);
+                TC(15, 'FOR A WHILE', F.RED);
             }
 
             // What actually happened, in numbers. Fire Pro would approve.
             var a = match.wrestlers[0], b = match.wrestlers[1];
-            F.text(W, 2, 18, 'HEALTH', F.GREY);
-            if (a) { F.text(W, 10, 18, a.name.substring(0, 8), F.WHITE); drawBar(20, 18, 8, a.hp / a.maxHp); }
-            if (b) { F.text(W, 10, 19, b.name.substring(0, 8), F.WHITE); drawBar(20, 19, 8, b.hp / b.maxHp); }
-            F.text(W, 2, 21, 'STAMINA', F.GREY);
+            T(2, 18, 'HEALTH', F.GREY);
+            if (a) { T(10, 18, a.name.substring(0, 8), F.WHITE); drawBar(20, 18, 8, a.hp / a.maxHp); }
+            if (b) { T(10, 19, b.name.substring(0, 8), F.WHITE); drawBar(20, 19, 8, b.hp / b.maxHp); }
+            T(2, 21, 'STAMINA', F.GREY);
             if (a) drawBar(20, 21, 8, a.stam / a.maxStam);
             if (b) drawBar(20, 22, 8, b.stam / b.maxStam);
 
-            if (this.t > 60 && ((this.t >> 4) & 1)) F.textCentred(W, 25, 'PRESS START', F.GREY);
-            else F.clear(W, 0, 25, 40, 1);
+            if (this.t > 60 && ((this.t >> 4) & 1)) TC(25, 'PRESS START', F.GREY);
+            else CLR(0, 25, 40, 1);
 
             // Only the winner, and parked where the stats are not. Drawing
             // the whole match leaves both wrestlers wherever the final fall
@@ -655,7 +733,7 @@
             var c = roster.CHARS[this.idx], f = RFIELDS[this.field];
             switch (f) {
                 case 'name': cycleName(c, d, this); break;
-                case 'hair': c.style.hair = (c.style.hair + d + 8) % 8; break;
+                case 'hair': c.style.hair = (c.style.hair + d + 9) % 9; break;
                 case 'mask': c.style.mask = (c.style.mask + d + 4) % 4; break;
                 case 'beard': c.style.beard = (c.style.beard + d + 3) % 3; break;
                 case 'build':
@@ -675,19 +753,19 @@
         draw: function (ctx) {
             ui.clear();
             var c = roster.CHARS[this.idx];
-            F.textCentred(W, 0, 'ROSTER EDITOR', F.YELLOW);
-            F.text(W, 1, 2, (this.idx + 1) + '/' + roster.CHARS.length + '  ' + c.name, F.WHITE);
+            TC(0, 'ROSTER EDITOR', F.YELLOW);
+            T(1, 2, (this.idx + 1) + '/' + roster.CHARS.length + '  ' + c.name, F.WHITE);
             for (var i = 0; i < RFIELDS.length; i++) {
                 var row = 4 + i, f = RFIELDS[i];
                 var ink = (i === this.field) ? F.YELLOW : F.WHITE;
-                F.text(W, 1, row, (i === this.field ? '→' : ' ') + f.toUpperCase(), ink);
-                F.text(W, 13, row, String(fieldValue(c, f)).toUpperCase(), F.CYAN);
+                T(1, row, (i === this.field ? '→' : ' ') + f.toUpperCase(), ink);
+                T(13, row, String(fieldValue(c, f)).toUpperCase(), F.CYAN);
             }
-            F.text(W, 22, 4, 'B/C WRESTLER', F.GREY);
-            F.text(W, 22, 6, 'L/R CHANGE', F.GREY);
-            F.text(W, 22, 8, 'B RANDOMISE', F.GREY);
-            F.text(W, 22, 10, 'V RESET ALL', F.GREY);
-            F.text(W, 22, 12, 'START SAVE', F.GREY);
+            T(22, 4, 'B/C WRESTLER', F.GREY);
+            T(22, 6, 'L/R CHANGE', F.GREY);
+            T(22, 8, 'B RANDOMISE', F.GREY);
+            T(22, 10, 'V RESET ALL', F.GREY);
+            T(22, 12, 'START SAVE', F.GREY);
             drawPreview(230, 200, c, pal.P1, false);
         }
     };
@@ -735,10 +813,10 @@
     ui.loading = {
         draw: function (done, total, note) {
             ui.clear();
-            F.bigCentred(W, 10, 'SLWF', F.YELLOW);
-            F.textCentred(W, 14, note || 'GENERATING WRESTLERS', F.WHITE);
+            HC(10, 'SLWF', F.YELLOW);
+            TC(14, note || 'GENERATING WRESTLERS', F.WHITE);
             drawBar(10, 16, 20, total ? done / total : 0);
-            F.textCentred(W, 18, Math.round(total ? done * 100 / total : 0) + '%', F.CYAN);
+            TC(18, Math.round(total ? done * 100 / total : 0) + '%', F.CYAN);
         }
     };
 
