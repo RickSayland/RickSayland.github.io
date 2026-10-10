@@ -277,6 +277,17 @@
             var side = (i & 1) ? 1 : -1;
             var x = side * (70 + core.rnd(150));
             var y = (i & 2) ? nearY : -(core.ARENA.RING_HY + 30);
+            // In a Tables match the tables ARE the match, so they start on
+            // the mat where the wrestling is. Leaving them under the apron
+            // with everything else meant the CPU never found one and the
+            // stipulation played as an ordinary singles match.
+            // Tables start in the ring for a Tables match, but in the
+            // CORNERS. Dropped in the middle they sat exactly where the bell
+            // rings and the first knockdown of the match ended it.
+            if (pool[i] === 'table' && match.stip.tables) {
+                x = side * (core.ARENA.RING_HX - 58);
+                y = ((i & 2) ? 1 : -1) * (core.ARENA.RING_HY - 42);
+            }
             combat.spawnWeapon(pool[i], x, y);
         }
     }
@@ -296,6 +307,22 @@
     };
 
     match.onRefCount = function (n) { match.refCount = n; };
+
+    // Going through a table ends a Tables match on the spot, and is just a
+    // very bad time anywhere else.
+    match.onTableBreak = function (victim, breaker) {
+        if (!match.stip.tables) return;
+        var winner = breaker;
+        if (!winner) {
+            for (var i = 0; i < match.wrestlers.length; i++) {
+                if (match.wrestlers[i] !== victim && !match.wrestlers[i].eliminated) {
+                    winner = match.wrestlers[i];
+                    break;
+                }
+            }
+        }
+        match.onFall(winner, victim, 'table');
+    };
 
     match.onRopeBreak = function (vic) {
         match.say('ROPE BREAK!');

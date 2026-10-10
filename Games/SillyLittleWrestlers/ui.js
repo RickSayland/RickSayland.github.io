@@ -409,7 +409,7 @@
     };
 
     function nameOf(id) {
-        var m = window.moves && moves.get ? moves.get(id) : null;
+        var m = (window.moves && moves.has && moves.has(id)) ? moves.get(id) : null;
         // Columns 25..39 of a 40-cell plane: fifteen, not thirteen. At 13
         // the longer finishers lost their last letters ("BOARDROOM BOM").
         // Columns 22..39 of a 40-cell logical plane: eighteen.
@@ -660,6 +660,7 @@
     var HOW = {
         pinfall: 'BY PINFALL', submission: 'BY SUBMISSION',
         injury: 'BY REFEREE STOPPAGE', countout: 'DOUBLE COUNT OUT',
+        table: 'THROUGH THE TABLE',
         knockout: 'BY KNOCKOUT', elimination: 'LAST ONE STANDING'
     };
 
@@ -724,11 +725,24 @@
         'power', 'speed', 'stamina', 'technique'];
 
     ui.roster = {
-        idx: 0, field: 0, nameCur: 0,
-        enter: function () { ui.menuBackdrop('#001200'); ui.clear(); },
+        idx: 0, field: 0, nameCur: 0, editingName: false,
+        enter: function () {
+            ui.menuBackdrop('#001200'); ui.clear();
+            this.editingName = false;
+            this.refresh();
+        },
         update: function (ctx) {
             var p = core.pads[0], B = core.BTN;
+            // Name entry takes over the pad entirely while it is open, which
+            // is the only way a d-pad can spell anything.
+            if (this.editingName) { this.editName(p, B); return; }
             if (p.just[B.START]) { roster.save(); ctx.go('menu'); return; }
+            if (p.just[B.A] && RFIELDS[this.field] === 'name') {
+                this.editingName = true;
+                this.nameCur = 0;
+                select();
+                return;
+            }
             if (p.just[B.D]) { this.field = (this.field + 1) % RFIELDS.length; beep(); }
             if (p.just[B.U]) { this.field = (this.field + RFIELDS.length - 1) % RFIELDS.length; beep(); }
             if (p.just[B.C]) { this.idx = (this.idx + 1) % roster.CHARS.length; beep(); this.refresh(); }
@@ -744,10 +758,57 @@
             var d = (p.just[B.R] ? 1 : 0) - (p.just[B.L] ? 1 : 0);
             if (d) { this.edit(d); this.refresh(); beep(); }
         },
+        /* Spell a name with a d-pad. Left and right walk a cursor along the
+           letters -- one position past the end, so you can append -- and up
+           and down turn the wheel at that position. C deletes. This is how
+           every console did it, and it is strictly better than the
+           append-or-truncate it replaces. */
+        editName: function (p, B) {
+            var c = roster.CHARS[this.idx];
+            var cs = F.CHARSET, i;
+
+            if (p.just[B.A] || p.just[B.START] || p.just[B.B]) {
+                // A name is a name plate: trim it, and never let it be empty.
+                c.name = c.name.replace(/\s+$/, '').substring(0, 12) || 'A';
+                if (this.nameCur > c.name.length) this.nameCur = c.name.length;
+                this.editingName = false;
+                select();
+                return;
+            }
+            if (p.just[B.R]) {
+                this.nameCur = Math.min(Math.min(11, c.name.length), this.nameCur + 1);
+                beep();
+            }
+            if (p.just[B.L]) { this.nameCur = Math.max(0, this.nameCur - 1); beep(); }
+            if (p.just[B.C] && c.name.length > 1 && this.nameCur < c.name.length) {
+                c.name = c.name.substring(0, this.nameCur) +
+                    c.name.substring(this.nameCur + 1);
+                if (this.nameCur >= c.name.length) this.nameCur = c.name.length - 1;
+                beep();
+            }
+            var step = (p.just[B.U] ? 1 : 0) - (p.just[B.D] ? 1 : 0);
+            if (step) {
+                var at = this.nameCur;
+                var ch = at < c.name.length ? c.name.charAt(at) : cs.charAt(0);
+                i = cs.indexOf(ch);
+                if (i < 0) i = 0;
+                i = (i + step + cs.length) % cs.length;
+                if (at < c.name.length) {
+                    c.name = c.name.substring(0, at) + cs.charAt(i) +
+                        c.name.substring(at + 1);
+                } else if (c.name.length < 12) {
+                    c.name = c.name + cs.charAt(i);
+                }
+                beep();
+            }
+        },
+
         edit: function (d) {
             var c = roster.CHARS[this.idx], f = RFIELDS[this.field];
             switch (f) {
-                case 'name': cycleName(c, d, this); break;
+                // Left/right on the name row opens the editor too, so the
+                // field behaves like every other one as well as taking A.
+                case 'name': this.editingName = true; this.nameCur = 0; break;
                 case 'hair': c.style.hair = (c.style.hair + d + 9) % 9; break;
                 case 'mask': c.style.mask = (c.style.mask + d + 4) % 4; break;
                 case 'beard': c.style.beard = (c.style.beard + d + 3) % 3; break;
@@ -769,7 +830,23 @@
             ui.clear();
             var c = roster.CHARS[this.idx];
             TC(0, 'ROSTER EDITOR', F.YELLOW);
-            T(1, 2, (this.idx + 1) + '/' + roster.CHARS.length + '  ' + c.name, F.WHITE);
+            T(1, 2, (this.idx + 1) + '/' + roster.CHARS.length + '  ' + c.name,
+                this.editingName ? F.YELLOW : F.WHITE);
+
+            // While spelling, show the name big with the cursor under it and
+            // swap the help line for the keys that actually do something.
+            if (this.editingName) {
+                var nm = c.name;
+                var nx = (40 - nm.length * 2) >> 1;
+                if (nx < 0) nx = 0;
+                H(nx, 18, nm, F.WHITE);
+                if ((core.clock.frames >> 2) & 1) {
+                    CELL(nx + this.nameCur * 2, 20, BAR.yellow + 8, pal.UI, 0);
+                    CELL(nx + this.nameCur * 2 + 1, 20, BAR.yellow + 8, pal.UI, 0);
+                }
+                TC(23, 'UP DOWN LETTER    LEFT RIGHT MOVE', F.GREY);
+                TC(25, 'C DELETE       ENTER DONE', F.GREY);
+            }
             for (var i = 0; i < RFIELDS.length; i++) {
                 var row = 4 + i, f = RFIELDS[i];
                 var ink = (i === this.field) ? F.YELLOW : F.WHITE;
@@ -781,7 +858,10 @@
             T(22, 8, 'B RANDOMISE', F.GREY);
             T(22, 10, 'V RESET ALL', F.GREY);
             T(22, 12, 'START SAVE', F.GREY);
-            drawPreview(230, 200, c, pal.P1, false);
+            // Up and right, clear of both the big name and the help lines
+            // the name editor puts along the bottom.
+            drawPreview(292, 172, c, pal.P1, false, 'idle',
+                ((core.clock.frames / 14) | 0) % 4);
         }
     };
 
@@ -798,19 +878,6 @@
             case 'accent': return c.colors.accent;
             default: return c.stats[f];
         }
-    }
-
-    // Name editing without a keyboard: step the last character through the
-    // charset, which is how every console of the era did it.
-    function cycleName(c, d, st) {
-        var cs = F.CHARSET;
-        var n = c.name;
-        if (d > 0 && n.length < 12) {
-            c.name = n + 'A';
-        } else if (d < 0 && n.length > 1) {
-            c.name = n.substring(0, n.length - 1);
-        }
-        st.nameCur = c.name.length - 1;
     }
 
     var PRESETS = ['#ffdbb6', '#db9249', '#924924', '#492400', '#ffffff', '#db0000',

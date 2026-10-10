@@ -457,7 +457,12 @@
                     w.vy = core.toward(w.vy, 0, T.STOP << 1);
                 }
                 advanceMovePose(w);
-                if (w.moveFrame >= moves.total(w.moveId)) {
+                // 'executing' is also used as a plain "busy for N frames"
+                // state with no move at all -- picking a weapon up, standing
+                // a table on its legs. moves.total(null) throws, so the state
+                // timer is the fallback duration.
+                var dur = w.moveId ? moves.total(w.moveId) : w.stTimer;
+                if (w.moveFrame >= dur) {
                     w.move = null; w.moveId = null;
                     wrestlers.setState(w, 'idle');
                     wrestlers.setPose(w, 'idle', true);
@@ -616,6 +621,12 @@
             }
         }
 
+        // Running or being whipped into a standing table goes through it.
+        if ((w.st === 'whipped' || w.st === 'running') &&
+            window.combat && window.match) {
+            combat.checkTableBreak(w, match);
+        }
+
         if (!ev.rope) w.pushRope = 0;
         if (w.exiting > 0 && --w.exiting === 0 && w.ropeMode === 'through') {
             w.ropeMode = 'block';
@@ -626,6 +637,9 @@
                 wrestlers.setState(w, 'down', 0);
                 w.downTimer = wrestlers.downFor(w);
                 w.mashCount = 0;
+                // Anything that puts a body on the mat might be putting it
+                // through a table instead.
+                if (window.combat && window.match) combat.checkTableBreak(w, match);
                 wrestlers.setPose(w, core.chance(0.5) ? 'downBack' : 'downFace', true);
                 if (window.sound) sound.sfx('bodyDrop');
                 if (window.combat) combat.spawnFx('slamDust', w.x, w.y, w.z, w.surface);

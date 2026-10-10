@@ -62,7 +62,16 @@
         DIVE_MISS_DMG: 55,
         DIVE_MISS_STUN: 70,
 
-        TACK_DMG: 40
+        TACK_DMG: 40,
+
+        TABLE_SETUP_FRAMES: 26,   // how long setting one up leaves you open
+        // You have to land ON it, not beside it. At 26 a wrestler roughly
+        // 20px wide broke a table by falling over anywhere near it, and a
+        // Tables match could end in three seconds.
+        TABLE_RADIUS: 19,
+        TABLE_RUN_SPEED: 420,     // 8.8/frame: fast enough to go through one
+        TABLE_DMG: 90,            // going through one, on top of the move
+        TABLE_STUN: 150
     };
 
     /* ------------------------------------------------------------- hurtboxes */
@@ -519,6 +528,11 @@
     };
 
     combat.executeHold = function (holder, moveId) {
+        // moves.get throws on an unknown id -- that is deliberate, it catches
+        // typos in the tables loudly -- so anything that might legitimately
+        // have no move has to ask first. moves.pick returns null for an
+        // unfilled slot.
+        if (!moveId || !moves.has(moveId)) return;
         var mv = moves.get(moveId);
         var victim = holder.hold;
         if (!mv || !victim) return;
@@ -587,6 +601,7 @@
     /* ------------------------------------------------------------- the dive */
 
     combat.launchDive = function (w, moveId) {
+        if (!moveId || !moves.has(moveId)) return;
         var mv = moves.get(moveId);
         if (!mv) return;
         w.onTop = false;
@@ -704,6 +719,7 @@
     combat.startSubmission = function (atk, vic, moveId) {
         var s = combat.sub;
         if (s.active) return;
+        if (!moveId || !moves.has(moveId)) return;
         var mv = moves.get(moveId);
         if (!mv) return;
         s.active = true; s.atk = atk; s.vic = vic; s.mv = mv;
@@ -803,7 +819,11 @@
         var wp = {
             id: id, x: fp(x), y: fp(y), z: 0, vx: 0, vy: 0, vz: 0,
             state: 'ground', mult: def.mult || 256, dmg: def.dmg || 0,
-            part: def.part || 'head', breakable: !!def.breakable, held: null,
+            part: def.part || 'head', breakable: !!def.breakable,
+            // Stood up rather than carried. Without copying this through
+            // from the art metadata every table was picked up and swung like
+            // a chair, and a Tables match could not be won.
+            setup: !!def.setup, held: null,
             surface: ring.surfaceAt(fp(x), fp(y))
         };
         combat.weapons.push(wp);
@@ -818,12 +838,27 @@
             if (wp.state !== 'ground') continue;
             var dx = px(wp.x - w.x), dy = px(wp.y - w.y);
             if (dx * dx + dy * dy * 4 > 22 * 22) continue;
+
+            // A table is not a thing you carry, it is a thing you stand up
+            // and then put somebody through. Same button, different verb.
+            if (wp.setup) {
+                wp.state = 'setup';
+                wrestlers.setState(w, 'executing', C.TABLE_SETUP_FRAMES);
+                wrestlers.setPose(w, 'grabWeapon', true);
+                w.move = null; w.moveId = null;
+                if (window.sound) sound.sfx('woosh');
+                if (window.match) match.say('TABLE SET UP');
+                return true;
+            }
+
             wp.state = 'held'; wp.held = w; w.weapon = wp;
+            // There is no 'weaponPickup' entry in the move table, so this is
+            // a pose and a timer rather than a move. It used to call
+            // moves.get() on the id and take the whole frame down the first
+            // time anybody actually picked something up.
             wrestlers.setState(w, 'executing', 20);
             wrestlers.setPose(w, 'grabWeapon', true);
-            w.move = moves.get('weaponPickup') || null;
-            w.moveId = w.move ? 'weaponPickup' : null;
-            if (!w.move) { wrestlers.setState(w, 'idle'); wrestlers.setPose(w, 'idle', true); }
+            w.move = null; w.moveId = null;
             if (window.sound) sound.sfx('metalClang');
             return true;
         }
@@ -832,7 +867,7 @@
 
     combat.swingWeapon = function (w) {
         var id = (w.weapon && w.weapon.id === 'chair') ? 'chairShot' : 'weaponSwing';
-        if (!moves.get(id)) id = 'weaponSwing';
+        if (!moves.has(id)) id = 'weaponSwing';
         wrestlers.startMove(w, id);
     };
 
@@ -861,11 +896,70 @@
         if (!window.art || !art.weaponRom) return;
         for (var i = 0; i < combat.weapons.length; i++) {
             var wp = combat.weapons[i];
-            if (wp.state !== 'ground') continue;
-            var rom = art.weaponRom(wp.id, 'ground');
+            if (wp.state !== 'ground' && wp.state !== 'setup' &&
+                wp.state !== 'broken') continue;
+            var rom = art.weaponRom(wp.id, wp.state);
             if (!rom) continue;
             var fr = gfx.stream(rom);
             gfx.frame(ring.screenX(wp.x), ring.screenY(wp.y, wp.z, wp.surface), fr, pal.UI, false, false);
+        }
+    };
+
+    /* --------------------------------------------------------------- tables */
+
+    /* The two ways through a table, and only these two:
+
+         - a knockdown landing on it, which is a slam or a dive
+         - running or being whipped into it at speed
+
+       Walking into one does nothing, which is the whole distinction. Being
+       whipped into a table is the ordinary way a wrestling match uses one,
+       and without it the CPU could stand tables up all day and never win
+       the stipulation. */
+    combat.checkTableBreak = function (w, m) {
+        if (w.z > fp(10)) return false;
+        var dropped = (w.st === 'falling' || w.st === 'down');
+        var fast = (w.st === 'whipped' || w.st === 'running') &&
+            (core.abs(w.vx) + core.abs(w.vy) >= C.TABLE_RUN_SPEED);
+        if (!dropped && !fast) return false;
+        for (var i = 0; i < combat.weapons.length; i++) {
+            var wp = combat.weapons[i];
+            if (wp.state !== 'setup') continue;
+            var dx = px(wp.x - w.x), dy = px(wp.y - w.y);
+            // Depth counts double, as everywhere else: the camera compresses
+            // y, so a table that looks adjacent is further away than it reads.
+            if (dx * dx + dy * dy * 4 > C.TABLE_RADIUS * C.TABLE_RADIUS) continue;
+            combat.breakTable(wp, w, m);
+            return true;
+        }
+        return false;
+    };
+
+    combat.breakTable = function (wp, victim, m) {
+        wp.state = 'broken';
+        wp.x = victim.x; wp.y = victim.y;
+        victim.hp -= C.TABLE_DMG;
+        if (victim.hp < 0) victim.hp = 0;
+        victim.inj.back = Math.min(C.BREAK_AT, victim.inj.back + 220);
+        victim.downTimer = Math.max(victim.downTimer, C.TABLE_STUN);
+        // However they arrived, they are on the floor now.
+        victim.vx = 0; victim.vy = 0; victim.vz = 0;
+        if (victim.st !== 'down') {
+            wrestlers.setState(victim, 'down', 0);
+            wrestlers.setPose(victim, 'downBack', true);
+        }
+
+        core.freeze(16);
+        core.shake(5, 22);
+        pal.flash(8, [31, 31, 26], 190);
+        combat.spawnFx('slamDust', victim.x, victim.y, 0, victim.surface);
+        combat.spawnFx('impactL', victim.x, victim.y, fp(14), victim.surface);
+        if (window.sound) { sound.sfx('tableBreak'); sound.sfx('crowdPop'); }
+
+        if (m) {
+            m.crowdPop(40);
+            m.say('THROUGH THE TABLE');
+            m.onTableBreak(victim, victim.lastHitBy || null);
         }
     };
 

@@ -36,6 +36,9 @@
         }
     };
 
+    // Match seconds before the CPU will go and set a table up.
+    var TABLE_PATIENCE = 60 * 70;
+
     ai.difficulty = 'normal';
 
     ai.attach = function (w, level) {
@@ -97,6 +100,27 @@
 
         if (w.weapon) { a.state = d < 38 ? 'weaponHit' : 'approach'; return; }
 
+        // Weapons. In a Tables match, standing a table up is most of the
+        // plan rather than an occasional flourish, so it gets its own chance
+        // and ignores whether a weapon is already carried.
+        //
+        // Not in the opening minute, though. Nobody goes to the gimmick
+        // before they have had a wrestling match, and when the CPU did, a
+        // Tables match was over inside twenty seconds.
+        if (m && m.stip.tables && combat.weapons.length &&
+            m.clock > TABLE_PATIENCE) {
+            var standing = 0, flat = 0;
+            for (var wi = 0; wi < combat.weapons.length; wi++) {
+                var cw = combat.weapons[wi];
+                if (cw.id !== 'table') continue;
+                if (cw.state === 'setup') standing++;
+                else if (cw.state === 'ground') flat++;
+            }
+            if (standing === 0 && flat > 0 && core.chance(0.14)) {
+                a.state = 'getWeapon';
+                return;
+            }
+        }
         if (m && m.stip.weapons && !w.weapon && core.chance(0.08) && combat.weapons.length) {
             a.state = 'getWeapon'; return;
         }
@@ -156,6 +180,15 @@
         if (w.hold) {
             if (a.delay > 0) { a.delay--; return; }
             if (w.spirit >= 1000) { i.Z = 1; return; }
+            // A table is standing: whip them into it. This is the one piece
+            // of stipulation-specific intent the CPU has, and without it it
+            // could set tables up all match and never win on one.
+            var tbl = (m && m.clock > TABLE_PATIENCE) ? standingTable() : null;
+            if (tbl && core.chance(0.26)) {
+                moveDir(i, core.dirFromVec(tbl.x - w.x, tbl.y - w.y));
+                i.C = 1;
+                return;
+            }
             if (core.chance(p.whip)) { i.C = 1; return; }
             // Bias toward forward and back, the two big slots.
             var r = core.rndf();
@@ -281,7 +314,7 @@
                 break;
 
             case 'getWeapon':
-                var wp = nearestWeapon(w);
+                var wp = nearestWeapon(w, m);
                 if (!wp) { a.state = 'approach'; break; }
                 var wd = Math.abs(px(wp.x - w.x)) + Math.abs(px(wp.y - w.y));
                 if (wd > 18) moveDir(i, core.dirFromVec(wp.x - w.x, wp.y - w.y));
@@ -316,14 +349,39 @@
         i.dy = v[1] > 60 ? 1 : (v[1] < -60 ? -1 : 0);
     }
 
-    function nearestWeapon(w) {
-        var best = null, bd = 1e9;
+    function standingTable() {
+        for (var i = 0; i < combat.weapons.length; i++) {
+            var wp = combat.weapons[i];
+            if (wp.id === 'table' && wp.state === 'setup') return wp;
+        }
+        return null;
+    }
+
+    /* In a Tables match a table outranks anything else, however far away --
+       otherwise the CPU picks up whichever chair happens to be nearest and
+       never gets round to the one thing the stipulation is about.
+
+       But only after TABLE_PATIENCE. The generic weapon urge fires at 8% a
+       decision regardless of stipulation, and while THAT path still preferred
+       tables the CPU went straight for one off the bell and the match was
+       over in ten seconds -- the patience gate on the other path bought
+       nothing at all. Before the gate opens, tables are invisible. */
+    function nearestWeapon(w, m) {
+        var tablesMatch = !!(m && m.stip.tables);
+        var wantTable = tablesMatch && m.clock > TABLE_PATIENCE;
+        var hideTables = tablesMatch && !wantTable;
+        var best = null, bd = 1e9, bestIsTable = false;
         for (var k = 0; k < combat.weapons.length; k++) {
             var wp = combat.weapons[k];
             if (wp.state !== 'ground') continue;
+            var isTable = (wp.id === 'table');
+            if (isTable && hideTables) continue;
+            if (wantTable && bestIsTable && !isTable) continue;
             var dx = px(wp.x - w.x), dy = px(wp.y - w.y);
             var dd = dx * dx + dy * dy;
-            if (dd < bd) { bd = dd; best = wp; }
+            if ((wantTable && isTable && !bestIsTable) || dd < bd) {
+                bd = dd; best = wp; bestIsTable = isTable;
+            }
         }
         return best;
     }

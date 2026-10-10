@@ -1457,7 +1457,7 @@
         },
         table: {
             w: 4, h: 3, ax: 16, ay: 23, mult: 360, part: 'back',
-            breakable: true, draw: wTable
+            breakable: true, setup: true, draw: wTable
         },
         ladder: {
             w: 2, h: 6, ax: 8, ay: 47, mult: 380, part: 'head',
@@ -1584,6 +1584,21 @@
             hline(p, w, h, 1, w - 2, h - 1, UI_BLACK);
             return;
         }
+        if (state === 'setup') {
+            // Standing on its legs, seen from the ring's camera angle: the
+            // top face is a shallow parallelogram so it reads as a surface
+            // somebody can be driven down onto rather than a plank.
+            var ty = h - 14;
+            rect(p, w, h, 0, ty, w, 5, UI_WOOD);
+            hline(p, w, h, 0, w - 1, ty, UI_ORANGE);
+            hline(p, w, h, 0, w - 1, ty + 4, UI_BLACK);
+            rect(p, w, h, 1, ty + 5, 2, 9, UI_DARK);
+            rect(p, w, h, w - 3, ty + 5, 2, 9, UI_DARK);
+            rect(p, w, h, 4, ty + 5, 1, 8, UI_BLACK);
+            rect(p, w, h, w - 5, ty + 5, 1, 8, UI_BLACK);
+            hline(p, w, h, 0, w - 1, h - 1, UI_BLACK);
+            return;
+        }
         var top = state === 'ground' ? h - 12 : 1;
         rect(p, w, h, 0, top, w, 4, UI_WOOD);          // top
         hline(p, w, h, 0, w - 1, top, UI_ORANGE);
@@ -1623,6 +1638,7 @@
             var d = WEAPON_DEFS[id];
             var pw = d.w * 8, ph = d.h * 8;
             var states = d.breakable ? ['ground', 'held', 'broken'] : ['ground', 'held'];
+            if (d.setup) states = states.concat(['setup']);
             var set = Object.create(null);
             for (var i = 0; i < states.length; i++) {
                 var p = buf(pw, ph);
@@ -1633,7 +1649,8 @@
             weaponRoms[id] = set;
             art.WEAPONS[id] = {
                 id: id, mult: d.mult, part: d.part,
-                breakable: !!d.breakable, w: d.w * U, h: d.h * U, pal: pal.UI
+                breakable: !!d.breakable, setup: !!d.setup,
+                w: d.w * U, h: d.h * U, pal: pal.UI
             };
         }
     }

@@ -392,16 +392,62 @@ The helper that makes those possible is `band()`: it draws across a limb
 *perpendicular to that limb's axis*, so a waistband stays square to the body
 when the pose is rotated instead of sliding off a suplexed wrestler.
 
+### 0.3.2 -- tables, names, and three crashes
+
+**Tables work.** The weapon button stands one up instead of picking it up (a
+table is not something you carry), and there are exactly two ways through
+one: a knockdown landing on it, or being run or whipped into it at speed.
+Walking into a standing table does nothing, which is the whole distinction.
+In a Tables match that is the finish.
+
+Getting the pacing right took three passes and the harness caught every
+mistake:
+
+- Tables spawned in the middle of the ring, where the bell rings, and the
+  first knockdown of the match ended it. They start in the corners now.
+- `TABLE_RADIUS` was 26px against a wrestler about 20px wide, so falling over
+  anywhere near a table broke it. It is 19.
+- `ai.TABLE_PATIENCE` keeps the CPU away from the gimmick for the first
+  seventy seconds. Gating only the *dedicated* table behaviour bought
+  nothing, because the generic 8%-per-decision weapon urge still preferred
+  tables and went straight for one off the bell; `nearestWeapon` now hides
+  tables entirely until the gate opens.
+
+The CPU also whips a held opponent into a standing table, which is the one
+piece of stipulation-specific intent it has. Without it the CPU would stand
+tables up all match and never win on one. Tables matches now run 1:29-3:04
+with most ending through a table and some not.
+
+**A real name editor.** Left and right walk a cursor along the letters, up
+and down turn the wheel at that position, C deletes, Enter is done -- the way
+every console did it, and strictly better than the append-or-truncate it
+replaces.
+
+**Three crashes, all the same mistake.** `moves.get()` throws on an unknown
+id, which is correct -- it catches typos in the tables loudly -- but five
+call sites treated it as returning null. `weaponPickup` and `chairShot` do
+not exist in the move table at all, so the game went down the first time
+anybody picked up a weapon. And `executing` doubles as a plain "busy for N
+frames" state with no move, where `moves.total(null)` threw. Every one of
+those sites now asks `moves.has()` first, and the harness checks that
+hardcoded move-id literals resolve.
+
+A fourth, quieter one: `combat.spawnWeapon` copied `breakable` from the art
+metadata but not `setup`, so every table was picked up and swung like a chair
+and the stipulation could not be won. The harness test had set the state by
+hand and sailed straight past it -- it now drives the real path, spawn to
+button press.
+
 ### Known rough edges, in the order they are worth looking at
 
-1. **The entrance is thin** -- no per-character animation; `char.entranceAnim`
+1. **Ladders are still scenery.** Tables work; ladders have no climb, nothing
+   hanging above the ring and no win condition.
+2. **The entrance is thin** -- no per-character animation; `char.entranceAnim`
    is carried through the roster but unused.
-2. **Tables and ladders are scenery.** Nothing puts a wrestler through one,
-   which is most of the point of those two stipulations.
-3. **The roster editor cannot really type a name.** It appends and deletes
-   characters rather than letting you pick each one.
-4. **The pose tables are still the ones authored for 48px.** The detail added
+3. **The pose tables are still the ones authored for 48px.** The detail added
    in 0.3.1 is costume and shading; the *poses themselves* -- how far a leg
    extends in a suplex, where a hand lands in a hold -- have the resolution
    they always had.
-5. **Blood is rare** outside long matches (`BLEED_AT` in `wrestler.js`).
+4. **Blood is rare** outside long matches (`BLEED_AT` in `wrestler.js`).
+5. **Cage and Royal Rumble are thin.** Both run, but the cage has no climbing
+   escape and the rumble no timed entrances.

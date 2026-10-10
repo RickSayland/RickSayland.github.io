@@ -262,6 +262,16 @@ console.log('SLWF check  (version ' + core.GAME_VERSION + ')\n');
     ok('a finisher can be interrupted (startup >= 16)', slowEnough);
     ok('finishers actually finish (dmg >= 100)', weakest >= 100, 'weakest ' + weakest);
 
+    // Move ids written as string literals in the game code, rather than
+    // looked up through moves.pick. These are invisible to every other check
+    // and moves.get throws on a bad one, so a stale literal is a crash the
+    // first time that code path runs -- which for 'weaponPickup' was the
+    // first time anybody picked up a weapon.
+    const HARDCODED = ['irishWhip', 'weaponSwing'];
+    const missingLiteral = HARDCODED.filter(id => !moves.has(id));
+    ok('every hardcoded move id exists', missingLiteral.length === 0,
+        missingLiteral.join(', '));
+
     // Every slot of every set must resolve for every character, or a direction
     // the player can hold does nothing and feels like a dropped input.
     let unresolved = [];
@@ -482,6 +492,80 @@ console.log('SLWF check  (version ' + core.GAME_VERSION + ')\n');
     ok('and it takes a moment, not instantly', frames > 20, frames + ' frames');
 }
 
+/* ------------------------------------------------- busy without a move */
+
+{
+    // 'executing' doubles as a plain busy state with no entry in the move
+    // table -- picking a weapon up, standing a table on its legs. It has to
+    // end on its own timer, because moves.total(null) throws and took the
+    // frame down the first time anybody picked anything up.
+    match.start({
+        chars: [roster.CHARS[0], roster.CHARS[1]],
+        cpu: [false, false], pads: [0, -1],
+        stip: match.STIPS.find(x => x.id === 'tables'),
+        difficulty: 'normal', showBars: false, seed: 31
+    });
+    const w = match.wrestlers[0];
+    wrestlers.clearIntent(w);
+    wrestlers.setState(w, 'executing', 20);
+    wrestlers.setPose(w, 'grabWeapon', true);
+    w.move = null; w.moveId = null;
+
+    let threw = null, frames = 0;
+    try {
+        for (; frames < 120 && w.st === 'executing'; frames++) wrestlers.update(w);
+    } catch (e) { threw = e.message; }
+    ok('a move-less busy state does not throw', !threw, threw || '');
+    ok('and it ends on its own timer', w.st !== 'executing',
+        'still executing after ' + frames + ' frames');
+
+    // The whole table mechanic, end to end -- and through the REAL path:
+    // spawn, walk up, press the button. Setting the state by hand is what
+    // let a missing `setup` flag survive, because every table was being
+    // picked up and swung like a chair instead.
+    combat.clearWeapons();
+    const tbl = combat.spawnWeapon('table', 0, 20);
+    ok('a table knows it is stood up, not carried', tbl.setup === true);
+    ok('standing-table art exists', !!art.weaponRom('table', 'setup'));
+
+    const setter = match.wrestlers[0];
+    wrestlers.reset(setter, 0, 20, core.DIR.R);
+    ok('pressing the weapon button on a table takes', combat.tryPickUp(setter));
+    eq('and stands it up rather than picking it up', tbl.state, 'setup');
+    ok('so nobody is left carrying a table', !setter.weapon);
+
+    const vic = match.wrestlers[1];
+    wrestlers.reset(vic, 0, 20, core.DIR.R);
+    wrestlers.setState(vic, 'walking');
+    for (let i = 0; i < 20; i++) wrestlers.update(vic);
+    eq('walking past a table leaves it standing', tbl.state, 'setup');
+
+    const hp0 = vic.hp;
+    vic.z = core.fp(26); vic.vz = -160;
+    vic.lastHitBy = match.wrestlers[0];
+    wrestlers.setState(vic, 'falling');
+    for (let i = 0; i < 90 && tbl.state === 'setup'; i++) wrestlers.update(vic);
+    eq('a body dropped on one goes through it', tbl.state, 'broken');
+    ok('and it hurts', hp0 - vic.hp >= 50, 'lost ' + (hp0 - vic.hp));
+
+    // The other way through: whipped into it at speed. This is how a match
+    // is actually won on the stipulation, so it needs its own check.
+    combat.clearWeapons();
+    const tbl2 = combat.spawnWeapon('table', 40, 10);
+    tbl2.state = 'setup';
+    wrestlers.reset(vic, -10, 10, core.DIR.R);
+    wrestlers.setState(vic, 'whipped', 60);
+    vic.vx = core.fp(4); vic.ropeMode = 'bounce';
+    let hit = false;
+    for (let i = 0; i < 60 && !hit; i++) {
+        vic.vx = core.fp(4);
+        wrestlers.update(vic);
+        hit = (tbl2.state === 'broken');
+    }
+    ok('being whipped into a standing table goes through it', hit,
+        'table still ' + tbl2.state);
+}
+
 /* ------------------------------------------------------------ input buffer */
 
 {
@@ -515,6 +599,48 @@ console.log('SLWF check  (version ' + core.GAME_VERSION + ')\n');
     w.in.C = 1; wrestlers.bufferIntent(w); w.in.C = 0;
     ok('grapple is buffered longer than the other buttons', bLife > w.buf.C,
         'B ' + bLife + ' vs C ' + w.buf.C);
+}
+
+/* ------------------------------------------------------- a tables match */
+
+{
+    // A Tables match has to be a match. The first build dropped the tables
+    // in the middle of the ring, where the bell rings, and finished in three
+    // seconds.
+    function tablesRun(seed) {
+        ai.difficulty = 'hard';
+        match.start({
+            chars: [roster.CHARS[0], roster.CHARS[4]],
+            cpu: [true, true], pads: [-1, -1],
+            stip: match.STIPS.find(x => x.id === 'tables'),
+            difficulty: 'hard', showBars: false, seed
+        });
+        let stood = 0;
+        for (let i = 0; i < 60000 && !match.result; i++) {
+            gfx.beginFrame();
+            match.update();
+            const n = combat.weapons.filter(w => w.id === 'table' && w.state === 'setup').length;
+            if (n > stood) stood = n;
+        }
+        return { clock: match.clock, how: match.result && match.result.how, stood };
+    }
+
+    // Six seeds and a median, not three and a minimum. The first version of
+    // this check passed on lucky seeds while real matches ended in ten
+    // seconds: one quick finish is legitimate wrestling, six are a bug.
+    const runs = [5, 77, 913, 2024, 6, 451].map(tablesRun);
+    const times = runs.map(r => r.clock).sort((a, b) => a - b);
+    const median = times[times.length >> 1];
+    ok('a tables match is paced like a match', median > 60 * 60,
+        'median ' + core.timeStr(median) + ' (' +
+        runs.map(r => core.timeStr(r.clock) + '/' + r.how).join(' ') + ')');
+    ok('and none is over before the bell stops ringing', times[0] > 60 * 25,
+        'quickest ' + core.timeStr(times[0]));
+    ok('the CPU does stand tables up', runs.some(r => r.stood > 0),
+        runs.map(r => r.stood).join(','));
+    ok('and at least one is won through a table',
+        runs.some(r => r.how === 'table'),
+        runs.map(r => r.how).join(','));
 }
 
 /* ------------------------------------------------------------ a whole match */
