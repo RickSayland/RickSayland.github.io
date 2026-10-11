@@ -101,6 +101,20 @@
             return;
         }
 
+        /* The cage. A third way out alongside the pinfall and the
+           submission, and the right moment for it is while the other one is
+           on the mat -- going up with them on their feet just hands them a
+           free shot at your legs. */
+        if (m && m.stip.cage && opp && !combat.isClimbing(w)) {
+            if (combat.isClimbing(opp)) {
+                if (core.chance(0.8)) { a.state = 'stopClimb'; return; }
+            } else if (wrestlers.isDown(opp) && opp.downTimer > 40 &&
+                core.chance(0.45)) {
+                a.state = 'climbCage';
+                return;
+            }
+        }
+
         /* The stipulation's own weapon. Standing a table or a ladder up is
            most of the plan rather than an occasional flourish, so it gets its
            own chance and ignores whether a weapon is already carried.
@@ -124,7 +138,7 @@
             // A ladder match is won up the ladder and nowhere else, so once
             // one is standing the CPU either climbs it or stops whoever is.
             if (gid === 'ladder' && standing > 0) {
-                if (opp && (opp.st === 'onLadder' || opp.st === 'climbLadder')) {
+                if (opp && combat.isClimbing(opp)) {
                     // Not every time. Two CPUs that always intercept each
                     // other produce a stalemate where neither ever reaches
                     // the top and the match runs forever.
@@ -189,6 +203,9 @@
             }
             return;
         }
+        // Straddling the cage: nothing to do but not get pulled off.
+        if (w.st === 'onCage' || w.st === 'climbCage') return;
+
         // At the top: hold on and pull. This is the whole of the CPU's
         // ladder-match endgame.
         if (w.st === 'onLadder') {
@@ -266,6 +283,22 @@
                 moveDir(i, (toward + 2 * a.circleDir + 8) & 7);
                 if (core.chance(0.02)) a.circleDir = -a.circleDir;
                 break;
+
+            case 'climbCage': {
+                // Head for whichever wall is closest and start climbing.
+                if (w.surface !== ring.RING) { moveDir(i, core.dirFromVec(-w.x, -w.y)); break; }
+                if (ring.atRopes(w.x, w.y)) { i.C = 1; break; }
+                var hx = ring.halfWidth(w.y);
+                var dLeft = px(w.x + hx), dRight = px(hx - w.x);
+                var dNear = px(core.fp(core.ARENA.RING_HY) - w.y);
+                var dFar = px(w.y + core.fp(core.ARENA.RING_HY));
+                var best = Math.min(dLeft, dRight, dNear, dFar);
+                if (best === dLeft) i.dx = -1;
+                else if (best === dRight) i.dx = 1;
+                else if (best === dNear) i.dy = 1;
+                else i.dy = -1;
+                break;
+            }
 
             case 'climbLadder': {
                 var lad = combat.standingLadder();

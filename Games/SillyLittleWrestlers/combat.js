@@ -79,6 +79,14 @@
         // one has a chance to get there, short enough to be finishable: at
         // 160 nobody ever completed it because any hit at all resets you.
         GRAB_FRAMES: 95,
+
+        // Shared with art.js, which draws the wall's top rail at this
+        // height. One number, two consumers -- the same reason the rest of
+        // the arena geometry lives in core.ARENA.
+        CAGE_H: core.ARENA.CAGE_H,
+        CAGE_CLIMB: 88,           // frames to get up it -- slower than a
+        // ladder, it is a long way and you are using your fingers
+        CAGE_OVER: 80,            // frames straddling the top before you drop
         TABLE_RUN_SPEED: 420,     // 8.8/frame: fast enough to go through one
         TABLE_DMG: 90,            // going through one, on top of the move
         TABLE_STUN: 150
@@ -265,6 +273,30 @@
             return;
         }
 
+        // ---- climb the cage. Any point along the ropes will do, which is
+        // what makes it different from the turnbuckle climb below: you go
+        // over the wall wherever you happen to be against it.
+        if (bC && ring.cage && w.surface === ring.RING) {
+            var side = ring.atRopes(w.x, w.y);
+            if (side) {
+                K(w, 'C');
+                w.cageSide = side;
+                w.vx = 0; w.vy = 0;
+                wrestlers.setState(w, 'climbCage', C.CAGE_CLIMB);
+                wrestlers.setPose(w, 'climb', true);
+                if (window.sound) sound.sfx('metalClang');
+                if (m) m.say(w.name + ' IS CLIMBING');
+                return;
+            }
+        }
+
+        // ---- straddling the top of the cage: the drop is automatic, but
+        // you can think better of it and come back down.
+        if (w.st === 'onCage') {
+            if (i.dy > 0 || bC) { combat.leaveCage(w); }
+            return;
+        }
+
         // ---- climb a standing ladder. Checked before the turnbuckle, so
         // a ladder propped in the corner is a ladder and not a turnbuckle.
         if (bC) {
@@ -369,7 +401,7 @@
                 // the table -- they are forty-six pixels up. Hitting the
                 // ladder from its foot counts, which is how a climber gets
                 // stopped and the only reason climbing is a risk.
-                var onLadder = (vic.st === 'onLadder' || vic.st === 'climbLadder');
+                var onLadder = combat.isClimbing(vic);
                 if (onLadder) {
                     if (ring.reach(atk, vic) > C.LADDER_FOOT + 12) continue;
                 } else if (!overlap(hb, combat.hurtbox(vic))) {
@@ -989,6 +1021,21 @@
             if (wp.id === 'ladder' && wp.state === 'setup') return wp;
         }
         return null;
+    };
+
+    // Climbed back down the inside. No shame in it.
+    combat.leaveCage = function (w) {
+        w.escape = 0;
+        w.z = 0;
+        wrestlers.setState(w, 'idle');
+        wrestlers.setPose(w, 'idle', true);
+    };
+
+    // True while a wrestler is anywhere off the ground on a ladder or a
+    // cage wall -- the states that any hit at all knocks you out of.
+    combat.isClimbing = function (w) {
+        return w.st === 'onLadder' || w.st === 'climbLadder' ||
+            w.st === 'onCage' || w.st === 'climbCage';
     };
 
     combat.leaveLadder = function (w) {

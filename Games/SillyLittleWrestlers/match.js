@@ -352,6 +352,30 @@
         match.finish(w, loser, 'ladder');
     };
 
+    // Over the wall and down to the floor. A legal finish in a cage match
+    // alongside the pinfall and the submission, which is why pins are not
+    // blocked here the way they are in a ladder match.
+    match.onCageEscape = function (w) {
+        if (match.result) return;
+        var loser = null;
+        for (var i = 0; i < match.wrestlers.length; i++) {
+            if (match.wrestlers[i] !== w) { loser = match.wrestlers[i]; break; }
+        }
+        // Put them on the floor outside, which is where they now are.
+        var side = w.cageSide || 3;
+        var hx = ring.halfWidth(w.y);
+        if (side === 2) w.x = hx + core.fp(40);
+        else if (side === 4) w.x = -hx - core.fp(40);
+        else if (side === 1) w.y = -core.fp(core.ARENA.RING_HY + 40);
+        else w.y = core.fp(core.ARENA.RING_HY + 40);
+        w.z = 0;
+        w.surface = ring.FLOOR;
+        match.crowdPop(40);
+        if (window.sound) sound.sfx('crowdPop');
+        match.say('OVER THE TOP AND OUT');
+        match.finish(w, loser, 'escape');
+    };
+
     match.onRopeBreak = function (vic) {
         match.say('ROPE BREAK!');
     };

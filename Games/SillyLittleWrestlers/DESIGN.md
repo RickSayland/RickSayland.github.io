@@ -478,6 +478,34 @@ found by watching the simulation rather than reading the code:
 Ladder matches now run 1:31-1:58 and all end on the briefcase, with
 knock-offs producing real back-and-forth (one test run had ten).
 
+### 0.3.4 -- the cage match
+
+C anywhere along the ropes starts a climb; `CAGE_CLIMB` frames later you are
+straddling the top, and `CAGE_OVER` frames after that you drop to the floor
+and win. The drop is on a timer rather than a button, because the player's
+job up there is not to get pulled off -- that is the whole drama of a cage
+escape. Press down to think better of it and climb back in.
+
+Unlike a ladder match, **the pin is not blocked**: a cage match has three
+legal finishes and escape is only one of them. The CPU goes for the wall when
+the other one is on the mat and `downTimer` says they will stay there, and
+interrupts a climber with the same `stopClimb` behaviour the ladder uses --
+`combat.isClimbing` now covers both, including the special case that lets a
+strike at the foot of the wall reach somebody seventy pixels up.
+
+**The cage was rendering perfectly and was invisible.** Its mesh was drawn in
+`CSHADOW`, which is a near-white grey, over a white canvas: a third of the
+pixels in the ring were wire and you could not see one of them. The tell was
+that the framebuffer showed 80 mesh pixels per scanline while the screen
+showed none. It is `FLOOR_M` now, and there are two walls at two densities --
+the far one dense and behind the wrestlers, the near one sparse and in front,
+because a dense mesh between the camera and the match is unreadable.
+
+`core.ARENA.CAGE_H` is shared geometry for the same reason the rest of the
+arena is: `combat` climbs to that height and `art` draws the wall's top rail
+at it. Before the rail existed a wrestler at the top of the cage was standing
+on nothing.
+
 ### Known rough edges, in the order they are worth looking at
 
 1. **The entrance is thin** -- no per-character animation; `char.entranceAnim`
@@ -486,9 +514,24 @@ knock-offs producing real back-and-forth (one test run had ten).
    in 0.3.1 is costume and shading; the *poses themselves* -- how far a leg
    extends in a suplex, where a hand lands in a hold -- have the resolution
    they always had.
-3. **Cage and Royal Rumble are thin.** Both run, but the cage has no climbing
-   escape (the ladder's climb machinery would transfer almost directly) and
-   the rumble has no timed entrances.
-4. **Blood is rare** outside long matches (`BLEED_AT` in `wrestler.js`).
-5. **Ladder matches are samey in length**, because the CPU starts going for
+3. **The Royal Rumble has no timed entrances.** Everyone starts in the ring
+   and it is over in about a minute.
+4. **The cage has no side walls drawn.** The near and far walls are there;
+   the left and right are implied by the posts.
+5. **Blood is rare** outside long matches (`BLEED_AT` in `wrestler.js`).
+6. **Ladder matches are samey in length**, because the CPU starts going for
    the ladder the moment `ai.TABLE_PATIENCE` expires and wins shortly after.
+
+### Stipulation status
+
+All seven run to a finish. A representative sweep:
+
+| stipulation | finish | time |
+|---|---|---|
+| Exhibition | pinfall | 3:45 |
+| Hardcore | pinfall | 2:28 |
+| Tables | pinfall *(table in ~7 of 8)* | 1:59 |
+| Ladder | **ladder** *(always)* | 2:03 |
+| Cage | pinfall *(escape in ~3 of 4)* | 4:40 |
+| 3-Way Dance | pinfall | 3:12 |
+| Royal Rumble | elimination | 0:52 |

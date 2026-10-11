@@ -563,6 +563,16 @@
         for (var g = 0; g < list.length; g++) {
             if (list[g].grab > 0) { grabber = list[g]; break; }
         }
+        // Somebody is straddling the top of the cage.
+        var escaper = null;
+        for (var e = 0; e < list.length; e++) {
+            if (list[e].st === 'onCage') { escaper = list[e]; break; }
+        }
+        if (escaper) {
+            TC(23, escaper.name + ' IS GOING OVER', F.YELLOW);
+            drawBar(10, 24, 20, escaper.escape / combat.TUNE.CAGE_OVER);
+        }
+
         if (grabber) {
             // Rows 23-24, on the dark floor below the apron: rows 18-20 are
             // the announcement lines and this collided with them. Nothing
@@ -675,6 +685,7 @@
         pinfall: 'BY PINFALL', submission: 'BY SUBMISSION',
         injury: 'BY REFEREE STOPPAGE', countout: 'DOUBLE COUNT OUT',
         table: 'THROUGH THE TABLE', ladder: 'BY RETRIEVAL',
+        escape: 'BY ESCAPING THE CAGE',
         knockout: 'BY KNOCKOUT', elimination: 'LAST ONE STANDING'
     };
 

@@ -16,7 +16,7 @@
 
     /* ---------------------------------------------------------------- version */
 
-    core.GAME_VERSION = '0.3.3';
+    core.GAME_VERSION = '0.3.4';
 
     /* ------------------------------------------------------- screen geometry */
 
@@ -55,6 +55,7 @@
         // per side: the whole of the ring's perspective
 
         ROPE_Z: [12, 24, 36],   // the three rope heights
+        CAGE_H: 72,       // height of the cage wall, when there is one
         POST_H: 46,       // post height above the canvas
         APRON_H: 20,      // blue apron band below the near canvas edge
 

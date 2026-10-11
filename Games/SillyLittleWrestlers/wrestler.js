@@ -124,6 +124,7 @@
             onTop: false, onApron: false,
             stun: 0, invuln: 0, downTimer: 0, mashCount: 0,
             rebound: 0, lastRope: 0, pushRope: 0, exiting: 0, grab: 0,
+            escape: 0, cageSide: 0,
             tieCd: 0, pinCd: 0,
             weapon: null,
             out: false, eliminated: false, dead: false,
@@ -177,7 +178,8 @@
         w.hold = w.heldBy = w.partner = null; w.holdSide = null;
         w.onTop = w.onApron = false;
         w.stun = w.invuln = w.downTimer = w.mashCount = 0;
-        w.rebound = 0; w.weapon = null; w.grab = 0;
+        w.rebound = 0; w.weapon = null; w.grab = 0; w.escape = 0;
+        w.cageSide = 0;
         w.pushRope = 0; w.exiting = 0; w.tieCd = 0; w.pinCd = 0;
         w.buf.A = w.buf.B = w.buf.C = w.buf.X = w.buf.Y = w.buf.Z = 0;
         w.tapDir = -1; w.tapAge = 0; w.heldDir = -1; w.dashRun = 0; w.sweatTick = 0;
@@ -354,14 +356,17 @@
 
         // Anything at all knocks you off a ladder, whatever the move's own
         // knockdown value. Being up there is the risk.
-        if (w.st === 'onLadder' || w.st === 'climbLadder') {
-            w.grab = 0;
+        if (combat.isClimbing(w)) {
+            w.grab = 0; w.escape = 0;
             w.vx = (from ? (core.sign(px(w.x - from.x)) || 1) : 1) * T.KNOCK_VX;
             w.vy = 0;
             w.vz = 40;
             wrestlers.setState(w, 'falling');
             wrestlers.setPose(w, 'knockdown', true);
-            if (window.match) match.say('OFF THE LADDER');
+            if (window.match) {
+                match.say(w.st === 'onCage' || w.st === 'climbCage'
+                    ? 'OFF THE CAGE' : 'OFF THE LADDER');
+            }
             if (window.sound) sound.sfx('crowdGasp');
             core.shake(3, 10);
             return true;
@@ -522,6 +527,33 @@
                     wrestlers.setState(w, 'idle');
                     wrestlers.setPose(w, 'idle', true);
                     w.invuln = T.GETUP_INVULN;
+                }
+                break;
+
+            case 'climbCage':
+                w.vx = w.vy = 0;
+                w.stTimer--;
+                var gt = 1 - (w.stTimer / combat.TUNE.CAGE_CLIMB);
+                w.z = fp(Math.round(combat.TUNE.CAGE_H * core.clamp(gt, 0, 1)));
+                wrestlers.setPose(w, 'climb');
+                if (w.stTimer <= 0) {
+                    w.z = fp(combat.TUNE.CAGE_H);
+                    w.escape = 0;
+                    wrestlers.setState(w, 'onCage');
+                    wrestlers.setPose(w, 'turnbuckleTop', true);
+                }
+                break;
+
+            case 'onCage':
+                // Straddling the top. The drop is on a timer rather than a
+                // button: the player's job up here is to not get pulled off,
+                // which is the whole drama of a cage escape.
+                w.vx = w.vy = w.vz = 0;
+                w.z = fp(combat.TUNE.CAGE_H);
+                w.escape = (w.escape || 0) + 1;
+                if (w.escape >= combat.TUNE.CAGE_OVER) {
+                    w.escape = 0;
+                    if (window.match) match.onCageEscape(w);
                 }
                 break;
 

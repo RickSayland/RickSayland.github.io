@@ -657,6 +657,99 @@ console.log('SLWF check  (version ' + core.GAME_VERSION + ')\n');
         runs.map(r => r.how).join(','));
 }
 
+/* --------------------------------------------------------- a cage match */
+
+{
+    // A cage match has three legal finishes -- pin, submission and escape --
+    // so unlike a ladder match the pin is NOT blocked. What has to be true
+    // is that the wall is climbable, that going over it wins, and that being
+    // hit up there puts you back on the mat.
+    function cageRun(seed) {
+        ai.difficulty = 'hard';
+        match.start({
+            chars: [roster.CHARS[0], roster.CHARS[4]],
+            cpu: [true, true], pads: [-1, -1],
+            stip: match.STIPS.find(x => x.id === 'cage'),
+            difficulty: 'hard', showBars: false, seed
+        });
+        let onWall = 0;
+        for (let i = 0; i < 100000 && !match.result; i++) {
+            gfx.beginFrame();
+            match.update();
+            for (const w of match.wrestlers) {
+                if (w.st === 'onCage' || w.st === 'climbCage') onWall++;
+            }
+        }
+        return { clock: match.clock, how: match.result && match.result.how, onWall };
+    }
+
+    const cruns = [9, 123, 8080].map(cageRun);
+    ok('every cage match finishes', cruns.every(r => r.how),
+        cruns.map(r => r.how || 'UNFINISHED').join(' '));
+    ok('the CPU tries the wall', cruns.some(r => r.onWall > 60),
+        cruns.map(r => r.onWall).join(','));
+    ok('and a cage match can be won by escaping',
+        cruns.some(r => r.how === 'escape'),
+        cruns.map(r => r.how).join(' '));
+    // ...but not ONLY by escaping: a pin is still legal in there.
+    ok('a pin is still legal in a cage', (function () {
+        match.start({
+            chars: [roster.CHARS[0], roster.CHARS[1]],
+            cpu: [false, false], pads: [0, -1],
+            stip: match.STIPS.find(x => x.id === 'cage'),
+            difficulty: 'normal', showBars: false, seed: 4
+        });
+        const t = match.wrestlers[0], b = match.wrestlers[1];
+        wrestlers.reset(b, 0, 20, core.DIR.L);
+        wrestlers.setState(b, 'down', 0); b.downTimer = 600;
+        wrestlers.reset(t, 0, 20, core.DIR.R);
+        combat.startPin(t, b);
+        return combat.pin.active;
+    })());
+
+    // Climbing, and being knocked off it.
+    match.start({
+        chars: [roster.CHARS[0], roster.CHARS[1]],
+        cpu: [false, false], pads: [0, -1],
+        stip: match.STIPS.find(x => x.id === 'cage'),
+        difficulty: 'normal', showBars: false, seed: 8
+    });
+    const cw = match.wrestlers[0];
+    wrestlers.reset(cw, 0, 20, core.DIR.R);
+    wrestlers.setState(cw, 'onCage');
+    cw.z = core.fp(core.ARENA.CAGE_H);
+    cw.escape = 0;
+    ok('the wall and the climb agree about its height',
+        combat.TUNE.CAGE_H === core.ARENA.CAGE_H);
+
+    let went = 0;
+    for (let i = 0; i < combat.TUNE.CAGE_OVER + 20 && !match.result; i++) {
+        wrestlers.update(cw);
+        went++;
+    }
+    eq('straddling the top long enough wins it', match.result && match.result.how, 'escape');
+    ok('and it takes the time it says it does',
+        went >= combat.TUNE.CAGE_OVER - 2, went + ' frames');
+
+    // Any hit at all, whatever its knockdown value, puts you back inside.
+    match.start({
+        chars: [roster.CHARS[0], roster.CHARS[1]],
+        cpu: [false, false], pads: [0, -1],
+        stip: match.STIPS.find(x => x.id === 'cage'),
+        difficulty: 'normal', showBars: false, seed: 12
+    });
+    const climber = match.wrestlers[0], shover = match.wrestlers[1];
+    wrestlers.reset(climber, 0, 20, core.DIR.R);
+    wrestlers.setState(climber, 'onCage');
+    climber.z = core.fp(core.ARENA.CAGE_H);
+    climber.escape = 40;
+    // knock: 0 -- the weakest possible result in the whole move table.
+    wrestlers.hurt(climber, 2, 6, 0, 'head', shover);
+    eq('the lightest possible hit still takes you off the wall',
+        climber.st, 'falling');
+    eq('and the escape progress is gone', climber.escape, 0);
+}
+
 /* ------------------------------------------------------- a ladder match */
 
 {

@@ -1008,18 +1008,40 @@
        cheaper than two code paths -- and placed only when buildArena is asked.
        ====================================================================== */
 
-    var cageMesh = 0, cageRail = 0, ladderGrid = null;
+    var cageMesh = 0, cageFar = 0, cageRail = 0, ladderGrid = null;
 
     function buildCage() {
+        // Steel in FLOOR_M, not CSHADOW. The mesh hangs over a white canvas
+        // and CSHADOW is a near-white grey, so the cage rendered perfectly
+        // and was invisible -- a third of the pixels in the ring were wire
+        // and you could not see one of them.
+        //
+        // Two densities: the near wall is sparse, because the camera is
+        // looking THROUGH it and a dense mesh in front of the wrestlers is
+        // unreadable, and the far wall is the full diamond because it sits
+        // behind everything.
         var p = buf(8, 8);
         for (var y = 0; y < 8; y++) {
             for (var x = 0; x < 8; x++) {
                 if (((x + y) & 3) === 0 || ((x - y + 8) & 3) === 0) {
-                    px(p, 8, 8, x, y, CSHADOW);
+                    px(p, 8, 8, x, y, FLOOR_M);
                 }
             }
         }
-        cageMesh = defTile(p, 8, 0, 0);
+        cageFar = defTile(p, 8, 0, 0);
+
+        var n = buf(8, 8);
+        for (var y2 = 0; y2 < 8; y2++) {
+            for (var x2 = 0; x2 < 8; x2++) {
+                // Every other intersection only: enough to read as mesh,
+                // open enough to see a match through.
+                if (((x2 + y2) & 7) === 0 || ((x2 - y2 + 8) & 7) === 0) {
+                    px(n, 8, 8, x2, y2, FLOOR_M);
+                }
+            }
+        }
+        cageMesh = defTile(n, 8, 0, 0);
+
         rect(p, 8, 8, 0, 0, 8, 2, CWHITE);
         rect(p, 8, 8, 0, 2, 8, 1, FLOOR_M);
         cageRail = defTile(p, 8, 0, 0);
@@ -1879,7 +1901,8 @@
             post: postBase, postRows: POST_ROWS,
             ropeH: ropeH, ropeSide: ropeSide,
             steps: stepsGrid, skirt: skirtGrid,
-            cageMesh: cageMesh, cageRail: cageRail, ladder: ladderGrid,
+            cageMesh: cageMesh, cageFar: cageFar, cageRail: cageRail,
+            ladder: ladderGrid,
             logo: logoGrid
         };
         art.tilesUsed = tilesUsed;
@@ -2036,18 +2059,31 @@
 
         /* ---- stipulation furniture */
         if (opts.cage && cageMesh) {
-            // Mesh over the whole ring, high priority at the near side so the
-            // camera is genuinely looking through it.
+            // Two walls. The far one is low priority and dense, so it sits
+            // behind the wrestlers like a wall should; the near one is high
+            // priority and sparse, so the camera looks through it. Drawing
+            // only the near half, as this did, left the ring with no back
+            // wall at all.
             for (row = farTop; row <= (CAN_BOT >> 3); row++) {
                 for (col = C_POST_NEAR; col <= MIRROR_COL - C_POST_NEAR; col++) {
                     if (row >= PRIO_SPLIT) {
                         gfx.cell(PA, col, row, cageMesh, P0, gfx.PRIO);
+                    } else if (row < R_CAN0) {
+                        gfx.cell(PA, col, row, cageFar, P0, 0);
                     }
                 }
             }
             if (cageRail) {
+                // The far wall's top...
                 for (col = C_POST_NEAR; col <= MIRROR_COL - C_POST_NEAR; col++) {
                     gfx.cell(PA, col, farTop, cageRail, P0, 0);
+                }
+                // ...and the near one's, which is the line a wrestler
+                // straddles on the way out. Without it a climber at the top
+                // of the cage was standing on nothing visible.
+                var nearTopRow = (CAN_BOT - A.CAGE_H) >> 3;
+                for (col = C_POST_NEAR; col <= MIRROR_COL - C_POST_NEAR; col++) {
+                    gfx.cell(PA, col, nearTopRow, cageRail, P0, gfx.PRIO);
                 }
             }
         }
