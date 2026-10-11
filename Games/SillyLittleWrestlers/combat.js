@@ -69,6 +69,16 @@
         // 20px wide broke a table by falling over anywhere near it, and a
         // Tables match could end in three seconds.
         TABLE_RADIUS: 19,
+
+        LADDER_H: 46,             // how high the top of a standing ladder is
+        LADDER_CLIMB: 52,         // frames to go up it
+        LADDER_FOOT: 22,          // px from the base you can start climbing
+        PRIZE_Z: 78,              // how high the briefcase hangs
+        GRAB_RANGE: 30,           // px from under it you can reach
+        // Frames of holding on to pull it down. Long enough that the other
+        // one has a chance to get there, short enough to be finishable: at
+        // 160 nobody ever completed it because any hit at all resets you.
+        GRAB_FRAMES: 95,
         TABLE_RUN_SPEED: 420,     // 8.8/frame: fast enough to go through one
         TABLE_DMG: 90,            // going through one, on top of the move
         TABLE_STUN: 150
@@ -176,6 +186,31 @@
             return;
         }
 
+        // ---- at the top of the ladder: hold anything to pull the prize
+        // down, or press down to climb off.
+        if (w.st === 'onLadder') {
+            var pz = m.prize;
+            if (!pz || pz.taken) { combat.leaveLadder(w); return; }
+            var inReach = Math.abs(px(pz.x - w.x)) <= C.GRAB_RANGE &&
+                Math.abs(px(pz.y - w.y)) * 2 <= C.GRAB_RANGE;
+            if (i.dy > 0) { combat.leaveLadder(w); return; }
+            if (inReach && (i.Ah || i.Ch || bA || bC)) {
+                w.grab = (w.grab || 0) + 1;
+                wrestlers.setPose(w, 'turnbuckleTop');
+                if (w.grab >= C.GRAB_FRAMES) {
+                    w.grab = 0;
+                    pz.taken = true;
+                    m.onLadderWin(w);
+                }
+            } else if (w.grab > 0) {
+                // Let go and the progress bleeds away, so it has to be done
+                // in one go while nobody is knocking you off.
+                w.grab -= 2;
+                if (w.grab < 0) w.grab = 0;
+            }
+            return;
+        }
+
         // ---- on the top rope
         if (w.st === 'onTurnbuckle') {
             if (bA || bB) {
@@ -228,6 +263,24 @@
             wrestlers.setPose(w, 'taunt', true);
             if (window.sound) sound.sfx('crowdPop');
             return;
+        }
+
+        // ---- climb a standing ladder. Checked before the turnbuckle, so
+        // a ladder propped in the corner is a ladder and not a turnbuckle.
+        if (bC) {
+            var lad = combat.standingLadder();
+            if (lad && w.surface === ring.RING) {
+                var ldx = px(lad.x - w.x), ldy = px(lad.y - w.y);
+                if (ldx * ldx + ldy * ldy * 4 <= C.LADDER_FOOT * C.LADDER_FOOT) {
+                    K(w, 'C');
+                    w.x = lad.x; w.y = lad.y;
+                    w.vx = 0; w.vy = 0;
+                    wrestlers.setState(w, 'climbLadder', C.LADDER_CLIMB);
+                    wrestlers.setPose(w, 'climb', true);
+                    if (window.sound) sound.sfx('metalClang');
+                    return;
+                }
+            }
         }
 
         // ---- climb a turnbuckle / step to the apron
@@ -312,7 +365,16 @@
                 if (vic === atk || vic.eliminated) continue;
                 if (vic.team === atk.team && list.length > 2) continue;
                 if (vic.invuln > 0) continue;
-                if (!overlap(hb, combat.hurtbox(vic))) continue;
+                // Somebody up a ladder is out of reach of every hitbox in
+                // the table -- they are forty-six pixels up. Hitting the
+                // ladder from its foot counts, which is how a climber gets
+                // stopped and the only reason climbing is a risk.
+                var onLadder = (vic.st === 'onLadder' || vic.st === 'climbLadder');
+                if (onLadder) {
+                    if (ring.reach(atk, vic) > C.LADDER_FOOT + 12) continue;
+                } else if (!overlap(hb, combat.hurtbox(vic))) {
+                    continue;
+                }
                 combat.land(atk, vic, atk.move, m);
                 atk.moveHitDone = true;
                 break;
@@ -642,6 +704,10 @@
     combat.startPin = function (top, bottom) {
         var p = combat.pin;
         if (p.active) return;
+        // You cannot pin anybody in a ladder match. The briefcase is the
+        // only finish, and allowing a pinfall meant the stipulation was
+        // decided by an ordinary three-count every time.
+        if (window.match && match.stip && match.stip.ladder) return;
         if (top.pinCd > 0) return;
         if (!wrestlers.isDown(bottom)) return;
         if (bottom.surface !== ring.RING) return;   // no pins on the floor
@@ -843,6 +909,16 @@
             // and then put somebody through. Same button, different verb.
             if (wp.setup) {
                 wp.state = 'setup';
+                // Standing a LADDER up means dragging it under the prize
+                // first -- that is the only place a ladder belongs in a
+                // ladder match, and without it the thing could be climbed
+                // but the briefcase was a hundred pixels away. A table is
+                // set up where it lies.
+                if (wp.id === 'ladder' && window.match && match.prize) {
+                    wp.x = match.prize.x;
+                    wp.y = match.prize.y;
+                    wp.surface = ring.surfaceAt(wp.x, wp.y);
+                }
                 wrestlers.setState(w, 'executing', C.TABLE_SETUP_FRAMES);
                 wrestlers.setPose(w, 'grabWeapon', true);
                 w.move = null; w.moveId = null;
@@ -905,6 +981,23 @@
         }
     };
 
+    /* -------------------------------------------------------------- ladders */
+
+    combat.standingLadder = function () {
+        for (var i = 0; i < combat.weapons.length; i++) {
+            var wp = combat.weapons[i];
+            if (wp.id === 'ladder' && wp.state === 'setup') return wp;
+        }
+        return null;
+    };
+
+    combat.leaveLadder = function (w) {
+        w.grab = 0;
+        w.z = 0;
+        wrestlers.setState(w, 'idle');
+        wrestlers.setPose(w, 'idle', true);
+    };
+
     /* --------------------------------------------------------------- tables */
 
     /* The two ways through a table, and only these two:
@@ -925,6 +1018,11 @@
         for (var i = 0; i < combat.weapons.length; i++) {
             var wp = combat.weapons[i];
             if (wp.state !== 'setup') continue;
+            // Only things that break. A standing LADDER is also in the
+            // 'setup' state, and without this test the first wrestler
+            // knocked off it landed on it, "broke" it, and a ladder match
+            // could never be won again.
+            if (!wp.breakable) continue;
             var dx = px(wp.x - w.x), dy = px(wp.y - w.y);
             // Depth counts double, as everywhere else: the camera compresses
             // y, so a table that looks adjacent is further away than it reads.
@@ -936,6 +1034,7 @@
     };
 
     combat.breakTable = function (wp, victim, m) {
+        if (!wp.breakable) return;
         wp.state = 'broken';
         wp.x = victim.x; wp.y = victim.y;
         victim.hp -= C.TABLE_DMG;

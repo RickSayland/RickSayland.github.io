@@ -564,6 +564,20 @@ console.log('SLWF check  (version ' + core.GAME_VERSION + ')\n');
     }
     ok('being whipped into a standing table goes through it', hit,
         'table still ' + tbl2.state);
+
+    // A ladder is also a 'setup' weapon, and it is not breakable. Dropping a
+    // body on one used to destroy it, which permanently un-winnable'd a
+    // ladder match the first time anybody was knocked off.
+    combat.clearWeapons();
+    const lad = combat.spawnWeapon('ladder', 0, 0);
+    ok('a ladder is a stand-up weapon', lad.setup === true);
+    ok('but not a breakable one', !lad.breakable);
+    lad.state = 'setup';
+    wrestlers.reset(vic, 0, 0, core.DIR.R);
+    vic.z = core.fp(30); vic.vz = -160;
+    wrestlers.setState(vic, 'falling');
+    for (let i = 0; i < 90; i++) wrestlers.update(vic);
+    eq('a body dropped on a ladder leaves it standing', lad.state, 'setup');
 }
 
 /* ------------------------------------------------------------ input buffer */
@@ -641,6 +655,63 @@ console.log('SLWF check  (version ' + core.GAME_VERSION + ')\n');
     ok('and at least one is won through a table',
         runs.some(r => r.how === 'table'),
         runs.map(r => r.how).join(','));
+}
+
+/* ------------------------------------------------------- a ladder match */
+
+{
+    // A ladder match has exactly one finish and the CPU has to be able to
+    // reach it. Everything about this stipulation was broken at some point:
+    // the ladder stood a hundred pixels from the prize, a pinfall could win
+    // it, and the first wrestler knocked off landed on the ladder and
+    // "broke" it, making the match unwinnable for the next forty minutes.
+    function ladderRun(seed) {
+        ai.difficulty = 'hard';
+        match.start({
+            chars: [roster.CHARS[0], roster.CHARS[4]],
+            cpu: [true, true], pads: [-1, -1],
+            stip: match.STIPS.find(x => x.id === 'ladder'),
+            difficulty: 'hard', showBars: false, seed
+        });
+        let onLadder = 0;
+        for (let i = 0; i < 100000 && !match.result; i++) {
+            gfx.beginFrame();
+            match.update();
+            for (const w of match.wrestlers) {
+                if (w.st === 'onLadder' || w.st === 'climbLadder') onLadder++;
+            }
+        }
+        return { clock: match.clock, how: match.result && match.result.how, onLadder };
+    }
+
+    const lruns = [11, 404, 7777].map(ladderRun);
+    ok('every ladder match finishes', lruns.every(r => r.how),
+        lruns.map(r => r.how || 'UNFINISHED@' + core.timeStr(r.clock)).join(' '));
+    ok('and only ever by the briefcase', lruns.every(r => r.how === 'ladder'),
+        lruns.map(r => r.how).join(' '));
+    ok('the CPU actually gets up there', lruns.every(r => r.onLadder > 60),
+        lruns.map(r => r.onLadder).join(','));
+    const lmed = lruns.map(r => r.clock).sort((a, b) => a - b)[1];
+    ok('a ladder match is paced like a match', lmed > 60 * 50,
+        'median ' + core.timeStr(lmed) + ' (' +
+        lruns.map(r => core.timeStr(r.clock)).join(' ') + ')');
+
+    // And a pinfall must not decide one.
+    match.start({
+        chars: [roster.CHARS[0], roster.CHARS[1]],
+        cpu: [false, false], pads: [0, -1],
+        stip: match.STIPS.find(x => x.id === 'ladder'),
+        difficulty: 'normal', showBars: false, seed: 3
+    });
+    const top = match.wrestlers[0], bot = match.wrestlers[1];
+    wrestlers.reset(bot, 0, 20, core.DIR.L);
+    wrestlers.setState(bot, 'down', 0);
+    bot.downTimer = 600; bot.hp = 1;
+    wrestlers.reset(top, 0, 20, core.DIR.R);
+    combat.startPin(top, bot);
+    ok('you cannot pin anybody in a ladder match', !combat.pin.active);
+    match.onFall(top, bot, 'pinfall');
+    ok('and a fall does not end one', !match.result);
 }
 
 /* ------------------------------------------------------------ a whole match */

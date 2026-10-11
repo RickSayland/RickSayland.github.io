@@ -69,6 +69,14 @@
 
         a.think = 9 + core.rnd(16);
 
+        // A ladder match cannot be won on the mat, so a downed opponent is
+        // not a cover opportunity -- it is a free run at the ladder, which
+        // is the only thing that ends it.
+        if (m && m.stip.ladder && opp && wrestlers.isDown(opp)) {
+            a.state = combat.standingLadder() ? 'climbLadder' : 'getWeapon';
+            return;
+        }
+
         // Finish it if the window is open. A CPU that never covers is a CPU
         // that cannot win, and a CPU that always covers is exhausting.
         if (opp && wrestlers.isDown(opp) && d < 34) {
@@ -93,34 +101,47 @@
             return;
         }
 
+        /* The stipulation's own weapon. Standing a table or a ladder up is
+           most of the plan rather than an occasional flourish, so it gets its
+           own chance and ignores whether a weapon is already carried.
+
+           Not in the opening minute, though. Nobody goes to the gimmick
+           before they have had a wrestling match, and when the CPU did, a
+           Tables match was over inside twenty seconds. */
+        var gid = gimmickId(m);
+        if (gid && combat.weapons.length && m.clock > TABLE_PATIENCE) {
+            var standing = 0, flat = 0;
+            for (var wi = 0; wi < combat.weapons.length; wi++) {
+                var cw = combat.weapons[wi];
+                if (cw.id !== gid) continue;
+                if (cw.state === 'setup') standing++;
+                else if (cw.state === 'ground') flat++;
+            }
+            if (standing === 0 && flat > 0 && core.chance(gid === 'ladder' ? 0.3 : 0.14)) {
+                a.state = 'getWeapon';
+                return;
+            }
+            // A ladder match is won up the ladder and nowhere else, so once
+            // one is standing the CPU either climbs it or stops whoever is.
+            if (gid === 'ladder' && standing > 0) {
+                if (opp && (opp.st === 'onLadder' || opp.st === 'climbLadder')) {
+                    // Not every time. Two CPUs that always intercept each
+                    // other produce a stalemate where neither ever reaches
+                    // the top and the match runs forever.
+                    if (core.chance(0.7)) { a.state = 'stopClimb'; return; }
+                }
+                if (core.chance(0.75)) { a.state = 'climbLadder'; return; }
+            }
+        }
+
         // Catch your breath. The CPU respects stamina, which is what stops it
         // sprinting into every exchange and makes the back half of a match
         // slow down the way it should.
         if (w.stam < 220 && health > 0.25) { a.state = 'recover'; return; }
 
+
         if (w.weapon) { a.state = d < 38 ? 'weaponHit' : 'approach'; return; }
 
-        // Weapons. In a Tables match, standing a table up is most of the
-        // plan rather than an occasional flourish, so it gets its own chance
-        // and ignores whether a weapon is already carried.
-        //
-        // Not in the opening minute, though. Nobody goes to the gimmick
-        // before they have had a wrestling match, and when the CPU did, a
-        // Tables match was over inside twenty seconds.
-        if (m && m.stip.tables && combat.weapons.length &&
-            m.clock > TABLE_PATIENCE) {
-            var standing = 0, flat = 0;
-            for (var wi = 0; wi < combat.weapons.length; wi++) {
-                var cw = combat.weapons[wi];
-                if (cw.id !== 'table') continue;
-                if (cw.state === 'setup') standing++;
-                else if (cw.state === 'ground') flat++;
-            }
-            if (standing === 0 && flat > 0 && core.chance(0.14)) {
-                a.state = 'getWeapon';
-                return;
-            }
-        }
         if (m && m.stip.weapons && !w.weapon && core.chance(0.08) && combat.weapons.length) {
             a.state = 'getWeapon'; return;
         }
@@ -168,6 +189,14 @@
             }
             return;
         }
+        // At the top: hold on and pull. This is the whole of the CPU's
+        // ladder-match endgame.
+        if (w.st === 'onLadder') {
+            i.Ch = 1; i.Ah = 1;
+            return;
+        }
+        if (w.st === 'climbLadder') return;
+
         if (w.st === 'pinning' || w.st === 'applying' || w.st === 'executing' ||
             w.st === 'receiving' || w.st === 'hurt' || w.st === 'stagger' ||
             w.st === 'falling' || w.st === 'gettingUp' || w.st === 'landing' ||
@@ -237,6 +266,30 @@
                 moveDir(i, (toward + 2 * a.circleDir + 8) & 7);
                 if (core.chance(0.02)) a.circleDir = -a.circleDir;
                 break;
+
+            case 'climbLadder': {
+                var lad = combat.standingLadder();
+                if (!lad) { a.state = 'approach'; break; }
+                // Both hands, or you are not climbing anything.
+                if (w.weapon) { combat.dropWeapon(w); }
+                var ldx = px(lad.x - w.x), ldy = px(lad.y - w.y);
+                if (Math.abs(ldx) + Math.abs(ldy) > 12) {
+                    moveDir(i, core.dirFromVec(lad.x - w.x, lad.y - w.y));
+                } else {
+                    i.C = 1;
+                }
+                break;
+            }
+
+            case 'stopClimb': {
+                // Get to the foot of the ladder and swing. Anything at all
+                // knocks a climber off.
+                if (!opp) { a.state = 'approach'; break; }
+                if (d > 22) { moveDir(i, toward); i.Ch = 1; break; }
+                if (a.delay > 0) break;
+                i.A = 1;
+                break;
+            }
 
             case 'returnRing':
                 // Head for the middle of the ring. The rope-exit rule works
@@ -349,6 +402,14 @@
         i.dy = v[1] > 60 ? 1 : (v[1] < -60 ? -1 : 0);
     }
 
+    // The weapon a stipulation is actually about.
+    function gimmickId(m) {
+        if (!m) return null;
+        if (m.stip.tables) return 'table';
+        if (m.stip.ladder) return 'ladder';
+        return null;
+    }
+
     function standingTable() {
         for (var i = 0; i < combat.weapons.length; i++) {
             var wp = combat.weapons[i];
@@ -367,20 +428,20 @@
        over in ten seconds -- the patience gate on the other path bought
        nothing at all. Before the gate opens, tables are invisible. */
     function nearestWeapon(w, m) {
-        var tablesMatch = !!(m && m.stip.tables);
-        var wantTable = tablesMatch && m.clock > TABLE_PATIENCE;
-        var hideTables = tablesMatch && !wantTable;
-        var best = null, bd = 1e9, bestIsTable = false;
+        var gid = gimmickId(m);
+        var wantGimmick = !!gid && m.clock > TABLE_PATIENCE;
+        var hideGimmick = !!gid && !wantGimmick;
+        var best = null, bd = 1e9, bestIsGimmick = false;
         for (var k = 0; k < combat.weapons.length; k++) {
             var wp = combat.weapons[k];
             if (wp.state !== 'ground') continue;
-            var isTable = (wp.id === 'table');
-            if (isTable && hideTables) continue;
-            if (wantTable && bestIsTable && !isTable) continue;
+            var isTable = (wp.id === gid);
+            if (isTable && hideGimmick) continue;
+            if (wantGimmick && bestIsGimmick && !isTable) continue;
             var dx = px(wp.x - w.x), dy = px(wp.y - w.y);
             var dd = dx * dx + dy * dy;
-            if ((wantTable && isTable && !bestIsTable) || dd < bd) {
-                bd = dd; best = wp; bestIsTable = isTable;
+            if ((wantGimmick && isTable && !bestIsGimmick) || dd < bd) {
+                bd = dd; best = wp; bestIsGimmick = isTable;
             }
         }
         return best;

@@ -558,6 +558,20 @@
 
         if (combat.tie.active) drawTieBar();
 
+        // Somebody is up the ladder with their hands on the briefcase.
+        var grabber = null;
+        for (var g = 0; g < list.length; g++) {
+            if (list[g].grab > 0) { grabber = list[g]; break; }
+        }
+        if (grabber) {
+            // Rows 23-24, on the dark floor below the apron: rows 18-20 are
+            // the announcement lines and this collided with them. Nothing
+            // else uses these two, because you cannot be in a tie-up and up
+            // a ladder at the same time.
+            TC(23, grabber.name + ' IS REACHING', F.YELLOW);
+            drawBar(10, 24, 20, grabber.grab / combat.TUNE.GRAB_FRAMES);
+        }
+
         if (match.phase === 'intro') {
             HC(12, 'FIGHT', F.YELLOW);
         }
@@ -660,7 +674,7 @@
     var HOW = {
         pinfall: 'BY PINFALL', submission: 'BY SUBMISSION',
         injury: 'BY REFEREE STOPPAGE', countout: 'DOUBLE COUNT OUT',
-        table: 'THROUGH THE TABLE',
+        table: 'THROUGH THE TABLE', ladder: 'BY RETRIEVAL',
         knockout: 'BY KNOCKOUT', elimination: 'LAST ONE STANDING'
     };
 

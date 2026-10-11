@@ -1461,7 +1461,7 @@
         },
         ladder: {
             w: 2, h: 6, ax: 8, ay: 47, mult: 380, part: 'head',
-            draw: wLadder
+            setup: true, draw: wLadder
         }
     };
 
@@ -1619,6 +1619,8 @@
             hline(p, w, h, 1, w - 2, h - 1, UI_STEELL);
             return;
         }
+        // Standing: rails splayed very slightly so it reads as an A-frame
+        // rather than a flat grid, and feet on the bottom row.
         vline(p, w, h, 2, 0, h - 1, UI_STEELL);
         vline(p, w, h, 3, 0, h - 1, UI_STEEL);
         vline(p, w, h, w - 4, 0, h - 1, UI_STEEL);
@@ -1627,7 +1629,50 @@
             hline(p, w, h, 3, w - 4, yy, UI_STEELL);
             hline(p, w, h, 3, w - 4, yy + 1, UI_DARK);
         }
+        hline(p, w, h, 1, w - 2, h - 1, UI_BLACK);
     }
+
+    /* ----------------------------------------------------------------------
+       THE PRIZE
+       What hangs over the ring in a ladder match. A briefcase rather than a
+       belt, because a rectangle with a handle survives being eight pixels
+       tall and a belt does not.
+       ---------------------------------------------------------------------- */
+    function drawPrize(p, w, h, f) {
+        var sway = (f === 1) ? 1 : (f === 2 ? -1 : 0);
+        var x0 = 2 + sway, y0 = 5;
+        // The cable it hangs from.
+        vline(p, w, h, w >> 1, 0, y0 - 1, UI_DARK);
+        // Handle.
+        hline(p, w, h, (w >> 1) - 2 + sway, (w >> 1) + 2 + sway, y0 - 1, UI_STEELL);
+        // Case.
+        rect(p, w, h, x0, y0, w - 4, h - y0 - 1, UI_WOOD);
+        hline(p, w, h, x0, x0 + w - 5, y0, UI_ORANGE);
+        hline(p, w, h, x0, x0 + w - 5, h - 2, UI_BLACK);
+        vline(p, w, h, x0, y0, h - 2, UI_ORANGE);
+        vline(p, w, h, x0 + w - 5, y0, h - 2, UI_BLACK);
+        // Clasps, in gold.
+        px(p, w, h, x0 + 2, y0 + 3, UI_YELLOW);
+        px(p, w, h, x0 + w - 7, y0 + 3, UI_YELLOW);
+    }
+
+    var prizeRoms = null;
+
+    function buildPrize() {
+        prizeRoms = [];
+        for (var f = 0; f < 3; f++) {
+            var pw = 16, ph = 16;
+            var p = buf(pw, ph);
+            drawPrize(p, pw, ph, f);
+            prizeRoms.push(gfx.romFrame(up(p, pw, ph), (pw * U) >> 3, (ph * U) >> 3,
+                (pw >> 1) * U, (ph - 1) * U));
+        }
+    }
+
+    art.prizeRom = function (frame) {
+        if (!prizeRoms) return null;
+        return prizeRoms[(frame | 0) % prizeRoms.length];
+    };
 
     var weaponRoms = null;
 
@@ -1821,6 +1866,7 @@
         buildWeapons();
         buildRef();
         buildShadows();
+        buildPrize();
 
         art.T = {
             crowd: crowdBase,

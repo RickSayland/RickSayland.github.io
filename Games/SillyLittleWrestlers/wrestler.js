@@ -123,7 +123,7 @@
 
             onTop: false, onApron: false,
             stun: 0, invuln: 0, downTimer: 0, mashCount: 0,
-            rebound: 0, lastRope: 0, pushRope: 0, exiting: 0,
+            rebound: 0, lastRope: 0, pushRope: 0, exiting: 0, grab: 0,
             tieCd: 0, pinCd: 0,
             weapon: null,
             out: false, eliminated: false, dead: false,
@@ -177,7 +177,7 @@
         w.hold = w.heldBy = w.partner = null; w.holdSide = null;
         w.onTop = w.onApron = false;
         w.stun = w.invuln = w.downTimer = w.mashCount = 0;
-        w.rebound = 0; w.weapon = null;
+        w.rebound = 0; w.weapon = null; w.grab = 0;
         w.pushRope = 0; w.exiting = 0; w.tieCd = 0; w.pinCd = 0;
         w.buf.A = w.buf.B = w.buf.C = w.buf.X = w.buf.Y = w.buf.Z = 0;
         w.tapDir = -1; w.tapAge = 0; w.heldDir = -1; w.dashRun = 0; w.sweatTick = 0;
@@ -352,6 +352,21 @@
         w.lastHitBy = from || null;
         w.lastHitFrame = core.clock.frames;
 
+        // Anything at all knocks you off a ladder, whatever the move's own
+        // knockdown value. Being up there is the risk.
+        if (w.st === 'onLadder' || w.st === 'climbLadder') {
+            w.grab = 0;
+            w.vx = (from ? (core.sign(px(w.x - from.x)) || 1) : 1) * T.KNOCK_VX;
+            w.vy = 0;
+            w.vz = 40;
+            wrestlers.setState(w, 'falling');
+            wrestlers.setPose(w, 'knockdown', true);
+            if (window.match) match.say('OFF THE LADDER');
+            if (window.sound) sound.sfx('crowdGasp');
+            core.shake(3, 10);
+            return true;
+        }
+
         // A hit lands you out of whatever you were doing, and clears a hold.
         if (w.hold) combat.breakHold(w);
         if (w.heldBy) combat.breakHold(w.heldBy);
@@ -508,6 +523,28 @@
                     wrestlers.setPose(w, 'idle', true);
                     w.invuln = T.GETUP_INVULN;
                 }
+                break;
+
+            case 'climbLadder':
+                // Rising. z interpolates over the climb so the figure is
+                // visibly partway up rather than teleporting to the top.
+                w.vx = w.vy = 0;
+                w.stTimer--;
+                var ct = 1 - (w.stTimer / combat.TUNE.LADDER_CLIMB);
+                w.z = fp(Math.round(combat.TUNE.LADDER_H * core.clamp(ct, 0, 1)));
+                wrestlers.setPose(w, 'climb');
+                if (w.stTimer <= 0) {
+                    w.z = fp(combat.TUNE.LADDER_H);
+                    w.grab = 0;
+                    wrestlers.setState(w, 'onLadder');
+                    wrestlers.setPose(w, 'turnbuckleTop', true);
+                }
+                break;
+
+            case 'onLadder':
+                // Held up there by the ladder, so gravity must not apply.
+                w.vx = w.vy = w.vz = 0;
+                w.z = fp(combat.TUNE.LADDER_H);
                 break;
 
             case 'climbing':

@@ -69,6 +69,8 @@
     match.lastMove = null;
     match.lastMoveTimer = 0;
     match.messages = [];
+    // What hangs over the ring in a ladder match. null in every other.
+    match.prize = null;
 
     /* ------------------------------------------------------------- referee */
 
@@ -234,6 +236,10 @@
         if (window.art) art.buildArena({ cage: match.stip.cage, ladder: match.stip.ladder });
         match.initStains();
 
+        match.prize = match.stip.ladder
+            ? { x: 0, y: 0, z: combat.TUNE.PRIZE_Z, taken: false }
+            : null;
+
         if (match.stip.weapons) scatterWeapons();
 
         match.phase = 'intro';
@@ -284,6 +290,13 @@
             // Tables start in the ring for a Tables match, but in the
             // CORNERS. Dropped in the middle they sat exactly where the bell
             // rings and the first knockdown of the match ended it.
+            // The ladder in a ladder match starts on the mat, off to one
+            // side: under the ring it would never be found, and under the
+            // prize it would be a race to a button rather than a match.
+            if (pool[i] === 'ladder' && match.stip.ladder) {
+                x = side * 120;
+                y = 30;
+            }
             if (pool[i] === 'table' && match.stip.tables) {
                 x = side * (core.ARENA.RING_HX - 58);
                 y = ((i & 2) ? 1 : -1) * (core.ARENA.RING_HY - 42);
@@ -324,6 +337,21 @@
         match.onFall(winner, victim, 'table');
     };
 
+    // Pulling the briefcase down ends a ladder match. There is no other
+    // way to win one.
+    match.onLadderWin = function (w) {
+        var loser = null;
+        for (var i = 0; i < match.wrestlers.length; i++) {
+            if (match.wrestlers[i] !== w) { loser = match.wrestlers[i]; break; }
+        }
+        pal.flash(20, [31, 31, 24], 240);
+        core.shake(3, 20);
+        match.crowdPop(40);
+        if (window.sound) sound.sfx('crowdPop');
+        match.say('GOT IT');
+        match.finish(w, loser, 'ladder');
+    };
+
     match.onRopeBreak = function (vic) {
         match.say('ROPE BREAK!');
     };
@@ -335,6 +363,12 @@
     };
 
     match.onFall = function (winner, loser, how) {
+        // In a ladder match there is no count and no submission: whatever
+        // just happened, the match carries on until somebody climbs.
+        if (match.stip.ladder && how !== 'ladder') {
+            if (loser) loser.downTimer = Math.max(loser.downTimer, 60);
+            return;
+        }
         // In a three-way or a rumble a fall eliminates rather than ends it.
         if (match.wrestlers.length > 2 && !match.stip.overTheTop) {
             loser.eliminated = true;
@@ -515,7 +549,20 @@
         wrestlers.drawList(match.wrestlers);
         drawRef();
         combat.drawParticles();
+        drawPrize();
     };
+
+    // Drawn last and at high priority: it hangs above everything, including
+    // the near ropes.
+    function drawPrize() {
+        var pz = match.prize;
+        if (!pz || pz.taken || !window.art || !art.prizeRom) return;
+        var rom = art.prizeRom((match.clock / 22) | 0);
+        if (!rom) return;
+        var fr = gfx.stream(rom);
+        gfx.frame(ring.screenX(pz.x), ring.screenY(pz.y, core.fp(pz.z), ring.RING),
+            fr, pal.UI, false, true);
+    }
 
     match.isOver = function () { return !!match.done; };
     match.clearDone = function () { match.done = false; };

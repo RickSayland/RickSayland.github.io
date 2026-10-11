@@ -438,16 +438,57 @@ and the stipulation could not be won. The harness test had set the state by
 hand and sailed straight past it -- it now drives the real path, spawn to
 button press.
 
+### 0.3.3 -- the ladder match
+
+A briefcase hangs over the ring at `PRIZE_Z`. Standing a ladder up drags it
+under the prize -- that is the only place a ladder belongs in a ladder match,
+and the setup frames are the cost. C at its foot starts the climb, the top of
+it puts you in reach, and holding anything pulls the prize down over
+`GRAB_FRAMES`. Let go and the progress bleeds away, so it has to be done in
+one go.
+
+**It is the only finish.** `combat.startPin` refuses in a ladder match and
+`match.onFall` ignores everything that is not `'ladder'`, because a
+stipulation that can be won with an ordinary three-count is not a
+stipulation. The CPU knows this: a downed opponent is not a cover
+opportunity, it is a free run at the ladder.
+
+**Anything at all knocks a climber off**, whatever the move's own knockdown
+value, and a strike thrown at the foot of the ladder reaches somebody
+forty-six pixels up -- no hitbox in the table does, so without that special
+case a climber could not be stopped and climbing carried no risk.
+
+Four bugs, each of which made the stipulation unplayable on its own, and each
+found by watching the simulation rather than reading the code:
+
+- **A ladder is not a table.** `checkTableBreak` matched on the `setup` state
+  without checking the weapon, so the first wrestler knocked off a ladder
+  landed on it and "broke" it. The ladder then no longer existed, nobody
+  could climb, and the match ran for forty minutes. `breakable` is now part
+  of the test.
+- The ladder stood up **where it lay**, a hundred and twenty pixels from the
+  prize, so it could be climbed but never reached anything.
+- **A pinfall won it**, which made the ladder decorative.
+- The CPU picked up a chair in the first minute and `if (w.weapon)` ended its
+  decision tree, so it never considered the ladder again. The gimmick block
+  now sits above both the carried-weapon check and the stamina check -- in a
+  long match stamina is under the `recover` threshold almost permanently, and
+  everything below it was unreachable.
+
+Ladder matches now run 1:31-1:58 and all end on the briefcase, with
+knock-offs producing real back-and-forth (one test run had ten).
+
 ### Known rough edges, in the order they are worth looking at
 
-1. **Ladders are still scenery.** Tables work; ladders have no climb, nothing
-   hanging above the ring and no win condition.
-2. **The entrance is thin** -- no per-character animation; `char.entranceAnim`
+1. **The entrance is thin** -- no per-character animation; `char.entranceAnim`
    is carried through the roster but unused.
-3. **The pose tables are still the ones authored for 48px.** The detail added
+2. **The pose tables are still the ones authored for 48px.** The detail added
    in 0.3.1 is costume and shading; the *poses themselves* -- how far a leg
    extends in a suplex, where a hand lands in a hold -- have the resolution
    they always had.
+3. **Cage and Royal Rumble are thin.** Both run, but the cage has no climbing
+   escape (the ladder's climb machinery would transfer almost directly) and
+   the rumble has no timed entrances.
 4. **Blood is rare** outside long matches (`BLEED_AT` in `wrestler.js`).
-5. **Cage and Royal Rumble are thin.** Both run, but the cage has no climbing
-   escape and the rumble no timed entrances.
+5. **Ladder matches are samey in length**, because the CPU starts going for
+   the ladder the moment `ai.TABLE_PATIENCE` expires and wins shortly after.
