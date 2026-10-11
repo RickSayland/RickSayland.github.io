@@ -657,6 +657,70 @@ console.log('SLWF check  (version ' + core.GAME_VERSION + ')\n');
         runs.map(r => r.how).join(','));
 }
 
+/* ------------------------------------------------------------- the face */
+
+{
+    // Every hairstyle's fringe is a solid mass over the skull, and seven of
+    // the nine used to reach below the eye line and erase the eyes outright.
+    // It was invisible in code review and obvious on screen, so it is a test:
+    // a head drawn toward the camera has whites of eyes in it, full stop.
+    const EYE = 15;             // pal index the poser uses for the whites
+    const headTop = Math.round(poser.FH - (poser.BASE.hed[1] + 6) * 2);
+    const headBot = Math.round(poser.FH - (poser.BASE.hed[1] - 6) * 2);
+
+    function eyePixels(style, view) {
+        const px = poser.render(style, 'idle', view, 0);
+        let n = 0;
+        for (let y = Math.max(0, headTop); y < Math.min(poser.FH, headBot); y++) {
+            for (let x = 0; x < poser.FW; x++) if (px[y * poser.FW + x] === EYE) n++;
+        }
+        return n;
+    }
+
+    const blind = [];
+    for (let hair = 0; hair <= 8; hair++) {
+        for (const mask of [0, 1, 3]) {          // 2 is a visor: no eyes by design
+            for (const view of ['front', 'side']) {
+                const st = { build: 'cruiser', tall: 0, hair, mask, beard: 0, boots: 1 };
+                if (eyePixels(st, view) < 2) blind.push('hair' + hair + '/mask' + mask + '/' + view);
+            }
+        }
+    }
+    ok('every hair and mask combination still has eyes', blind.length === 0,
+        blind.join(' '));
+
+    // ...and the visor really does cover them, or it is just face paint.
+    ok('the visor covers the eyes',
+        eyePixels({ build: 'cruiser', tall: 0, hair: 0, mask: 2, beard: 0, boots: 1 },
+            'front') === 0);
+
+    // The back of a head has no face on it.
+    ok('the back of the head has no eyes',
+        eyePixels({ build: 'cruiser', tall: 0, hair: 1, mask: 0, beard: 0, boots: 1 },
+            'back') === 0);
+
+    // Arms have to clear the chest at every build, or a heavyweight is a
+    // slab. Measured as the figure's width: spreading the arm chain is only
+    // worth anything if it actually widens the silhouette.
+    function widthOf(build) {
+        const px = poser.render({ build, tall: 0, hair: 0, mask: 0, beard: 0, boots: 1 },
+            'idle', 'front', 0);
+        let lo = poser.FW, hi = -1;
+        for (let y = 0; y < poser.FH; y++) {
+            for (let x = 0; x < poser.FW; x++) {
+                if (px[y * poser.FW + x]) { if (x < lo) lo = x; if (x > hi) hi = x; }
+            }
+        }
+        return hi - lo + 1;
+    }
+    const wl = widthOf('light'), wc = widthOf('cruiser'), ws = widthOf('super');
+    ok('bulk widens the figure monotonically', wl < wc && wc < ws,
+        [wl, wc, ws].join(' < '));
+    // And the whole figure still fits its own frame, which is what the hair
+    // spike cap in drawHair exists to guarantee.
+    ok('the widest build still fits the frame', ws <= poser.FW, ws + '/' + poser.FW);
+}
+
 /* --------------------------------------------------------- a cage match */
 
 {

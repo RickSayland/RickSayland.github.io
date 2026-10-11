@@ -903,7 +903,9 @@
     wrestlers.applyPalette = function (w) {
         roster.applyPalette(w.pal, w.char);
         if (w.bleeding) {
-            var blood = pal.get(w.pal, 14);
+            // Slot 14 is the rim light now, so the blood colour is named
+            // outright rather than read back out of the palette.
+            var blood = pal.hex('#db0000');
             pal.setRGB(w.pal, 4, blood);
             pal.setRGB(w.pal, 2, pal.shade(blood, 150));
         }

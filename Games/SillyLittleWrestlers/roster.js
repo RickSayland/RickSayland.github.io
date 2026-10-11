@@ -126,19 +126,21 @@
         trunkShadow: 7, trunk: 8, trunkLight: 9,
         bootShadow: 10, boot: 11,
         accent: 12,
-        bloodDark: 13, blood: 14, white: 15
+        // Shared lighting rather than materials. See the note in poser.js:
+        // these were bloodDark and blood, which the poser never drew.
+        deep: 13, rim: 14, white: 15
     };
 
     // Ramp amounts for pal.shade: 8.8, so 256 is "unchanged".
     var SHADOW = 150;   // ~0.59x toward black
     var LIGHT = 332;   // ~0.30 of the way toward white
 
-    // Shared across all wrestler palettes. Blood matches the arena's so a
-    // bleeding wrestler and the stain he leaves on the canvas are the same red.
+    // Shared across all wrestler palettes: the outline, the arena lights
+    // that catch every figure's top-left edge, and white.
     roster.SHARED = {
         outline: '#000000',
-        bloodDark: '#920000',
-        blood: '#db0000',
+        // The arena lights, the same for everyone in the building.
+        rim: '#d6ecff',
         white: '#ffffff'
     };
 
@@ -194,8 +196,15 @@
 
         pal.setRGB(palId, IDX.accent, accent);
 
-        pal.setHex(palId, IDX.bloodDark, roster.SHARED.bloodDark);
-        pal.setHex(palId, IDX.blood, roster.SHARED.blood);
+        // The core shadow is derived from the SKIN rather than being a flat
+        // black: a shared dark that still belongs to the character reads as
+        // shadow, where neutral grey reads as dirt.
+        // 64/256 of the skin tone is nearly black, and the poser puts this
+        // down the shaded side of every form. 96 keeps it clearly below the
+        // material's own shadow without reading as a hole in the wrestler.
+        pal.setRGB(palId, IDX.deep, pal.shade(skin, 96));
+        pal.setHex(palId, IDX.rim, roster.SHARED.rim);
+
         pal.setHex(palId, IDX.white, roster.SHARED.white);
         return true;
     };

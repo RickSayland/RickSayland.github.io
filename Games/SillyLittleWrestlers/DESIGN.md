@@ -131,10 +131,16 @@ an authentic compromise, and the reason the roster's palettes are grouped.
  2 skinShadow      10 bootShadow
  3 skin            11 boot
  4 skinLight       12 accent      (tape, mask trim, logo)
- 5 hairShadow      13 bloodDark
- 6 hair            14 blood
+ 5 hairShadow      13 deep        (core shadow, shared by all materials)
+ 6 hair            14 rim         (edge light, shared)
  7 trunkShadow     15 white       (eyes, teeth, highlight)
 ```
+
+13 and 14 were `bloodDark`/`blood` and the poser never once drew them: blood
+is an FX sprite, not part of the figure. They are the figure's two shared
+lighting tones now, which is what made a five-step ramp possible inside
+sixteen colours -- every material gets its own base/shadow/light plus these
+two, rather than three tones and a flat silhouette.
 
 `roster.applyPalette(palId, char)` fills those 16 slots from a character's five
 base colours, deriving the shadow/light ramps. A character is therefore five
@@ -505,6 +511,63 @@ because a dense mesh between the camera and the match is unreadable.
 arena is: `combat` climbs to that height and `art` draws the wall's top rail
 at it. Before the rail existed a wrestler at the top of the cage was standing
 on nothing.
+
+### 0.3.5 -- the art revamp
+
+Five rounds on the figure itself, because the roster looked like
+mannequins. In rough order of how much each one mattered:
+
+**Seven of the nine hairstyles drew their fringe over the eyes.** Only the
+bald head and the mohawk had a face at all. Every fringe is a solid ellipse
+over the skull, and an ellipse wide enough to cover a head is necessarily
+tall enough to reach the brow -- one short enough to clear the eyes is a thin
+lens sitting on top of the skull. Raising them helped and was not enough, so
+the head is now drawn in three passes and **the order is the whole point**:
+`drawFace` (mask, visor), then `drawHair`, then `drawFeatures` (the face
+re-asserted as an oval from brow to chin, then war paint, eyes and mouth).
+The hair above the oval becomes a hairline and the locks either side become
+sideburns, which is what they were always meant to be. A luchador mask and a
+visor are worn *over* the face so they keep what they drew; war paint is *on*
+the skin, so it moved into the third pass with the eyes.
+
+`tools/check.mjs` now renders all 27 hair x mask combinations in two views and
+asserts there are whites of eyes in the head box -- and that the visor, which
+is the one thing meant to cover them, still does.
+
+**Each limb segment carried its own dark edge.** Thigh, shin and boot each
+got a ring, and where two rings met they stacked into a two-pixel band
+straight across the limb: an arm read as a string of beads, worst with the
+arms overhead where four outlined shapes line up. The edge is now laid down
+for the whole chain first and the fills painted over it, so what survives is
+one outline around the limb and the joints are left to the shading -- which
+was drawing them anyway. The radii are named once because the two passes have
+to agree and drift the moment they are typed out twice.
+
+**The arm chain is spread outward at projection time.** The authored skeleton
+hangs the shoulders at +-4.4 units inside a 4.7-unit ribcage, which is
+anatomically backwards, and bulk scales limb *radii* faster than it spreads
+the skeleton -- at super build the arm was 7px thick, the shoulder sat 10px
+off centre and the chest was 15px wide, so the whole arm was inside the
+torso's silhouette. It cannot be fixed in `BASE`, because every pose states
+its joints absolutely and editing `BASE` would reach the four generated gaits
+and leave the other ninety-odd poses alone. `ARM_SPREAD` is applied in
+`build()` instead, with weights falling off down the arm: the shoulder line
+is what the silhouette is made of, and a hand stays where the pose put it
+because poses put hands on opponents.
+
+**The rim light was tracing the silhouette, not catching it.** Testing "is
+the pixel above or to the left empty" lights the whole top half of a round
+form plus its left flank -- three quarters of the outline -- and in near-white
+the figure read as a chalk drawing. `rimPass` now measures the direction the
+empty space lies in and lights a pixel only if that direction is within about
+sixty degrees of the lamp.
+
+**And the shapes underneath.** A V-taper (chest 5.20 -> 4.70, waist 4.00 ->
+3.45), deltoid caps, pectorals hung off the shoulder line so they roll with
+the torso, calves behind the shin, a head at 4.5 heads tall instead of 4.05,
+feet that are not clown shoes, and a core shadow at 96/256 of the skin rather
+than 64 -- at 64 the darkest colour in the palette ran down the shaded side
+of every form and read as a hole rather than a shadow.
 
 ### Known rough edges, in the order they are worth looking at
 

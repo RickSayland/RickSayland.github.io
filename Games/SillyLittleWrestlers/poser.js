@@ -113,6 +113,12 @@
 
     // Tone band edges, as the dot of the surface offset with the light.
     var LIT = 0.33, DARK = -0.30;
+    // Below this, the shared core shadow. It used to be -0.70, which put a
+    // four-pixel crescent of the DARKEST colour in the palette down the
+    // shaded side of every head and limb -- the figure read as half in
+    // silhouette. DEEP is for where two forms meet; the terminator belongs
+    // to the material's own shadow tone.
+    var DEEPT = -0.80;
     var R_LIT = 2.00;   // a limb thinner than this gets no light tone
     var R_DARK = 1.30;  // ...nor this, no shadow tone either: mush at 48px
 
@@ -136,6 +142,28 @@
         super: { ms: 1.18, hs: 1.050, bs: 1.42 }
     };
     var TALL_STEP = 0.035;    // per unit of style.tall
+
+    /* How far out from the centre line the arm chain sits.
+
+       Two separate problems, one lever. The authored skeleton hangs the
+       shoulders at +-4.4 units inside a ribcage 4.7 units wide -- the
+       deltoid was inside the chest, which is anatomically backwards and is
+       most of why the torso read as one slab. And bulk scales limb RADII
+       faster than it spreads the skeleton, so at super build the arm was 7px
+       thick, the shoulder sat 10px off centre and the chest was 15px wide:
+       the whole arm was inside the torso's own silhouette.
+
+       It cannot be fixed in BASE, because every pose in the table states its
+       joints ABSOLUTELY -- editing BASE would reach the four generated gaits
+       and leave the other ninety-odd poses alone. So it is applied at
+       projection, to the arm chain of every pose.
+
+       The weights fall off down the arm: the SHOULDER line is what the
+       silhouette is made of, and a hand is where it was authored because
+       poses put hands on an opponent. */
+    var ARM_SPREAD = 1.16;        // at cruiser build
+    var ARM_SPREAD_BULK = 0.85;   // and further out the bigger he is
+    var ARM_JOINTS = { shA: 1, shB: 1, elA: 0.6, elB: 0.6, haA: 0.3, haB: 0.3 };
 
     /* ===================================================================== */
     /* TUNABLES -- the base skeleton                                         */
@@ -182,12 +210,23 @@
     /* ===================================================================== */
 
     var R = {
-        torsoPel: 4.00, torsoCst: 5.20, shoulder: 3.00, neck: 1.90,
+        // The chest is NARROWER than it was and the waist narrower still: a
+        // wrestler is a V and the old 4.00/5.20 pair was a cylinder. The
+        // chest also has to leave an arm room to hang outside it, which is
+        // what ARM_SPREAD is for.
+        torsoPel: 3.45, torsoCst: 4.70, shoulder: 3.10, neck: 1.90,
         thighTop: 3.00, thighBot: 2.45, shinTop: 2.30, shinBot: 1.75,
-        foot: 1.70, toe: 1.45, toeLen: 2.60,
+        // Each foot was 14px long and eight rows deep on an eighty-row
+        // figure -- a tenth of the wrestler's height was shoe.
+        foot: 1.42, toe: 1.12, toeLen: 2.05,
         armTop: 2.45, armMid: 2.00, foreTop: 2.00, foreBot: 1.55,
         fist: 2.25,                      // deliberately big: readability
-        headRx: 4.50, headRy: 4.70
+        // The figure was 4.05 heads tall, which is a toy. This is 4.5 --
+        // short of the 6 a heroic figure gets, deliberately, because the head
+        // is where the character actually lives: at 4.2 units the head is
+        // 17px and a face still fits in it. Hair and features are derived
+        // from these two, so they come down with it.
+        headRx: 4.15, headRy: 4.20
     };
 
     // Boot top as a fraction along ankle->knee, or past the knee into the thigh
@@ -205,6 +244,25 @@
     var BOOT = { sh: 10, base: 11, lt: 11 };  // only two boot slots exist
     var ACC = { sh: 12, base: 12, lt: 12 };  // tape, trim, logo: flat
     var OUTL = 1, WHITE = 15;
+
+    /* Two colours shared by every material rather than owned by one.
+
+       DEEP is the core shadow -- the darkest band on any surface, whatever
+       it is made of. RIM is the arena's light catching the top-left edge of
+       the figure. One shared dark and one shared light read as LIGHTING
+       rather than as more materials, which is how a sixteen-colour sprite
+       gets depth it has no business having.
+
+       They cost nothing: slots 13 and 14 were bloodDark and blood, and the
+       poser has never drawn a drop of blood in its life -- bleeding is a
+       palette tint applied by wrestler.js and a particle in the UI palette. */
+    var DEEP = 13, RIM = 14;
+
+    // How much fatter a limb's own dark edge is than the limb. ONE pixel,
+    // not one pixel per view unit: an internal line is a line at any
+    // resolution, and at 2.4 each limb carried five pixels of black and the
+    // figure read as a wireframe.
+    var EDGE = 1.0;
 
     /* ===================================================================== */
     /* STYLE                                                                 */
@@ -1381,8 +1439,15 @@
 
        Below R_LIT and R_DARK the bands are dropped. A two-pixel-wide forearm
        with three tones in it is not shaded, it is noise. */
-    function capsule(x0, y0, r0, x1, y1, r1, mat, fat) {
+    /* `mat` may be a material object (shaded) or a plain palette index
+       (flat fill). `edge` draws the same shape EDGE pixels fatter in the
+       outline colour first, which is what separates an arm from the torso
+       behind it -- the silhouette outline pass runs over the finished figure
+       and only ever wraps its outside. */
+    function capsule(x0, y0, r0, x1, y1, r1, mat, fat, edge) {
         if (fat) { r0 *= fat; r1 *= fat; }
+        if (edge) capsule(x0, y0, r0 + EDGE, x1, y1, r1 + EDGE, OUTL, 0, 0);
+        var flat = (typeof mat === 'number');
         var dx = x1 - x0, dy = y1 - y0;
         var len2 = dx * dx + dy * dy;
         var rmax = (r0 > r1 ? r0 : r1) + 1;
@@ -1401,10 +1466,12 @@
                 var dd = Math.sqrt(ox * ox + oy * oy);
                 var r = r0 + (r1 - r0) * t;
                 if (dd > r) continue;
+                if (flat) { pix[y * FW + x] = mat; continue; }
                 var tone = mat.base;
                 if (r >= R_DARK) {
                     var n = dd > 0.001 ? (ox / dd * LX + oy / dd * LY) * (dd / r) : 0;
                     if (r >= R_LIT && n > LIT) tone = mat.lt;
+                    else if (n < DEEPT) tone = DEEP;
                     else if (n < DARK) tone = mat.sh;
                 }
                 pix[y * FW + x] = tone;
@@ -1413,7 +1480,9 @@
     }
 
     // A shaded ellipse. Heads, fists and the barrel of a chest.
-    function blob(cx, cy, rx, ry, mat) {
+    function blob(cx, cy, rx, ry, mat, edge) {
+        if (edge) blob(cx, cy, rx + EDGE, ry + EDGE, OUTL, 0);
+        var flat = (typeof mat === 'number');
         var xa = Math.floor(cx - rx), xb = Math.ceil(cx + rx);
         var ya = Math.floor(cy - ry), yb = Math.ceil(cy + ry);
         if (xa < 0) xa = 0; if (ya < 0) ya = 0;
@@ -1423,12 +1492,14 @@
                 var ox = (x + 0.5 - cx) / rx, oy = (y + 0.5 - cy) / ry;
                 var d2 = ox * ox + oy * oy;
                 if (d2 > 1) continue;
+                if (flat) { pix[y * FW + x] = mat; continue; }
                 var tone = mat.base;
                 var rr = (rx + ry) * 0.5;
                 if (rr >= R_DARK) {
                     var d = Math.sqrt(d2);
                     var n = d > 0.001 ? (ox / d * LX + oy / d * LY) * d : 0;
                     if (rr >= R_LIT && n > LIT) tone = mat.lt;
+                    else if (n < DEEPT) tone = DEEP;
                     else if (n < DARK) tone = mat.sh;
                 }
                 pix[y * FW + x] = tone;
@@ -1485,6 +1556,68 @@
        trunks and boots uniformly. Without it a wrestler drawn over a dark
        seething crowd simply disappears -- this one pass is the difference
        between readable and not. */
+    /* Catch the arena lights along the top-left edge of every form.
+
+       Run BEFORE the outline pass, so "edge" still means "next to nothing"
+       -- afterwards the whole exterior is outline colour and there is no
+       edge left to find. Internal boundaries count too: an arm crossing the
+       chest gets a lit edge against its own dark one, which is what makes
+       the limb sit in front rather than merely overlap. */
+    function rimPass() {
+        tmp.set(pix);
+        for (var y = 2; y < FH - 2; y++) {
+            var row = y * FW;
+            for (var x = 2; x < FW - 2; x++) {
+                var v = tmp[row + x];
+                if (!v || v === OUTL || v === WHITE || v === ACC.base) continue;
+                var up = tmp[row - FW + x], lf = tmp[row + x - 1],
+                    dn = tmp[row + FW + x], rt = tmp[row + x + 1];
+                if (up && lf && dn && rt &&
+                    up !== OUTL && lf !== OUTL && dn !== OUTL && rt !== OUTL) continue;
+                /* Light on the outside of the figure only. Rimming against
+                   the internal edges as well lit every limb all the way
+                   round and the figure came out drawn in light rather than
+                   lit by it -- the dark edges already do the separating.
+
+                   But every limb now carries its OWN edge, so the outermost
+                   pixel of the silhouette is outline and "next to
+                   transparent" never matched anything. Looking one pixel
+                   further, THROUGH that edge, is what finds the real
+                   outside. */
+                /* ...and only on the side the lamp is actually on.
+
+                   Testing "is the pixel above or to the left empty" lights
+                   the entire top half of every round form plus its whole
+                   left flank, which is three quarters of the silhouette:
+                   the figure came out TRACED in near-white rather than lit,
+                   and at a distance read as a chalk outline.
+
+                   So the opening direction is measured -- the sum of the
+                   directions of the empty cells around this one, nearer
+                   ones counting double -- and the pixel is lit only if that
+                   direction is within about sixty degrees of (LX, LY). The
+                   two-cell reach is what looks through the limb's own dark
+                   edge; the eight-neighbour gate above keeps the rim one
+                   pixel wide instead of two. */
+                var nx = 0, ny = 0, open = 0, dx, dy, r2, w;
+                for (dy = -2; dy <= 2; dy++) {
+                    r2 = row + dy * FW;
+                    for (dx = -2; dx <= 2; dx++) {
+                        if (dx === 0 && dy === 0) continue;
+                        if (tmp[r2 + x + dx] !== 0) continue;
+                        w = (dx * dx + dy * dy) > 2 ? 0.5 : 1;
+                        nx += dx * w; ny += dy * w; open += w;
+                    }
+                }
+                if (open < 1) continue;
+                var m = Math.sqrt(nx * nx + ny * ny);
+                if (m < 0.75) continue;
+                if ((nx / m) * LX + (ny / m) * LY < 0.5) continue;
+                pix[row + x] = RIM;
+            }
+        }
+    }
+
     function outlinePass() {
         tmp.set(pix);
         for (var y = 0; y < FH; y++) {
@@ -1519,17 +1652,19 @@
         var M = HAIR;
         switch (h) {
             case 1:                                            // short: a cap
-                blob(cx, cy - ry * 0.42, rx * 1.02, ry * 0.62, M);
+                blob(cx, cy - ry * 0.56, rx * 1.02, ry * 0.56, M);
                 break;
             case 2:                                            // long: past the jaw
-                blob(cx, cy - ry * 0.35, rx * 1.10, ry * 0.76, M);
-                capsule(cx - rx * 0.95, cy - ry * 0.2, rx * 0.44,
-                    cx - rx * 0.85, cy + ry * 1.15, rx * 0.40, M);
-                capsule(cx + rx * 0.95, cy - ry * 0.2, rx * 0.44,
-                    cx + rx * 0.85, cy + ry * 1.15, rx * 0.40, M);
+                blob(cx, cy - ry * 0.48, rx * 1.10, ry * 0.70, M);
+                // The side locks FRAME the face. At +-0.95rx with a 0.44rx
+                // radius they reached 0.51rx inward and covered half of it.
+                capsule(cx - rx * 1.02, cy - ry * 0.2, rx * 0.38,
+                    cx - rx * 0.92, cy + ry * 1.15, rx * 0.34, M);
+                capsule(cx + rx * 1.02, cy - ry * 0.2, rx * 0.38,
+                    cx + rx * 0.92, cy + ry * 1.15, rx * 0.34, M);
                 break;
             case 3:                                            // ponytail
-                blob(cx, cy - ry * 0.40, rx * 1.04, ry * 0.66, M);
+                blob(cx, cy - ry * 0.55, rx * 1.04, ry * 0.58, M);
                 if (fx) {
                     capsule(cx - fx * rx * 0.9, cy - ry * 0.3, rx * 0.40,
                         cx - fx * rx * 2.3, cy + ry * 0.5, rx * 0.30, M);
@@ -1555,10 +1690,10 @@
                 }
                 break;
             case 5:                                            // afro
-                blob(cx, cy - ry * 0.46, rx * 1.42, ry * 1.02, M);
+                blob(cx, cy - ry * 0.62, rx * 1.42, ry * 0.94, M);
                 break;
             case 6:                                            // topknot
-                blob(cx, cy - ry * 0.44, rx * 1.00, ry * 0.60, M);
+                blob(cx, cy - ry * 0.56, rx * 1.00, ry * 0.54, M);
                 blob(cx - fx * rx * 0.25, cy - ry * 1.42, rx * 0.46, ry * 0.46, M);
                 break;
             case 8: {                                          // ears
@@ -1580,13 +1715,13 @@
                 // mask has already drawn it, and capping again paints hair
                 // over the whole face.
                 if (style.mask !== 1) {
-                    blob(cx, cy - ry * 0.42, rx * 1.0, ry * 0.58, M);
+                    blob(cx, cy - ry * 0.54, rx * 1.0, ry * 0.52, M);
                 }
                 break;
             }
 
             default:                                           // wild / metal
-                blob(cx, cy - ry * 0.30, rx * 1.16, ry * 0.86, M);
+                blob(cx, cy - ry * 0.48, rx * 1.16, ry * 0.76, M);
                 // Spike length is capped so the tallest build at tall=+1
                 // still fits: at rx*2.2 a super heavyweight's hair ran off the
                 // top of its own 48px box and the outline pass had nowhere to
@@ -1602,12 +1737,24 @@
         }
     }
 
-    /* The face is four pixels and a brow. fx is +1 if the face points screen
-       right, -1 left, 0 if it is pointing at or away from the camera. */
+    /* The head is drawn in three passes and the ORDER IS THE WHOLE POINT.
+
+       drawFace paints what is part of the head's surface -- a luchador mask,
+       a visor, war paint. Then the hair goes on. Then drawFeatures puts the
+       eyes and the mouth on top of both.
+
+       Features used to be painted with the mask, BEFORE the hair, and seven
+       of the nine hairstyles have a fringe that reaches below the eye line:
+       the cap, the long hair, the ponytail, the afro, the topknot, the wild
+       one and the hood all erased the eyes completely. Only the bald head
+       and the mohawk had a face, which is most of why the roster read as a
+       set of mannequins. The fringes were raised as well -- that is what
+       lets a brow show -- but the ordering is what guarantees a face.
+
+       fx is +1 if the face points screen right, -1 left, 0 if it is pointing
+       at or away from the camera. */
     function drawFace(cx, cy, rx, ry, style, fx, toward) {
         if (!toward) return;                 // back of the head: nothing
-        var ex = fx ? fx * rx * 0.42 : 0;
-        var ey = cy - ry * 0.10;
         // A head is nine pixels across. A trim line of radius 1.1 is a
         // quarter of it, and two of them plus the eyes left no face at all --
         // every masked wrestler came out as a solid slab of accent colour.
@@ -1633,14 +1780,46 @@
             // thing that stops it reading identically to face paint at this
             // size.
             capsule(cx - rx, cy - ry * 0.20, rx * 0.28, cx + rx, cy - ry * 0.20, rx * 0.28, ACC);
-        } else if (style.mask === 3) {
-            // Paint as two vertical streaks through the eyes, not a band.
-            // Horizontally it was indistinguishable from the visor; this way
-            // it reads as war paint on one and erosion on the other.
+        }
+        // Note that mask 3 -- war paint -- is NOT here. It is a marking on
+        // the skin rather than a thing worn over it, so it is painted in
+        // drawFeatures, after the hair and after the face is re-asserted.
+    }
+
+    function drawFeatures(cx, cy, rx, ry, style, fx, toward) {
+        if (!toward) return;
+        var ex = fx ? fx * rx * 0.42 : 0;
+        var ey = cy - ry * 0.10;
+
+        /* Re-assert the face.
+
+           Hair is drawn as a solid mass over the whole skull, and there is
+           no way to shape a single ellipse that covers the crown AND stops
+           above the brow -- an ellipse is at its widest in the middle, so
+           one short enough to clear the eyes is a thin lens that does not
+           cover the head at all. Raising the fringes helped and was not
+           enough: long hair still filled the space between the eyes, so a
+           face was two dots peering out of a wig.
+
+           Rather than fight nine hairstyles individually, the face is
+           painted back on afterwards -- an oval from just above the brow to
+           the chin. The hair above it becomes a hairline and the locks
+           either side become sideburns, which is what they were meant to be.
+
+           A luchador mask and a visor are structures worn OVER the face, so
+           they keep what they drew; war paint is on the skin, so it goes
+           back on below. */
+        if (style.mask !== 1 && style.mask !== 2) {
+            blob(cx, cy + ry * 0.18, rx * 0.76, ry * 0.70, SKIN);
+        }
+        if (style.mask === 3) {
+            // Two vertical streaks through the eyes, not a band: a band was
+            // indistinguishable from the visor at this size. This way one
+            // reads as war paint and the other as erosion.
             var pw = rx * 0.19;
-            capsule(cx - rx * 0.42, cy - ry * 0.95, pw,
+            capsule(cx - rx * 0.42, cy - ry * 0.80, pw,
                 cx - rx * 0.42, cy + ry * 0.55, pw, ACC);
-            capsule(cx + rx * 0.42, cy - ry * 0.95, pw,
+            capsule(cx + rx * 0.42, cy - ry * 0.80, pw,
                 cx + rx * 0.42, cy + ry * 0.55, pw, ACC);
         }
         var blind = (style.mask === 2);
@@ -1658,13 +1837,25 @@
             stroke(cx + fx * rx * 0.35, cy + ry * 0.48,
                 cx + fx * rx * 0.72, cy + ry * 0.42, er * 0.6, OUTL);
         } else {
-            var er2 = Math.max(0.5, rx * 0.14);
-            dot(cx - rx * 0.40, ey, er2, WHITE);
-            dot(cx + rx * 0.40, ey, er2, WHITE);
-            dot(cx - rx * 0.40, ey + er2 + 0.5, er2 * 0.8, OUTL);
-            dot(cx + rx * 0.40, ey + er2 + 0.5, er2 * 0.8, OUTL);
-            stroke(cx - rx * 0.30, cy + ry * 0.52,
-                cx + rx * 0.30, cy + ry * 0.52, er2 * 0.6, OUTL);
+            var er2 = Math.max(0.5, rx * 0.115);
+            // Snapped to the pixel grid, symmetrically about a pixel CENTRE.
+            // An eye is two or three pixels wide, so a half-pixel of
+            // rounding put the two at different widths and the face came out
+            // lopsided -- which at this size reads as a mistake, not a
+            // character.
+            var hc = Math.floor(cx) + 0.5;
+            var exx = Math.max(2, Math.round(rx * 0.40));
+            // The lid is wider than the eye and sits on top of it, so it
+            // does the brow's job from inside the eye's own footprint. An
+            // actual brow stroke above the eye lands in the hair at this
+            // scale, whatever the hairstyle. Two features is the budget:
+            // adding a pupil and a lower lid to a 2.5px eye filled it in.
+            dot(hc - exx, ey - er2 * 0.75, er2 * 1.15, OUTL);
+            dot(hc + exx, ey - er2 * 0.75, er2 * 1.15, OUTL);
+            dot(hc - exx, ey + er2 * 0.25, er2 * 0.95, WHITE);
+            dot(hc + exx, ey + er2 * 0.25, er2 * 0.95, WHITE);
+            stroke(hc - rx * 0.28, cy + ry * 0.50,
+                hc + rx * 0.28, cy + ry * 0.50, er2 * 0.6, OUTL);
         }
         if (style.beard) {
             var bm = style.beard === 1 ? { sh: HAIR.sh, base: HAIR.sh, lt: HAIR.sh } : HAIR;
@@ -1691,33 +1882,70 @@
         a[2] + (b[2] - a[2]) * t];
     }
 
+    /* A limb is edged ONCE, around the whole chain, and then filled.
+
+       Every segment used to carry its own `edge` flag, which drew a dark
+       ring around the thigh, another around the shin and a third around the
+       boot. Where two rings met -- at the knee, at the ankle -- they stacked
+       into a two-pixel dark band straight across the limb, and a leg read as
+       a string of beads rather than a leg. It is worst with the arms
+       overhead, where four outlined shapes stack in a row.
+
+       So every edge goes down first, at the same radii plus EDGE, and the
+       fills are painted over them. What survives is the outline of the limb
+       as a whole: the internal seams are covered by the next fill, and the
+       joints are left to the shading, which is what was drawing them in
+       the first place. The radii are named once for the same reason -- the
+       two passes have to agree, and they drift the moment they are typed
+       out twice. */
     function drawLeg(S, hi, kn, ft, sc, style) {
         var bs = sc.bs;
         var bt = BOOT_TOP[style.boots];
         // Boot top: a fraction up the shin, or past the knee into the thigh.
         var top = bt <= 1 ? lerpJ(ft, kn, bt) : lerpJ(kn, hi, bt - 1);
-
         // Trunks cover the top third of the thigh.
         var trunkEnd = lerpJ(hi, kn, 0.34);
-        capsule(hi[0], hi[1], R.thighTop * bs, trunkEnd[0], trunkEnd[1],
-            R.thighTop * 0.88 * bs, TRUNK);
-
-        if (bt <= 1) {
-            capsule(trunkEnd[0], trunkEnd[1], R.thighTop * 0.88 * bs,
-                kn[0], kn[1], R.thighBot * bs, SKIN);
-            capsule(kn[0], kn[1], R.shinTop * bs, top[0], top[1], R.shinBot * 1.1 * bs, SKIN);
-            capsule(top[0], top[1], R.shinBot * 1.15 * bs, ft[0], ft[1], R.foot * bs, BOOT);
-        } else {
-            capsule(trunkEnd[0], trunkEnd[1], R.thighTop * 0.88 * bs,
-                top[0], top[1], R.thighBot * bs, SKIN);
-            capsule(top[0], top[1], R.thighBot * 1.1 * bs, kn[0], kn[1], R.shinTop * bs, BOOT);
-            capsule(kn[0], kn[1], R.shinTop * bs, ft[0], ft[1], R.foot * bs, BOOT);
-        }
-        // The toe, pointing the way the foot leads.
         var tx = ft[0] + (ft[0] - kn[0]) * 0.1;
         var dir = (ft[0] - hi[0]) >= 0 ? 1 : -1;
-        capsule(ft[0], ft[1], R.foot * bs, tx + dir * R.toeLen * bs, ft[1] + 0.4,
-            R.toe * bs, BOOT);
+
+        var rHip = R.thighTop * bs, rTrk = R.thighTop * 0.88 * bs;
+        var rKne = R.thighBot * bs, rShT = R.shinTop * bs;
+        var rShB = R.shinBot * 1.1 * bs, rAnk = R.shinBot * 1.15 * bs;
+        var rBtT = R.thighBot * 1.1 * bs;
+        var rFt = R.foot * bs, rToe = R.toe * bs;
+        var toeX = tx + dir * R.toeLen * bs, toeY = ft[1] + 0.4;
+
+        capsule(hi[0], hi[1], rHip + EDGE, trunkEnd[0], trunkEnd[1], rTrk + EDGE, OUTL);
+        if (bt <= 1) {
+            capsule(trunkEnd[0], trunkEnd[1], rTrk + EDGE, kn[0], kn[1], rKne + EDGE, OUTL);
+            capsule(kn[0], kn[1], rShT + EDGE, top[0], top[1], rShB + EDGE, OUTL);
+            capsule(top[0], top[1], rAnk + EDGE, ft[0], ft[1], rFt + EDGE, OUTL);
+        } else {
+            capsule(trunkEnd[0], trunkEnd[1], rTrk + EDGE, top[0], top[1], rKne + EDGE, OUTL);
+            capsule(top[0], top[1], rBtT + EDGE, kn[0], kn[1], rShT + EDGE, OUTL);
+            capsule(kn[0], kn[1], rShT + EDGE, ft[0], ft[1], rFt + EDGE, OUTL);
+        }
+        capsule(ft[0], ft[1], rFt + EDGE, toeX, toeY, rToe + EDGE, OUTL);
+
+        capsule(hi[0], hi[1], rHip, trunkEnd[0], trunkEnd[1], rTrk, TRUNK);
+        if (bt <= 1) {
+            capsule(trunkEnd[0], trunkEnd[1], rTrk, kn[0], kn[1], rKne, SKIN);
+            capsule(kn[0], kn[1], rShT, top[0], top[1], rShB, SKIN);
+            // Calf, a third of the way down the shin and swung BEHIND the
+            // bone -- behind being the side the toe does not point at, the
+            // same test the toe itself uses so the two can never disagree.
+            // A leg without one is a pipe.
+            blob(kn[0] + (ft[0] - kn[0]) * 0.32 - dir * rShT * 0.30,
+                kn[1] + (ft[1] - kn[1]) * 0.32,
+                rShT * 0.64, rShT * 1.10, SKIN);
+            capsule(top[0], top[1], rAnk, ft[0], ft[1], rFt, BOOT);
+        } else {
+            capsule(trunkEnd[0], trunkEnd[1], rTrk, top[0], top[1], rKne, SKIN);
+            capsule(top[0], top[1], rBtT, kn[0], kn[1], rShT, BOOT);
+            capsule(kn[0], kn[1], rShT, ft[0], ft[1], rFt, BOOT);
+        }
+        // The toe, pointing the way the foot leads.
+        capsule(ft[0], ft[1], rFt, toeX, toeY, rToe, BOOT);
 
         // Detail that only exists above about 64px: a cuff where the boot
         // ends and a dark sole under it. At 48 both were a single pixel and
@@ -1730,16 +1958,27 @@
         }
     }
 
+    /* Edged, because an arm hanging at the side sits inside the torso's own
+       silhouette: at heavy build the two merged into one slab and the figure
+       had no arms at all. Edge pass first, then fills -- see drawLeg. */
     function drawArm(S, sh, el, ha, sc, fatS, fatE) {
         var bs = sc.bs;
-        capsule(sh[0], sh[1], R.armTop * bs, el[0], el[1], R.armMid * bs, SKIN, fatS);
-        capsule(el[0], el[1], R.foreTop * bs, ha[0], ha[1], R.foreBot * bs, SKIN, fatE);
-        // The fist is deliberately oversized. A correctly-proportioned fist at
-        // this scale is two pixels and a punch reads as an arm twitching.
+        var rSh = R.armTop * bs * (fatS || 1), rEl = R.armMid * bs * (fatS || 1);
+        var rFo = R.foreTop * bs * (fatE || 1), rWr = R.foreBot * bs * (fatE || 1);
+        // The fist is deliberately oversized. A correctly-proportioned fist
+        // at this scale is two pixels and a punch reads as an arm twitching.
         var fr = R.fist * bs * (fatE || 1);
+
+        capsule(sh[0], sh[1], rSh + EDGE, el[0], el[1], rEl + EDGE, OUTL);
+        capsule(el[0], el[1], rFo + EDGE, ha[0], ha[1], rWr + EDGE, OUTL);
+        blob(ha[0], ha[1], fr + EDGE, fr + EDGE, OUTL);
+
+        capsule(sh[0], sh[1], rSh, el[0], el[1], rEl, SKIN);
+        capsule(el[0], el[1], rFo, ha[0], ha[1], rWr, SKIN);
         blob(ha[0], ha[1], fr, fr, SKIN);
         // A knuckle line across the back of it, square to the forearm. This
-        // is the difference between a fist and a ball on a stick.
+        // is the difference between a fist and a ball on a stick, and with
+        // the wrist seam gone it is the only thing saying where one ends.
         if (bs >= 1.4) {
             band(ha[0], ha[1], el[0], el[1], ha[0], ha[1],
                 fr * 0.72, Math.max(0.6, 0.22 * bs), SKIN.sh);
@@ -1764,10 +2003,20 @@
         parts.length = 0;
 
         // Project every joint into screen units, then into pixels.
-        var o = [0, 0, 0], k, i;
+        // Lateral is index 0 upright and index 2 laid out -- see project().
+        var spread = ARM_SPREAD *
+            (1 + (BUILDS[S.build].bs - 1) * ARM_SPREAD_BULK);
+        var o = [0, 0, 0], k, i, jj, w;
         for (i = 0; i < JOINTS.length; i++) {
             k = JOINTS[i];
-            project(j[k], view, flat, o);
+            jj = j[k];
+            w = ARM_JOINTS[k];
+            if (w) {
+                w = 1 + (spread - 1) * w;
+                jj = flat ? [jj[0], jj[1], jj[2] * w]
+                    : [jj[0] * w, jj[1], jj[2]];
+            }
+            project(jj, view, flat, o);
             P[k][0] = poser.AX + o[0] * sc.ms;
             P[k][1] = GY - o[1] * sc.hs;
             P[k][2] = o[2];
@@ -1790,6 +2039,24 @@
                 P.cst[0], P.cst[1], R.torsoCst * bs, SKIN);
             capsule(P.shA[0], P.shA[1], R.shoulder * bs,
                 P.shB[0], P.shB[1], R.shoulder * bs, SKIN);
+            // Deltoid caps, so an arm grows out of a joint instead of being
+            // nailed to the end of a plank.
+            blob(P.shA[0], P.shA[1], R.shoulder * 0.88 * bs,
+                R.shoulder * 0.80 * bs, SKIN);
+            blob(P.shB[0], P.shB[1], R.shoulder * 0.88 * bs,
+                R.shoulder * 0.80 * bs, SKIN);
+            // Pectorals, placed a quarter of the way down the chest and
+            // offset along the SHOULDER line rather than along screen x, so
+            // they roll with the torso instead of sitting on it like two
+            // coins. The sternum stroke below draws over the seam.
+            var pfx = P.cst[0] + (P.wst[0] - P.cst[0]) * 0.26;
+            var pfy = P.cst[1] + (P.wst[1] - P.cst[1]) * 0.26;
+            var pux = (P.shB[0] - P.shA[0]) * 0.17;
+            var puy = (P.shB[1] - P.shA[1]) * 0.17;
+            blob(pfx - pux, pfy - puy, R.torsoCst * 0.48 * bs,
+                R.torsoCst * 0.38 * bs, SKIN);
+            blob(pfx + pux, pfy + puy, R.torsoCst * 0.48 * bs,
+                R.torsoCst * 0.38 * bs, SKIN);
             capsule(P.cst[0], P.cst[1], R.neck * bs,
                 P.nek[0], P.nek[1], R.neck * bs, SKIN);
             // Trunks waistband, so the two materials do not just abut.
@@ -1836,7 +2103,7 @@
         var hd = P.hed;
         part(hd[2] + 0.02, function () {
             var rx = R.headRx * sc.hd, ry = R.headRy * sc.hd;
-            blob(hd[0], hd[1], rx, ry, SKIN);
+            blob(hd[0], hd[1], rx, ry, SKIN, 1);
             // Which way is the face pointing, in screen terms?
             var fwd = flat ? (j._fwd || [1, 0, 0]) : null;
             var fx = 0, toward = true;
@@ -1853,6 +2120,8 @@
             // hairstyle from the front.
             drawHair(hd[0], hd[1], rx, ry, S, fx,
                 S.hair * 97 + S.build.charCodeAt(0), view);
+            // Last, and over the hair. See drawFace.
+            drawFeatures(hd[0], hd[1], rx, ry, S, fx, toward);
         });
 
         // Painter's algorithm, far to near. Stable: equal depths keep their
@@ -1864,6 +2133,7 @@
         }
         for (i = 0; i < parts.length; i++) parts[i].fn();
 
+        rimPass();
         outlinePass();
         return pix;
     }
