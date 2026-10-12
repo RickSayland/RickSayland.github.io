@@ -1,0 +1,288 @@
+/* PowderPet. Full-viewport flex row: 20% / 60% / 20%. Below 600px the side
+   columns turn into button rows above and below the tank. */
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+    --bg: #0b0d14;
+    --panel: #121522;
+    --panel-2: #191d2e;
+    --line: #262b42;
+    --ink: #dfe3f0;
+    --dim: #8b91a8;
+    --accent: #f2b05e;
+    --good: #6fd08c;
+    --warn: #e8c15a;
+    --bad: #e2605f;
+    --gap: 10px;
+}
+
+html, body { height: 100%; }
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    overflow: hidden;
+    overscroll-behavior: none;
+    -webkit-tap-highlight-color: transparent;
+}
+
+#app {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    flex-direction: row;
+}
+
+/* ---- side columns ---------------------------------------------------------- */
+.col {
+    flex: 0 0 20%;
+    width: 20%;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--gap);
+    padding: var(--gap);
+    background: var(--panel);
+    overflow-x: hidden;
+    overflow-y: auto;
+}
+.col > * { flex: none; min-width: 0; }
+#left { border-right: 1px solid var(--line); }
+#right { border-left: 1px solid var(--line); }
+
+.btns { display: flex; flex-direction: column; gap: var(--gap); }
+
+button { font: inherit; color: inherit; cursor: pointer; }
+
+.big {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    min-height: 56px;
+    padding: 10px 14px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--panel-2);
+    font-size: 1rem;
+    font-weight: 600;
+    text-align: left;
+    touch-action: manipulation;
+    user-select: none;
+    transition: background 0.12s, border-color 0.12s, transform 0.06s;
+}
+.big:hover { background: #20253a; border-color: #343a58; }
+.big:active { transform: translateY(1px); }
+.big.on { border-color: var(--accent); background: #2a2417; color: #ffe0ae; }
+.big:disabled { opacity: 0.45; cursor: default; }
+.big .ico { font-size: 1.35rem; line-height: 1; width: 1.6em; text-align: center; flex: none; }
+.big .lbl { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.big .cd { margin-left: auto; font-size: 0.75rem; font-weight: 500; color: var(--dim); font-variant-numeric: tabular-nums; }
+
+.stats { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
+
+.stat { display: grid; grid-template-columns: 1fr auto; grid-template-areas: "l v" "b b"; gap: 3px 6px; align-items: baseline; }
+.stat label { grid-area: l; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.07em; color: var(--dim); }
+.stat .val { grid-area: v; font-size: 0.78rem; font-variant-numeric: tabular-nums; color: var(--dim); }
+.stat .bar { grid-area: b; height: 10px; border-radius: 6px; background: #0a0c13; border: 1px solid var(--line); overflow: hidden; }
+.stat .bar i { display: block; height: 100%; width: 50%; background: var(--good); border-radius: 5px; transition: width 0.25s linear, background 0.25s; }
+.stat.mid .bar i { background: var(--warn); }
+.stat.low .bar i { background: var(--bad); }
+
+.read { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; padding-top: 6px; border-top: 1px solid var(--line); }
+.read label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.07em; color: var(--dim); }
+.read span { font-size: 0.9rem; font-variant-numeric: tabular-nums; text-align: right; }
+.read span.warn { color: var(--warn); }
+.read span.bad { color: var(--bad); }
+
+/* ---- centre ---------------------------------------------------------------- */
+#center {
+    flex: 1 1 60%;
+    min-width: 0;
+    min-height: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #05060a;
+    position: relative;
+    overflow: hidden;
+}
+
+#stage { position: relative; flex: none; }
+
+/* The simulation is a fixed 200x150 grid; the canvas is scaled up to fill the
+   column with nearest-neighbour sampling so a cell stays a hard-edged square. */
+#sim, #overlay { position: absolute; left: 0; top: 0; width: 100%; height: 100%; display: block; }
+#sim {
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    touch-action: none;
+    cursor: crosshair;
+    background: #090b13;
+}
+#overlay { pointer-events: none; }
+
+#hud {
+    position: absolute; left: 8px; top: 8px;
+    display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap;
+    font-size: 0.78rem; pointer-events: none;
+    text-shadow: 0 1px 2px #000, 0 0 6px #000;
+    max-width: calc(100% - 60px);
+}
+#hudName { font-weight: 700; }
+#hudState { color: var(--dim); }
+
+.chip {
+    border: 1px solid var(--line); background: rgba(18, 21, 34, 0.85); border-radius: 999px;
+    min-width: 36px; height: 36px; padding: 0 10px; font-size: 1rem; line-height: 1;
+}
+.chip:hover { background: #20253a; }
+#btnMute { position: absolute; right: 8px; top: 8px; }
+
+#toast {
+    position: absolute; left: 50%; top: 14%; transform: translateX(-50%);
+    max-width: 86%; padding: 8px 14px; border-radius: 10px;
+    background: rgba(16, 19, 30, 0.92); border: 1px solid var(--line);
+    font-size: 0.85rem; text-align: center; pointer-events: none;
+    opacity: 0; transition: opacity 0.25s;
+}
+#toast.show { opacity: 1; }
+
+#debugPanel {
+    position: absolute; left: 8px; top: 30px; max-width: 70%;
+    padding: 6px 8px; border-radius: 8px;
+    background: rgba(8, 10, 16, 0.78); border: 1px solid var(--line);
+    font-size: 0.66rem; pointer-events: auto;
+}
+#debugPanel pre { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; line-height: 1.35; white-space: pre-wrap; }
+#debugPanel .layers { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 5px; color: var(--dim); }
+#debugPanel label { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
+
+#newEgg {
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    display: flex; flex-direction: column; gap: 10px; align-items: center;
+    padding: 16px 18px; border-radius: 14px; width: min(320px, 82%);
+    background: rgba(16, 19, 30, 0.94); border: 1px solid var(--line); text-align: center;
+}
+#newEgg[hidden], #palette[hidden], #debugPanel[hidden] { display: none; }
+#newEgg p { font-size: 0.85rem; color: var(--dim); }
+#newEgg .big { justify-content: center; }
+
+/* The sandbox picker lives in the right column, under the buttons, so it
+   never covers the tank. */
+#palette {
+    display: flex; flex-direction: column; gap: 8px;
+    padding: 8px; border-radius: 12px;
+    background: #0d1019; border: 1px solid var(--accent);
+}
+.tabs { display: flex; gap: 4px; min-width: 0; }
+.tabs button {
+    flex: 1 1 0; min-width: 0;
+    border: 1px solid var(--line); background: var(--panel-2); border-radius: 8px;
+    padding: 6px 2px; font-size: 0.72rem; font-weight: 600; min-height: 34px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.tabs button.on { border-color: var(--accent); color: #ffe0ae; background: #2a2417; }
+.swatches { display: flex; flex-wrap: wrap; gap: 4px; }
+.swatches button {
+    display: inline-flex; align-items: center; gap: 5px;
+    flex: 1 1 auto; min-width: 0;
+    border: 1px solid var(--line); background: var(--panel-2); border-radius: 8px;
+    padding: 5px 7px 5px 6px; font-size: 0.74rem; min-height: 34px;
+    white-space: nowrap;
+}
+.swatches button i { width: 14px; height: 14px; border-radius: 3px; border: 1px solid rgba(255, 255, 255, 0.25); flex: none; }
+.swatches button.on { border-color: var(--accent); background: #2a2417; }
+.brush { display: inline-flex; align-items: center; gap: 6px; font-size: 0.74rem; color: var(--dim); }
+.brush input { flex: 1 1 auto; min-width: 0; }
+
+/* ---- modals ---------------------------------------------------------------- */
+.modal {
+    position: fixed; inset: 0; z-index: 20;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(3, 4, 8, 0.72); padding: 14px;
+}
+.modal[hidden] { display: none; }
+.sheet {
+    width: min(760px, 100%); max-height: 100%; overflow-y: auto;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 16px;
+}
+.sheet.small { width: min(380px, 100%); text-align: center; }
+.sheet header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.sheet h2 { font-size: 1.1rem; }
+.sheet p { font-size: 0.88rem; color: var(--dim); margin: 10px 0; line-height: 1.45; }
+.sheet canvas { max-width: 100%; border-radius: 10px; background: #0a0c13; border: 1px solid var(--line); }
+.row { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+.row button, #btnBreed {
+    border: 1px solid var(--line); background: var(--panel-2); border-radius: 10px;
+    padding: 10px 14px; font-weight: 600; min-height: 44px;
+}
+.row button.primary { border-color: var(--accent); background: #2a2417; color: #ffe0ae; }
+.row button:hover, #btnBreed:hover { background: #20253a; }
+
+#lineageList { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.kin {
+    border: 1px solid var(--line); border-radius: 12px; padding: 8px; background: var(--panel-2);
+    display: flex; flex-direction: column; gap: 5px; font-size: 0.74rem; color: var(--dim);
+}
+.kin.now { border-color: var(--accent); }
+.kin canvas { width: 100%; height: auto; }
+.kin b { color: var(--ink); font-size: 0.82rem; }
+.kin code { font-size: 0.62rem; word-break: break-all; color: #6f768f; cursor: pointer; }
+.kin code:hover { color: var(--accent); }
+.empty { grid-column: 1 / -1; padding: 18px; text-align: center; color: var(--dim); font-size: 0.88rem; }
+
+.breed { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
+.breed label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.07em; color: var(--dim); }
+.breed .row { justify-content: stretch; margin-top: 6px; }
+.breed input {
+    flex: 1 1 200px; min-width: 0; min-height: 44px; padding: 8px 10px;
+    border-radius: 10px; border: 1px solid var(--line); background: #0a0c13; color: var(--ink); font: inherit; font-size: 0.85rem;
+}
+.note { font-size: 0.8rem; min-height: 1.2em; }
+
+/* ---- narrow screens ---------------------------------------------------------
+   The columns collapse into rows: buttons (and a compact strip of bars) above
+   the tank and below it. */
+@media (max-width: 600px) {
+    #app { flex-direction: column; }
+    .col {
+        flex: 0 0 auto; width: 100%;
+        flex-direction: column; gap: 6px; padding: 6px;
+        overflow: visible;
+    }
+    #left { border-right: none; border-bottom: 1px solid var(--line); }
+    #right { border-left: none; border-top: 1px solid var(--line); }
+    .btns { flex-direction: row; gap: 6px; }
+    .big {
+        flex: 1 1 0; min-width: 0; min-height: 50px;
+        flex-direction: column; justify-content: center; gap: 2px; padding: 5px 2px;
+        font-size: 0.66rem; text-align: center;
+    }
+    .big .ico { font-size: 1.15rem; width: auto; }
+    .big .cd { margin: 0; font-size: 0.6rem; }
+    .stats { flex-direction: row; gap: 8px; margin-top: 0; align-items: flex-end; }
+    .stat { flex: 1 1 0; min-width: 0; }
+    .stat label { font-size: 0.58rem; letter-spacing: 0.03em; white-space: nowrap; overflow: hidden; }
+    .stat .val { display: none; }
+    .stat .bar { height: 7px; }
+    .read { flex: 1 1 0; min-width: 0; flex-direction: column; align-items: flex-start; gap: 1px; padding-top: 0; border-top: none; }
+    .read label { font-size: 0.58rem; letter-spacing: 0.03em; white-space: nowrap; }
+    .read span { font-size: 0.7rem; text-align: left; white-space: nowrap; }
+    #center { flex: 1 1 auto; }
+    #palette { padding: 5px; gap: 5px; flex-direction: row; flex-wrap: wrap; align-items: center; }
+    .tabs { flex: 0 0 auto; }
+    .tabs button { flex: none; padding: 4px 8px; }
+    .swatches { flex: 1 1 100%; order: 3; }
+    .swatches button { flex: none; }
+    .brush { flex: 1 1 90px; }
+    .swatches button { padding: 4px 6px 4px 5px; font-size: 0.68rem; min-height: 30px; }
+    .tabs button { padding: 4px 7px; min-height: 30px; }
+    #debugPanel { max-width: 80%; font-size: 0.58rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .big, .stat .bar i, #toast { transition: none; }
+}

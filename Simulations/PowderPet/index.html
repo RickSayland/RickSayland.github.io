@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Powder Pet — a soft-bodied pet in a radioactive sandbox</title>
+    <meta name="description" content="A virtual pet made of bone, meat, blood and skin particles, living in a falling-sand simulation with radiation and heritable genetics.">
+    <link rel="icon" type="image/svg+xml" href="content/favicon.svg">
+    <link rel="stylesheet" href="style.css?v=0.1.0">
+</head>
+<body>
+<div id="app">
+
+    <aside id="left" class="col">
+        <div class="btns">
+            <button class="big" id="btnFeed" title="Pour food for a second"><span class="ico">&#127830;</span><span class="lbl">Feed</span></button>
+            <button class="big" id="btnClean" title="Pour water: dissolves waste, washes off contamination"><span class="ico">&#128167;</span><span class="lbl">Clean</span></button>
+            <button class="big" id="btnPlay" title="Drop a bouncy ball"><span class="ico">&#9917;</span><span class="lbl">Play</span></button>
+            <button class="big" id="btnShare" title="Copy a link to this pet's genome"><span class="ico">&#128279;</span><span class="lbl">Share</span></button>
+        </div>
+        <div class="stats">
+            <div class="stat" data-stat="hunger"><label>Hunger</label><div class="bar"><i></i></div><span class="val"></span></div>
+            <div class="stat" data-stat="happiness"><label>Happy</label><div class="bar"><i></i></div><span class="val"></span></div>
+            <div class="stat" data-stat="hygiene"><label>Hygiene</label><div class="bar"><i></i></div><span class="val"></span></div>
+            <div class="stat" data-stat="energy"><label>Energy</label><div class="bar"><i></i></div><span class="val"></span></div>
+        </div>
+    </aside>
+
+    <main id="center">
+        <div id="stage">
+            <canvas id="sim" width="200" height="150"></canvas>
+            <canvas id="overlay"></canvas>
+            <div id="hud"><span id="hudName"></span><span id="hudState"></span></div>
+            <button id="btnMute" class="chip" title="Sound">&#128263;</button>
+            <div id="toast" role="status" aria-live="polite"></div>
+            <div id="debugPanel" hidden>
+                <pre id="debugText"></pre>
+                <div class="layers">
+                    <label><input type="checkbox" data-layer="particles" checked> particles</label>
+                    <label><input type="checkbox" data-layer="constraints" checked> constraints</label>
+                    <label><input type="checkbox" data-layer="dose" checked> dose</label>
+                    <label><input type="checkbox" data-layer="temp"> temp</label>
+                </div>
+            </div>
+            <div id="newEgg" hidden>
+                <p id="newEggNote"></p>
+                <button class="big" id="btnNewEgg">New Egg</button>
+            </div>
+        </div>
+    </main>
+
+    <aside id="right" class="col">
+        <div class="btns">
+            <button class="big" id="btnLights" title="Lights out: the pet sleeps"><span class="ico">&#128161;</span><span class="lbl">Lights</span></button>
+            <button class="big" id="btnMedicine" title="Restore health, speed healing, flush contamination"><span class="ico">&#128138;</span><span class="lbl">Medicine</span></button>
+            <button class="big" id="btnSandbox" title="Paint materials into the tank"><span class="ico">&#127912;</span><span class="lbl">Sandbox</span></button>
+            <button class="big" id="btnLineage" title="Ancestors"><span class="ico">&#129516;</span><span class="lbl">Lineage</span></button>
+            <button class="big" id="btnDebug" title="Show what it is made of"><span class="ico">&#128300;</span><span class="lbl">Debug</span></button>
+        </div>
+        <div id="palette" hidden>
+            <div class="tabs" id="paletteTabs">
+                <button data-tab="basic" class="on">Basic</button>
+                <button data-tab="nuclear">Nuclear</button>
+                <button data-tab="tissue">Tissue</button>
+            </div>
+            <div class="swatches" id="swatches"></div>
+            <label class="brush">Brush <input type="range" id="brush" min="0" max="6" step="1" value="2"></label>
+        </div>
+        <div class="stats">
+            <div class="stat" data-stat="health"><label>Health</label><div class="bar"><i></i></div><span class="val"></span></div>
+            <div class="read"><label>Body temp</label><span id="readTemp">—</span></div>
+            <div class="read"><label>Dose rate</label><span id="readRate">—</span></div>
+            <div class="read"><label>Total dose</label><span id="readDose">—</span></div>
+            <div class="read"><label>Stage</label><span id="readStage">—</span></div>
+        </div>
+    </aside>
+</div>
+
+<div class="modal" id="lineageModal" hidden>
+    <div class="sheet">
+        <header><h2>Lineage</h2><button class="chip" data-close>&#10005;</button></header>
+        <div id="lineageList"></div>
+        <div class="breed">
+            <label for="breedInput">Breed with link</label>
+            <div class="row">
+                <input id="breedInput" type="text" placeholder="paste a genome link or code" spellcheck="false" autocomplete="off">
+                <button id="btnBreed">Set mate</button>
+            </div>
+            <p id="breedNote" class="note"></p>
+        </div>
+    </div>
+</div>
+
+<div class="modal" id="dialogModal" hidden>
+    <div class="sheet small">
+        <h2 id="dialogTitle"></h2>
+        <canvas id="dialogThumb" width="220" height="130"></canvas>
+        <p id="dialogText"></p>
+        <div class="row" id="dialogButtons"></div>
+    </div>
+</div>
+
+<script type="module" src="js/main.js?v=0.1.0"></script>
+</body>
+</html>

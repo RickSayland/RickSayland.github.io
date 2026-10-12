@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 570 214" role="img" aria-labelledby="title desc">
+  <title id="title">Powder Pet</title>
+  <desc id="desc">A cute powder creature with dust motes and the Powder Pet wordmark.</desc>
+  <defs>
+    <radialGradient id="bgGlow" cx="50%" cy="48%" r="60%">
+      <stop offset="0%" stop-color="#9de7ff" stop-opacity="0.32"/>
+      <stop offset="48%" stop-color="#6ee7c2" stop-opacity="0.18"/>
+      <stop offset="100%" stop-color="#0a1620" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="petBody" cx="38%" cy="30%" r="75%">
+      <stop offset="0%" stop-color="#f9f8ff"/>
+      <stop offset="26%" stop-color="#dff1ff"/>
+      <stop offset="60%" stop-color="#7dc7ff"/>
+      <stop offset="100%" stop-color="#4164bf"/>
+    </radialGradient>
+    <radialGradient id="petEar" cx="35%" cy="25%" r="75%">
+      <stop offset="0%" stop-color="#f9f8ff"/>
+      <stop offset="100%" stop-color="#b2d6ff"/>
+    </radialGradient>
+    <filter id="softGlow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="5" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <rect width="570" height="214" fill="#091720"/>
+  <circle cx="106" cy="107" r="104" fill="url(#bgGlow)"/>
+
+  <g opacity="0.8" fill="#bfe6ff" filter="url(#softGlow)">
+    <circle cx="36" cy="47" r="4"/>
+    <circle cx="58" cy="30" r="3"/>
+    <circle cx="170" cy="52" r="5"/>
+    <circle cx="182" cy="34" r="2.5"/>
+    <circle cx="164" cy="158" r="4"/>
+    <circle cx="32" cy="156" r="3"/>
+    <circle cx="60" cy="176" r="3.5"/>
+  </g>
+
+  <g transform="translate(10 0)" filter="url(#softGlow)">
+    <path d="M113 49 L142 22 L155 58 L127 80 Z" fill="url(#petEar)" opacity="0.9"/>
+    <path d="M99 49 L70 22 L58 58 L87 80 Z" fill="url(#petEar)" opacity="0.9"/>
+    <path d="M62 102 C62 62, 84 40, 111 41 C146 42, 166 70, 167 106 C168 147, 145 170, 111 170 C79 170, 62 144, 62 102 Z" fill="url(#petBody)"/>
+    <path d="M79 92 C90 84, 100 82, 111 83 C122 84, 132 88, 140 96 C134 88, 125 82, 111 80 C98 78, 86 82, 79 92 Z" fill="#ddefff" opacity="0.75"/>
+
+    <ellipse cx="91" cy="106" rx="10" ry="12" fill="#12314a"/>
+    <ellipse cx="131" cy="106" rx="10" ry="12" fill="#12314a"/>
+    <circle cx="95" cy="102" r="3.3" fill="#f4fbff"/>
+    <circle cx="127" cy="102" r="3.3" fill="#f4fbff"/>
+    <circle cx="90" cy="102" r="1.2" fill="#0f1727"/>
+    <circle cx="122" cy="102" r="1.2" fill="#0f1727"/>
+
+    <path d="M111 117 Q118 123 111 129 Q104 123 111 117 Z" fill="#ffbca8"/>
+    <path d="M103 132 Q111 138 119 132" fill="none" stroke="#4c6ba8" stroke-width="2.2" stroke-linecap="round"/>
+
+    <path d="M74 130 C82 151, 95 160, 111 160 C127 160, 141 151, 149 130" fill="none" stroke="#d9fdff" stroke-width="4" stroke-linecap="round" opacity="0.75"/>
+    <path d="M88 150 L81 166" stroke="#7cdaf7" stroke-width="5" stroke-linecap="round"/>
+    <path d="M134 150 L141 166" stroke="#7cdaf7" stroke-width="5" stroke-linecap="round"/>
+    <path d="M100 145 L95 164" stroke="#7cdaf7" stroke-width="4" stroke-linecap="round"/>
+    <path d="M122 145 L127 164" stroke="#7cdaf7" stroke-width="4" stroke-linecap="round"/>
+  </g>
+
+  <g fill="#dbe9ff" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+    <text x="200" y="98" font-size="44" font-weight="700" letter-spacing="0.5">Powder Pet</text>
+    <text x="203" y="130" font-size="12" font-weight="600" letter-spacing="3.6" fill="#8eaecd">DUST-BORN COMPANION</text>
+  </g>
+</svg>
