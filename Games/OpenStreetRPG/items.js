@@ -59,15 +59,18 @@ const ITEMS = {
         equipText: 'Afterburners lit. You climb to cruising altitude.',
         unequipText: 'You land the jet and climb out.'
     },
-    // The secret one, granted by ?ufo (main.js). Three times the jet on both
-    // speed and boost, so it is 3x as fast whether or not Shift is held. It
-    // also stops on a dime, which nothing from Earth does.
+    // The secret one, granted by ?ufo (main.js). Fifteen times the jet (it
+    // was three, then got a 5x speedup), with the same boost, so the ratio
+    // holds whether or not Shift is held. Its view sits a level further out
+    // than the old one: still visibly quicker on screen, but not so quick that
+    // the tiles can never arrive. It also stops on a dime, which nothing from
+    // Earth does.
     ufo: {
         name: 'UFO',
         slot: 'mount',
-        blurb: 'Not of this Earth. Three times as fast as the jet, and it stops on a dime. Hover still to switch on the beam.',
-        move: { speed: 360, boost: 1.6, accel: 6, coast: 6 },
-        view: { cruise: 11, min: 6, max: 11 },
+        blurb: 'Not of this Earth. Fifteen times as fast as the jet, and it stops on a dime. Hover still to switch on the beam.',
+        move: { speed: 1800, boost: 1.6, accel: 6, coast: 6 },
+        view: { cruise: 10, min: 5, max: 10 },
         alt: 34,
         equipText: 'The hatch hisses shut. The craft hums to life.',
         unequipText: 'The beam lowers you gently back to the ground.'

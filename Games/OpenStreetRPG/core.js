@@ -3,7 +3,7 @@
 // the camera. Depends on nothing. Bump GAME_VERSION together with the ?v=
 // queries in index.html.
 
-const GAME_VERSION = '0.3.0';
+const GAME_VERSION = '0.3.2';
 
 const TAU = Math.PI * 2;
 

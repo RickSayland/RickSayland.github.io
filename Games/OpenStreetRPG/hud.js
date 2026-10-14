@@ -37,6 +37,8 @@ const hud = {
     el: {},
     lastSearch: -Infinity,
     toastTimer: 0,
+    toastHeldUntil: 0,
+    toastQueued: null,
     readoutText: '',
     tileWarned: false,
     invOpen: false,
@@ -191,12 +193,26 @@ const hud = {
         }
     },
 
-    toast(msg, ms = 4000) {
+    // A held toast (the UFO announcement) is not overwritten by ordinary ones
+    // while it shows; the latest of those waits and follows it. Otherwise the
+    // start-up location messages, which arrive a second later, replace it.
+    toast(msg, ms = 4000, hold = false) {
+        if (!hold && performance.now() < this.toastHeldUntil) {
+            this.toastQueued = [msg, ms];
+            return;
+        }
         const t = this.$('toast');
         t.textContent = msg;
         t.classList.add('show');
+        this.toastHeldUntil = hold ? performance.now() + ms : 0;
         clearTimeout(this.toastTimer);
-        this.toastTimer = setTimeout(() => t.classList.remove('show'), ms);
+        this.toastTimer = setTimeout(() => {
+            t.classList.remove('show');
+            this.toastHeldUntil = 0;
+            const q = this.toastQueued;
+            this.toastQueued = null;
+            if (q) this.toastTimer = setTimeout(() => this.toast(q[0], q[1]), 300);
+        }, ms);
     },
 
     update() {

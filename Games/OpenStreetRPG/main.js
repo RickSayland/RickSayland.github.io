@@ -12,6 +12,7 @@ const game = {
     ZOOM_MAX_SPEED: 4.5,    // levels/s: a six-level climb into a jet takes over a second, not a blink
     FOLLOW_RATE: 8,         // 1/s, how tightly the camera chases the player
     LOOK_AHEAD: 0.35,       // s of travel the camera aims ahead, so a fast rider sees where they are going
+    MAX_DRIFT: 0.3,         // the player never drifts further than this x the screen's short side from centre
     SAVE_KEY: 'openstreetrpg.save',
     SAVE_EVERY_MS: 1000,
     LOCATE_HOLD_MS: 3000,   // how long a fresh start waits for a fix before showing the fallback map
@@ -41,6 +42,7 @@ const game = {
         // deliberate — a live-reload dev server reloads on every file save.
         // A fresh start goes to where you really are, standing on the saved
         // spot (or the default) until the browser answers or if it will not.
+        const secret = this.takeSecret('ufo');      // before fromHash: it may be stuck on the end of the hash
         const saved = this.load();
         const hash = this.fromHash();
         const s = hash || saved || this.START;
@@ -55,16 +57,14 @@ const game = {
         player.walked = (saved && saved.walked) || 0;
         hud.toggleInventory(saved ? !!saved.invOpen : true);    // open on a first visit, so the bike is found
 
-        // The secret: ?ufo puts a UFO in the inventory, for good.
-        if (new URLSearchParams(location.search).has('ufo') && inventory.grant('ufo')) {
-            hud.toggleInventory(true);
-            hud.expanded = 'ufo';
-            setTimeout(() => hud.toast('Something not of this Earth has landed in your inventory…', 6000), 400);
-        }
+        if (secret) this.unlockUfo();
         this.invSeen = inventory.version;
         if (!hash) this.locate(true);
 
+        // Editing only the hash does not reload the page, so the secret is
+        // looked for here too.
         addEventListener('hashchange', () => {
+            if (this.takeSecret('ufo')) this.unlockUfo();
             const h = this.fromHash();
             if (h) this.travel(h.lat, h.lon, null, h.zoom);
         });
@@ -85,6 +85,43 @@ const game = {
         }
         if (label) hud.toast('Arrived: ' + label);
         this.dirty = true;
+    },
+
+    // ---- The secret ----
+    // `ufo` in the address puts a UFO in the inventory, for good (the save
+    // keeps it). It is accepted in the query (?ufo) AND anywhere in the hash
+    // (#ufo, or ?ufo typed onto the end of an address that already carries a
+    // position, which lands after the #). The hash matters because it
+    // survives a server redirect and a query may not: VS Code's Live Server
+    // answers /Games/OpenStreetRPG?ufo with a redirect to
+    // /Games/OpenStreetRPG/ and the ?ufo is simply gone. (GitHub Pages keeps
+    // it.) The token is then removed from the address so the position hash
+    // parses again and a reload does not announce it twice.
+
+    takeSecret(token) {
+        const q = new URLSearchParams(location.search);
+        const re = new RegExp('(^|[?&])' + token + '(=[^?&]*)?(?=$|[?&])', 'ig');
+        let hash = location.hash.slice(1);
+        const inHash = hash.search(re) >= 0;
+        if (!q.has(token) && !inHash) return false;
+        q.delete(token);
+        hash = hash.replace(re, '').replace(/^[?&]+|[?&]+$/g, '');
+        const search = q.toString();
+        try {
+            history.replaceState(null, '', location.pathname + (search ? '?' + search : '') + (hash ? '#' + hash : ''));
+        } catch (e) { /* sandboxed */ }
+        return true;
+    },
+
+    unlockUfo() {
+        hud.toggleInventory(true);
+        hud.expanded = 'ufo';
+        if (inventory.grant('ufo')) {
+            hud.toast('Something not of this Earth has landed in your inventory…', 6000, true);
+        } else {
+            hud.renderInventory();
+            hud.toast('The UFO is already in your inventory. Press ' + (inventory.items.indexOf('ufo') + 1) + ' to fly it.', 5000, true);
+        }
     },
 
     // The zoom levels allowed with what you are riding.
@@ -182,6 +219,17 @@ const game = {
         const tx = player.x + player.vx * lead, ty = player.y + player.vy * lead;
         camera.x = geo.wrapX(camera.x + geo.dx(tx, camera.x) * k);
         camera.y += (ty - camera.y) * k;
+
+        // The lead and the lag both grow with speed, and at UFO speeds their
+        // sum would carry the player off the edge of a small window. Leash
+        // the camera to the player, in screen pixels.
+        const wp = geo.worldPx(camera.zoom);
+        const ox = geo.dx(camera.x, player.x) * wp, oy = (camera.y - player.y) * wp;
+        const off = Math.hypot(ox, oy), max = this.MAX_DRIFT * Math.min(view.w, view.h);
+        if (off > max) {
+            camera.x = geo.wrapX(player.x + ox * (max / off) / wp);
+            camera.y = player.y + oy * (max / off) / wp;
+        }
 
         if (!(this.locating && performance.now() < this.holdTilesUntil)) tiles.request();
         hud.update();
