@@ -36,6 +36,7 @@ const game = {
 
         input.init();
         hud.init();
+        water.init();
 
         // A position in the URL wins: it is either a shared link or a reload,
         // since save() keeps the hash current. A reload resuming in place is

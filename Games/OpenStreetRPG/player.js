@@ -3,8 +3,10 @@
 // avatar.js.
 //
 // The position is the point under the character's FEET, in normalised
-// mercator (geo.js). There is no collision yet: the map is a picture, and the
-// player walks over it.
+// mercator (geo.js). The only collision is water: it stops you on foot and
+// in any vehicle marked `landOnly` (the bike and the car; see keepDry and
+// water.js). Aircraft fly over it. There is no swimming yet, which is why
+// walking is blocked too.
 
 const player = {
 
@@ -38,6 +40,7 @@ const player = {
     alt: 0,                 // flying height in sprite units, eased toward the mount's `alt`
     clock: 0,               // seconds; drives rotors, flames and hovering
     walked: 0,              // metres on the ground, however they were covered
+    blocked: false,         // ran into water this frame (on foot, or in a land vehicle)
 
     lat() { return geo.toLat(this.y); },
     lon() { return geo.toLon(this.x); },
@@ -62,7 +65,10 @@ const player = {
         if (!pressing && speed < 3) { this.vx = this.vy = 0; speed = 0; }
 
         const u = dt / geo.worldPx(this.REF_ZOOM);
-        const dx = this.vx * u, dy = this.vy * u;
+        let dx = this.vx * u, dy = this.vy * u;
+        this.blocked = false;
+        const landOnly = this.mount ? !!this.mount.landOnly : true;
+        if (landOnly && (dx || dy)) [dx, dy] = this.keepDry(dx, dy, u);
         this.walked += Math.hypot(dx, dy) * geo.metresPerUnit(this.y);
         this.x = geo.wrapX(this.x + dx);
         this.y = clamp(this.y + dy, 0, 1);
@@ -87,6 +93,74 @@ const player = {
             if (this.moving) this.phase += dt * (this.running ? 15 : 10);
             this.stride += ((this.moving ? 1 : 0) - this.stride) * Math.min(1, dt * 12);
         }
+    },
+
+    // Water stops you on foot and in a land vehicle.
+    //
+    // Whether a piece of movement is allowed is decided by PROBING a fixed
+    // distance ahead in its direction (`probe`, two sampler radii, ~2 m at
+    // street zoom), not where the piece lands. A slow step is a fraction of a
+    // pixel, and the water reading is pixel-coarse: judged where it lands, a
+    // step parks you on the line where the "mostly water" vote is a coin
+    // toss, after which every step in any direction flips it and you are
+    // stuck — the car, which arrives fast and restarts slowly, could not slide
+    // at all. Probing well ahead stops you clear of that band whatever your
+    // speed. Movement is also cut into pieces no longer than one radius, so a
+    // fast car cannot hop a canal between probes.
+    //
+    // A blocked piece keeps only its part ALONG the shore (the step minus its
+    // component on the shore's normal), so the rider slides along a bank at
+    // whatever angle it runs, slower the more squarely they push into it and
+    // not at all when they push straight at it, plus a small push back out so
+    // a curving shore does not catch them again. Velocity is then set to what
+    // was actually covered: momentum follows the bank, and is zero after a
+    // dead stop.
+    //
+    // Anyone already in the water (teleported there, or landed there) moves
+    // freely until they reach land, rather than being trapped where they
+    // stand. Ordinary movement can no longer slip anyone in (the landing
+    // check below), so that freedom cannot be abused. Do NOT make it "never
+    // deeper": a river name or ferry line drawn mid-river reads as a little
+    // drier, and the next step back into plain water then counts as deeper —
+    // that version stranded a walker halfway to the bank.
+    keepDry(dx, dy, u) {
+        if (water.isWater(this.x, this.y)) return [dx, dy];
+        const piece = water.RADIUS / geo.worldPx(18), probe = 2 * piece;
+        const n = Math.min(64, Math.max(1, Math.ceil(Math.hypot(dx, dy) / piece)));
+        let sx = dx / n, sy = dy / n, x = this.x, y = this.y;
+        // A piece is refused if the probe ahead is wet OR the piece would
+        // land in water. The probe alone is not enough: running along a shore
+        // (momentum after a slide) the probe can stay just dry while the body
+        // drifts sideways into the water. The landing check is safe because
+        // the probe keeps the body well clear of the coin-toss line.
+        const wet = (vx, vy) => {
+            const l = Math.hypot(vx, vy);
+            return l > 0 && (water.blocks(x + vx / l * probe, y + vy / l * probe) || water.blocks(x + vx, y + vy));
+        };
+        for (let i = 0; i < n; i++) {
+            if (!wet(sx, sy)) { x += sx; y += sy; continue; }
+            this.blocked = true;
+            const l = Math.hypot(sx, sy);
+            const nrm = water.shoreNormal(x + sx / l * probe, y + sy / l * probe) || water.shoreNormal(x, y);
+            if (!nrm) break;
+            const into = sx * nrm[0] + sy * nrm[1];
+            if (into <= 0) break;
+            let tx = sx - into * nrm[0], ty = sy - into * nrm[1];
+            const along = Math.hypot(tx, ty);
+            if (along < 1e-14) break;
+            tx -= nrm[0] * along * 0.25;
+            ty -= nrm[1] * along * 0.25;
+            if (wet(tx, ty)) break;
+            x += tx;
+            y += ty;
+            sx = tx;
+            sy = ty;
+        }
+        if (this.blocked) {
+            this.vx = (x - this.x) / u;
+            this.vy = (y - this.y) / u;
+        }
+        return [x - this.x, y - this.y];
     },
 
     // Four facings for eight directions of travel. On a diagonal, keep the

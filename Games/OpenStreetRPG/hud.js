@@ -41,6 +41,8 @@ const hud = {
     toastQueued: null,
     readoutText: '',
     tileWarned: false,
+    wasBlocked: false,
+    blockToastAt: -Infinity,
     invOpen: false,
     invVersion: -1,
     expanded: null,         // the item whose details are showing (an accordion inside the accordion)
@@ -145,6 +147,7 @@ const hud = {
                 stats.append(el('span', null, 'Speed ×' + it.move.speed), el('span', null, 'Shift ×' + it.move.boost));
             }
             if (it.alt) stats.appendChild(el('span', null, 'Flies'));
+            if (it.landOnly) stats.appendChild(el('span', null, 'Land only'));
             clip.appendChild(stats);
             more.appendChild(clip);
 
@@ -234,6 +237,15 @@ const hud = {
         }
 
         if (m > this.HINT_AFTER_M) this.$('hint').classList.add('gone');
+
+        // Say why the bike stopped, once per bump and not more than every few
+        // seconds while sliding along a bank.
+        if (player.blocked && !this.wasBlocked && performance.now() - this.blockToastAt > 6000) {
+            this.blockToastAt = performance.now();
+            this.toast(player.mount ? 'The ' + player.mount.name.toLowerCase() + ' can’t go into the water.'
+                                    : 'You can’t swim… yet.', 2500);
+        }
+        this.wasBlocked = player.blocked;
 
         if (!this.tileWarned && tiles.failed >= 6 && tiles.loaded === 0) {
             this.tileWarned = true;

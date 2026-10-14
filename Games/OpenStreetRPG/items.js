@@ -16,6 +16,8 @@
 //          servers for a screenful of tiles every frame. Absent: the walking
 //          range, and the zoom is left where it was.
 //   alt    flying height in sprite units (0 or absent: on the ground)
+//   landOnly   water blocks it (water.js), as it blocks walking; aircraft
+//              leave it out and fly over
 
 const SLOTS = {
     mount: 'Vehicle'
@@ -27,6 +29,7 @@ const ITEMS = {
         slot: 'mount',
         blurb: 'A sturdy town bike. Takes a moment to get going, and freewheels when you stop pedalling.',
         move: { speed: 3.2, boost: 1.5, accel: 4, coast: 2.2 },
+        landOnly: true,
         equipText: 'You hop on the bicycle.',
         unequipText: 'You hop off the bicycle.'
     },
@@ -36,6 +39,7 @@ const ITEMS = {
         blurb: 'A zippy little convertible. Quick on the straights and slow to stop, so brake early. The view pulls back a little.',
         move: { speed: 8, boost: 1.75, accel: 2.2, coast: 1.4 },
         view: { cruise: 17, min: 15, max: 18 },
+        landOnly: true,
         equipText: 'You start the car.',
         unequipText: 'You park the car and climb out.'
     },
