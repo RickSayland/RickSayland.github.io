@@ -49,6 +49,13 @@ const input = {
         } else if (e.key === '/' || e.code === 'Enter') {
             hud.focusSearch();
             e.preventDefault();
+        } else if (e.code === 'KeyI' && !e.repeat) {
+            hud.toggleInventory();
+        } else if (/^Digit[1-9]$/.test(e.code) && !e.repeat) {
+            // Hotbar: the nth inventory row, so a mount can be taken on and
+            // off without letting go of the keyboard.
+            const id = inventory.items[+e.code[5] - 1];
+            if (id) hud.equip(id);
         }
     },
 

@@ -9,6 +9,7 @@ const game = {
     MAX_ZOOM: 19,           // tiles.MAX_Z: the deepest the OSM layer goes
     ZOOM_RATE: 12,          // 1/s, how fast the display zoom eases
     FOLLOW_RATE: 8,         // 1/s, how tightly the camera chases the player
+    LOOK_AHEAD: 0.35,       // s of travel the camera aims ahead, so a fast rider sees where they are going
     SAVE_KEY: 'openstreetrpg.save',
     SAVE_EVERY_MS: 1000,
     LOCATE_HOLD_MS: 3000,   // how long a fresh start waits for a fix before showing the fallback map
@@ -21,6 +22,7 @@ const game = {
     locating: false,
     holdTilesUntil: 0,
     fallbackName: '',
+    invSeen: -1,
 
     boot() {
         resizeCanvas();
@@ -41,6 +43,9 @@ const game = {
         this.fallbackName = saved ? 'where you left off' : 'Trafalgar Square';
         this.travel(s.lat, s.lon, null, s.zoom);
         player.walked = (saved && saved.walked) || 0;
+        inventory.restore(saved && saved.inv);
+        hud.toggleInventory(saved ? !!saved.invOpen : true);    // open on a first visit, so the bike is found
+        this.invSeen = inventory.version;
         if (!hash) this.locate(true);
 
         addEventListener('hashchange', () => {
@@ -125,12 +130,16 @@ const game = {
 
         player.update(dt);
         if (player.moving) this.dirty = true;
+        if (inventory.version !== this.invSeen) { this.invSeen = inventory.version; this.dirty = true; }
 
-        // Exponential follow, frame-rate independent. The player runs a little
-        // ahead of centre while moving and the view settles when they stop.
+        // Exponential follow, frame-rate independent, aimed a little ahead of
+        // the player along their velocity. Without the lead a fast rider sits
+        // behind centre and sees less of the road ahead than the road behind.
         const k = 1 - Math.exp(-dt * this.FOLLOW_RATE);
-        camera.x = geo.wrapX(camera.x + geo.dx(player.x, camera.x) * k);
-        camera.y += (player.y - camera.y) * k;
+        const lead = this.LOOK_AHEAD / geo.worldPx(player.REF_ZOOM);
+        const tx = player.x + player.vx * lead, ty = player.y + player.vy * lead;
+        camera.x = geo.wrapX(camera.x + geo.dx(tx, camera.x) * k);
+        camera.y += (ty - camera.y) * k;
 
         if (!(this.locating && performance.now() < this.holdTilesUntil)) tiles.request();
         hud.update();
@@ -146,7 +155,7 @@ const game = {
         ctx.fillRect(0, 0, view.w, view.h);
 
         const wp = geo.worldPx(camera.zoom);
-        player.draw(view.w / 2 + geo.dx(player.x, camera.x) * wp,
+        avatar.draw(view.w / 2 + geo.dx(player.x, camera.x) * wp,
                     view.h / 2 + (player.y - camera.y) * wp);
     },
 
@@ -171,7 +180,9 @@ const game = {
             lat: +player.lat().toFixed(6),
             lon: +player.lon().toFixed(6),
             zoom: camera.zoomTarget,
-            walked: Math.round(player.walked)
+            walked: Math.round(player.walked),
+            inv: inventory.save(),
+            invOpen: hud.invOpen
         };
         try { localStorage.setItem(this.SAVE_KEY, JSON.stringify(s)); } catch (e) { /* private mode */ }
         try { history.replaceState(null, '', '#' + s.zoom + '/' + s.lat.toFixed(5) + '/' + s.lon.toFixed(5)); } catch (e) { /* sandboxed */ }

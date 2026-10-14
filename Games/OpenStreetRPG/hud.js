@@ -1,6 +1,7 @@
 // ============ OPENSTREETRPG — HUD ============
-// The DOM overlay: the travel box, the position readout, the controls hint and
-// toasts. The only file besides main.js that touches the DOM. Owns `hud`.
+// The DOM overlay: the inventory, the travel box, the position readout, the
+// controls hint and toasts. The only file besides main.js that touches the
+// DOM. Owns `hud`.
 
 const hud = {
 
@@ -11,11 +12,21 @@ const hud = {
     SEARCH_GAP_MS: 1100,
     HINT_AFTER_M: 60,       // the controls hint fades once you have walked this far
 
+    // Line icons for the inventory, keyed by an item's `icon`. Drawn in
+    // currentColor so a row can recolour its icon from CSS.
+    ICONS: {
+        bicycle: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">' +
+            '<circle cx="5.5" cy="15.5" r="3.8"/><circle cx="18.5" cy="15.5" r="3.8"/>' +
+            '<path d="M5.5 15.5 L11 15.5 L8.5 9 Z M8.5 9 H16 L11 15.5 M16 9 L18.5 15.5 M16 9 L16.6 6.5 H19 M7 7.2 H10.4 M8.5 9 L8.8 7.2"/></svg>'
+    },
+
     el: {},
     lastSearch: -Infinity,
     toastTimer: 0,
     readoutText: '',
     tileWarned: false,
+    invOpen: false,
+    invVersion: -1,
 
     $(id) { return this.el[id] || (this.el[id] = document.getElementById(id)); },
 
@@ -32,6 +43,89 @@ const hud = {
             e.currentTarget.blur();     // or the next Space/Enter would press it again
             game.locate(false);
         });
+        this.$('invHead').addEventListener('click', e => {
+            e.currentTarget.blur();
+            this.toggleInventory();
+        });
+        this.$('invList').addEventListener('click', e => {
+            const btn = e.target.closest('button[data-item]');
+            if (!btn) return;
+            btn.blur();
+            this.equip(btn.dataset.item);
+        });
+    },
+
+    // ---- Inventory ----
+    // An accordion: the header folds the list away. Rows are rebuilt whenever
+    // inventory.version moves, which is rarely enough that rebuilding beats
+    // keeping a patch path in step with the data.
+
+    toggleInventory(open = !this.invOpen) {
+        this.invOpen = open;
+        this.$('inv').classList.toggle('open', open);
+        this.$('invHead').setAttribute('aria-expanded', String(open));
+        game.dirty = true;
+    },
+
+    // Equip or unequip, by id. Keys 1-9 come here too, by row.
+    equip(id) {
+        const it = ITEMS[id];
+        if (!it) return;
+        this.toast(inventory.toggle(id) ? it.equipText : it.unequipText, 2500);
+    },
+
+    renderInventory() {
+        const list = this.$('invList');
+        list.textContent = '';
+        inventory.items.forEach((id, i) => {
+            const it = ITEMS[id], on = inventory.isEquipped(id);
+            const li = document.createElement('li');
+            li.className = 'item' + (on ? ' equipped' : '');
+
+            const icon = document.createElement('div');
+            icon.className = 'item-icon';
+            icon.innerHTML = this.ICONS[it.icon] || '';
+
+            const main = document.createElement('div');
+            main.className = 'item-main';
+            const name = document.createElement('div');
+            name.className = 'item-name';
+            name.textContent = it.name;
+            const tag = document.createElement('span');
+            tag.className = 'item-tag';
+            tag.textContent = on ? 'Equipped' : SLOTS[it.slot];
+            name.appendChild(tag);
+            const blurb = document.createElement('p');
+            blurb.className = 'item-blurb';
+            blurb.textContent = it.blurb;
+
+            const foot = document.createElement('div');
+            foot.className = 'item-foot';
+            const stats = document.createElement('span');
+            stats.className = 'item-stats';
+            if (it.move) {
+                for (const line of ['Speed ×' + it.move.speed, 'Shift ×' + it.move.boost]) {
+                    const l = document.createElement('span');
+                    l.textContent = line;
+                    stats.appendChild(l);
+                }
+            }
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'item-btn';
+            btn.dataset.item = id;
+            btn.textContent = on ? 'Unequip' : 'Equip';
+            if (i < 9) {
+                const k = document.createElement('kbd');
+                k.textContent = i + 1;
+                btn.appendChild(k);
+            }
+            foot.append(stats, btn);
+            main.append(name, blurb, foot);
+            li.append(icon, main);
+            list.appendChild(li);
+        });
+        this.$('invCount').textContent = inventory.items.length;
     },
 
     setLocating(on) { this.$('locateBtn').classList.toggle('busy', on); },
@@ -82,12 +176,17 @@ const hud = {
     },
 
     update() {
+        if (inventory.version !== this.invVersion) {
+            this.invVersion = inventory.version;
+            this.renderInventory();
+        }
+
         const lat = player.lat(), lon = player.lon();
         const m = player.walked;
         const text =
             Math.abs(lat).toFixed(5) + '° ' + (lat >= 0 ? 'N' : 'S') + '   ' +
             Math.abs(lon).toFixed(5) + '° ' + (lon >= 0 ? 'E' : 'W') + '   ·   zoom ' +
-            camera.zoomTarget + '   ·   walked ' +
+            camera.zoomTarget + '   ·   travelled ' +
             (m < 1000 ? Math.round(m) + ' m' : (m / 1000).toFixed(2) + ' km');
         if (text !== this.readoutText) {
             this.readoutText = text;

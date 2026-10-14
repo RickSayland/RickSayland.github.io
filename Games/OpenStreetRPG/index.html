@@ -5,14 +5,31 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>OpenStreetRPG</title>
     <link rel="icon" type="image/svg+xml" href="content/favicon.svg">
-    <link rel="stylesheet" href="osrpg.css?v=0.1.1">
+    <link rel="stylesheet" href="osrpg.css?v=0.2.0">
 </head>
 <body>
     <canvas id="world"></canvas>
 
     <div class="hud">
         <div class="hud-top">
-            <a class="badge" href="/" title="Back to the library"><b>OpenStreet</b>RPG <span id="version"></span></a>
+            <div class="hud-left">
+                <a class="badge" href="/" title="Back to the library"><b>OpenStreet</b>RPG <span id="version"></span></a>
+
+                <section class="inv" id="inv">
+                    <button type="button" class="inv-head" id="invHead" aria-expanded="false" aria-controls="invBody">
+                        <svg class="chev" viewBox="0 0 12 12" width="12" height="12" aria-hidden="true"><path d="M3 4.5 L6 7.5 L9 4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                        <span class="inv-title">Inventory</span>
+                        <span class="inv-count" id="invCount">0</span>
+                        <kbd>I</kbd>
+                    </button>
+                    <!-- Two wrappers so the height can animate: the grid row goes 0fr -> 1fr. -->
+                    <div class="inv-body" id="invBody">
+                        <div class="inv-clip">
+                            <ul class="inv-list" id="invList"></ul>
+                        </div>
+                    </div>
+                </section>
+            </div>
             <form class="search" id="search" autocomplete="off">
                 <button type="button" class="locate" id="locateBtn" title="Go to my real location" aria-label="Go to my real location">
                     <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
@@ -33,6 +50,7 @@
             <span><kbd>Shift</kbd> run</span>
             <span><kbd>+</kbd><kbd>−</kbd> or wheel to zoom</span>
             <span><kbd>/</kbd> travel</span>
+            <span><kbd>I</kbd> inventory</span>
         </div>
 
         <div class="readout" id="readout"></div>
@@ -44,12 +62,14 @@
     <noscript><p class="nojs">OpenStreetRPG needs JavaScript.</p></noscript>
 
     <!-- Load order IS the dependency order. Only main.js boots. -->
-    <script src="core.js?v=0.1.1"></script>
-    <script src="geo.js?v=0.1.1"></script>
-    <script src="tiles.js?v=0.1.1"></script>
-    <script src="input.js?v=0.1.1"></script>
-    <script src="player.js?v=0.1.1"></script>
-    <script src="hud.js?v=0.1.1"></script>
-    <script src="main.js?v=0.1.1"></script>
+    <script src="core.js?v=0.2.0"></script>
+    <script src="geo.js?v=0.2.0"></script>
+    <script src="tiles.js?v=0.2.0"></script>
+    <script src="input.js?v=0.2.0"></script>
+    <script src="items.js?v=0.2.0"></script>
+    <script src="player.js?v=0.2.0"></script>
+    <script src="avatar.js?v=0.2.0"></script>
+    <script src="hud.js?v=0.2.0"></script>
+    <script src="main.js?v=0.2.0"></script>
 </body>
 </html>
