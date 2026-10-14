@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Thermalize — Neutrons in a Lattice of Sand</title>
+    <link rel="icon" type="image/svg+xml" href="content/favicon.svg">
+    <link rel="stylesheet" href="thermal.css?v=0.1.0">
+</head>
+<body>
+    <div class="topbar">
+        <h1><span>Therm</span>alize</h1>
+        <span class="version" id="version">v0.1.0</span>
+        <p class="tagline">Every grain of sand is an atom. Fire a fast neutron in and watch its targets grow as it slows down.</p>
+        <div class="controls">
+            <button id="playBtn" class="ctl" title="Space">Pause</button>
+            <button id="stepBtn" class="ctl" title="Advance the followed neutron to its next collision (N)">Next collision</button>
+            <div class="speed" id="speedGroup">
+                <button class="ctl spd" data-speed="0.2">Slow</button>
+                <button class="ctl spd is-on" data-speed="1">×1</button>
+                <button class="ctl spd" data-speed="4">×4</button>
+            </div>
+            <button id="clearNBtn" class="ctl">Clear neutrons</button>
+            <button id="clearBtn" class="ctl">Clear bench</button>
+        </div>
+    </div>
+
+    <div class="app">
+        <aside class="rail rail-left">
+            <div class="section-title">Scenes</div>
+            <div class="presets" id="presets">
+                <button class="preset" data-preset="lab">Moderator and absorber</button>
+                <button class="preset" data-preset="cutoff">Cadmium cutoff</button>
+                <button class="preset" data-preset="race">Moderator race</button>
+                <button class="preset" data-preset="chain">Chain reaction</button>
+                <button class="preset" data-preset="rods">Fuel rods in water</button>
+                <button class="preset" data-preset="sand">Sandbox</button>
+            </div>
+            <p class="preset-note" id="presetNote">&nbsp;</p>
+
+            <div class="section-title">Neutron gun <span class="val" id="gunEVal">2.00 MeV</span></div>
+            <input type="range" id="gunE" class="slider" min="-2" max="7.15" step="0.05" value="6.3">
+            <div class="chips" id="gunChips">
+                <button class="chip" data-e="0.0253">thermal</button>
+                <button class="chip" data-e="1">1 eV</button>
+                <button class="chip" data-e="1000">1 keV</button>
+                <button class="chip" data-e="2e6">2 MeV</button>
+                <button class="chip" data-e="1.4e7">14 MeV</button>
+            </div>
+            <div class="tools">
+                <button class="ctl" id="fireBtn" title="F">Fire neutron</button>
+                <button class="ctl auto is-on" data-auto="single" title="Fire the next one when the followed neutron is gone">One at a time</button>
+                <button class="ctl auto" data-auto="stream" title="A steady stream">Stream</button>
+            </div>
+            <p class="knob-note">
+                Pick the Gun tool and drag on the bench to move and aim it.
+                Each new neutron is followed until it is absorbed or leaves.
+            </p>
+
+            <div class="section-title">View <span class="val" id="zoomVal">sand</span></div>
+            <input type="range" id="zoom" class="slider" min="0" max="1" step="0.005" value="0.5">
+            <div class="row-label"><span>Lattice drawn for a neutron of</span><b id="viewEVal">2.00 MeV</b></div>
+            <input type="range" id="viewE" class="slider" min="-2" max="7.15" step="0.05" value="6.3">
+            <div class="tools">
+                <button class="ctl tog is-on" id="burnBtn" title="A capture turns the atom into what it becomes. Each drawn atom stands for about 10^22 real ones, so this is exaggerated by that much.">Captures use up atoms</button>
+                <button class="ctl tog" id="eyeBtn" title="In the sand view, colour every material by how opaque it is at the view energy">Neutron's-eye tint</button>
+                <button class="ctl tog is-on" id="trackBtn" title="Keep the followed neutron in view when zoomed in">Camera follows</button>
+            </div>
+
+            <div class="section-title">Material</div>
+            <div id="palette" class="palette"></div>
+            <p class="mat-blurb" id="matBlurb">&nbsp;</p>
+
+            <div class="section-title">Brush <span class="val" id="brushVal">3 cm</span></div>
+            <input type="range" id="brushSize" class="slider" min="0.5" max="10" step="0.5" value="3">
+            <div class="tools" id="tools">
+                <button class="ctl tool is-on" data-tool="paint">Paint</button>
+                <button class="ctl tool" data-tool="erase">Erase</button>
+                <button class="ctl tool" data-tool="gun">Gun</button>
+                <button class="ctl tool" data-tool="pick">Follow</button>
+            </div>
+            <p class="knob-note">
+                Scroll to zoom, right-drag to pan. Cells are one centimetre, so
+                the brush size is real. Follow: click a neutron to track it.
+            </p>
+        </aside>
+
+        <main class="viewport">
+            <canvas id="bench"></canvas>
+            <div class="legend">
+                <span class="lg"><i class="sw sw-ramp"></i>neutron, fast → thermal</span>
+                <span class="lg"><i class="sw sw-sc"></i>disc: scatters</span>
+                <span class="lg"><i class="sw sw-ab"></i>core: absorbs</span>
+                <span class="lg"><i class="sw sw-fi"></i>core: fissions</span>
+            </div>
+            <div class="banner" id="banner" hidden></div>
+            <div class="hover" id="hover" hidden></div>
+            <div class="footnote" id="footnote">
+                One drawn atom stands for the ~10²² in a cubic centimetre. Its
+                disc is as wide as its cross section needs for a straight line
+                to meet it as often as a neutron really would — so the free
+                path you see is the real one.
+            </div>
+        </main>
+
+        <aside class="rail rail-right">
+            <div class="section-title">Followed neutron</div>
+            <div class="headline">
+                <div class="headline-val" id="nEnergy">—</div>
+                <div class="headline-unit" id="nSpeed">no neutron followed</div>
+                <div class="state" id="nState">IDLE</div>
+            </div>
+            <div class="stat-grid">
+                <div class="stat"><div class="stat-value" id="nCol">—</div><div class="stat-label">collisions</div></div>
+                <div class="stat"><div class="stat-value" id="nPath">—</div><div class="stat-label">path</div></div>
+                <div class="stat"><div class="stat-value" id="nAtoms">—</div><div class="stat-label">atoms passed</div></div>
+            </div>
+            <div class="verdict" id="nFate">Fire a neutron to follow it.</div>
+
+            <div class="section-title">Cross section <span class="val" id="xsMat">—</span></div>
+            <canvas id="xsChart"></canvas>
+            <div class="dose-split">
+                <span><i class="dot dot-sc"></i>scatter</span>
+                <span><i class="dot dot-ab"></i>absorb</span>
+                <span><i class="dot dot-fi"></i>fission</span>
+            </div>
+            <div class="rows">
+                <div class="row"><span>Free path here</span><b id="xsMfp">—</b></div>
+                <div class="row"><span>Absorbed, per collision</span><b id="xsAbs">—</b></div>
+            </div>
+
+            <div class="section-title">Slowing down</div>
+            <canvas id="stairChart"></canvas>
+            <p class="knob-note">
+                One step per collision. Hydrogen takes anything from nothing to
+                everything; carbon takes at most 28%; lead takes almost none.
+            </p>
+
+            <div class="section-title">Neutrons in flight <span class="val" id="nAlive">0</span></div>
+            <canvas id="specChart"></canvas>
+
+            <div class="section-title">Bench</div>
+            <div class="rows">
+                <div class="row"><span>Fired</span><b id="tFired">0</b></div>
+                <div class="row"><span>Born from fission</span><b id="tBorn">0</b></div>
+                <div class="row"><span>Fissions</span><b id="tFis">0</b></div>
+                <div class="row"><span>Absorbed</span><b id="tAbs">0</b></div>
+                <div class="row"><span>Left the bench</span><b id="tLeak">0</b></div>
+            </div>
+            <div class="rows" id="byMat"></div>
+
+            <div class="section-title">What is real here</div>
+            <p class="knob-note">
+                Thermal cross sections are measured values (Sears, 1992, as
+                published by NIST). How each one changes with energy is a
+                model: the 1/v law, the best-known resonances, and a fast
+                value. Right shape, right size, not an evaluated library.
+                Neutron speeds on screen are compressed about 11:1 where the
+                true range is 9,000:1, and the bench is flat, so nothing here
+                is a critical mass.
+            </p>
+        </aside>
+    </div>
+
+    <script src="nuclides.js?v=0.1.0"></script>
+    <script src="materials.js?v=0.1.0"></script>
+    <script src="grid.js?v=0.1.0"></script>
+    <script src="neutrons.js?v=0.1.0"></script>
+    <script src="render.js?v=0.1.0"></script>
+    <script src="inspector.js?v=0.1.0"></script>
+    <script src="main.js?v=0.1.0"></script>
+</body>
+</html>

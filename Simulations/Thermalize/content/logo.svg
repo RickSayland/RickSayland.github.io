@@ -1,0 +1,36 @@
+<svg viewBox="0 0 570 214" xmlns="http://www.w3.org/2000/svg">
+  <rect width="570" height="214" rx="15" fill="#05070b"/>
+
+  <!-- the lattice: the same atoms, drawn as a faster and a slower neutron sees them -->
+  <g fill="#378add" opacity="0.46">
+    <circle cx="28" cy="40" r="2"/><circle cx="28" cy="84" r="2"/><circle cx="28" cy="128" r="2"/><circle cx="28" cy="172" r="2"/>
+    <circle cx="66" cy="62" r="4.5"/><circle cx="66" cy="106" r="4.5"/><circle cx="66" cy="150" r="4.5"/>
+    <circle cx="104" cy="40" r="8"/><circle cx="104" cy="84" r="8"/><circle cx="104" cy="128" r="8"/><circle cx="104" cy="172" r="8"/>
+    <circle cx="142" cy="62" r="13"/><circle cx="142" cy="106" r="13"/><circle cx="142" cy="150" r="13"/>
+    <circle cx="180" cy="40" r="19"/><circle cx="180" cy="84" r="19"/><circle cx="180" cy="128" r="19"/><circle cx="180" cy="172" r="19"/>
+  </g>
+  <g fill="#e24b4a" opacity="0.9">
+    <circle cx="142" cy="62" r="3"/><circle cx="142" cy="106" r="3"/><circle cx="142" cy="150" r="3"/>
+    <circle cx="180" cy="40" r="9"/><circle cx="180" cy="84" r="9"/><circle cx="180" cy="128" r="9"/><circle cx="180" cy="172" r="9"/>
+  </g>
+  <g fill="#dfe7f2">
+    <circle cx="28" cy="40" r="1.4"/><circle cx="28" cy="84" r="1.4"/><circle cx="28" cy="128" r="1.4"/><circle cx="28" cy="172" r="1.4"/>
+    <circle cx="66" cy="62" r="1.4"/><circle cx="66" cy="106" r="1.4"/><circle cx="66" cy="150" r="1.4"/>
+    <circle cx="104" cy="40" r="1.4"/><circle cx="104" cy="84" r="1.4"/><circle cx="104" cy="128" r="1.4"/><circle cx="104" cy="172" r="1.4"/>
+    <circle cx="142" cy="62" r="1.4"/><circle cx="142" cy="106" r="1.4"/><circle cx="142" cy="150" r="1.4"/>
+    <circle cx="180" cy="40" r="1.4"/><circle cx="180" cy="84" r="1.4"/><circle cx="180" cy="128" r="1.4"/><circle cx="180" cy="172" r="1.4"/>
+  </g>
+
+  <!-- one neutron, slowing: violet, teal, amber, and then it is caught -->
+  <g fill="none" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M6 118 L62 100" stroke="#a480ff"/>
+    <path d="M62 100 L98 136" stroke="#7fa8e4"/>
+    <path d="M98 136 L132 96" stroke="#48d0c4"/>
+    <path d="M132 96 L158 122 L172 90" stroke="#ffb040"/>
+  </g>
+  <circle cx="172" cy="90" r="4.2" fill="#ffb040"/>
+  <circle cx="172" cy="90" r="9" fill="none" stroke="#ff6f66" stroke-width="1.4" opacity="0.8"/>
+
+  <text x="216" y="98" font-family="system-ui,-apple-system,sans-serif" font-size="42" font-weight="700" fill="#cbd8e6" letter-spacing="1">Thermalize</text>
+  <text x="217" y="128" font-family="ui-monospace,monospace" font-size="12.5" fill="#ffb347" letter-spacing="2.1">NEUTRONS IN A LATTICE OF SAND</text>
+</svg>
