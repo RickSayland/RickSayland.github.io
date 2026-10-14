@@ -5,9 +5,11 @@
 const game = {
 
     START: { lat: 51.50803, lon: -0.12804, zoom: 18 },     // Trafalgar Square
-    MIN_ZOOM: 15,
+    MIN_ZOOM: 15,           // the range on foot; a vehicle's `view` replaces it
     MAX_ZOOM: 19,           // tiles.MAX_Z: the deepest the OSM layer goes
+    GROUND_ZOOM: 18,
     ZOOM_RATE: 12,          // 1/s, how fast the display zoom eases
+    ZOOM_MAX_SPEED: 4.5,    // levels/s: a six-level climb into a jet takes over a second, not a blink
     FOLLOW_RATE: 8,         // 1/s, how tightly the camera chases the player
     LOOK_AHEAD: 0.35,       // s of travel the camera aims ahead, so a fast rider sees where they are going
     SAVE_KEY: 'openstreetrpg.save',
@@ -23,6 +25,8 @@ const game = {
     holdTilesUntil: 0,
     fallbackName: '',
     invSeen: -1,
+    mountSeen: null,
+    groundZoom: 18,         // the zoom to come back down to when you land
 
     boot() {
         resizeCanvas();
@@ -41,10 +45,22 @@ const game = {
         const hash = this.fromHash();
         const s = hash || saved || this.START;
         this.fallbackName = saved ? 'where you left off' : 'Trafalgar Square';
+
+        // The inventory before the position: what you are riding decides the
+        // zoom range the saved zoom is clamped into.
+        inventory.restore(saved && saved.inv);
+        this.mountSeen = inventory.equipped.mount || null;
+        this.groundZoom = (saved && saved.groundZoom) || this.GROUND_ZOOM;
         this.travel(s.lat, s.lon, null, s.zoom);
         player.walked = (saved && saved.walked) || 0;
-        inventory.restore(saved && saved.inv);
         hud.toggleInventory(saved ? !!saved.invOpen : true);    // open on a first visit, so the bike is found
+
+        // The secret: ?ufo puts a UFO in the inventory, for good.
+        if (new URLSearchParams(location.search).has('ufo') && inventory.grant('ufo')) {
+            hud.toggleInventory(true);
+            hud.expanded = 'ufo';
+            setTimeout(() => hud.toast('Something not of this Earth has landed in your inventory…', 6000), 400);
+        }
         this.invSeen = inventory.version;
         if (!hash) this.locate(true);
 
@@ -63,9 +79,28 @@ const game = {
         player.place(lat, lon);
         camera.x = player.x;
         camera.y = player.y;
-        if (zoom) camera.zoom = camera.zoomTarget = clamp(Math.round(zoom), this.MIN_ZOOM, this.MAX_ZOOM);
+        if (zoom) {
+            const [lo, hi] = this.zoomRange();
+            camera.zoom = camera.zoomTarget = clamp(Math.round(zoom), lo, hi);
+        }
         if (label) hud.toast('Arrived: ' + label);
         this.dirty = true;
+    },
+
+    // The zoom levels allowed with what you are riding.
+    zoomRange() {
+        const m = inventory.inSlot('mount');
+        return m && m.view ? [m.view.min, m.view.max] : [this.MIN_ZOOM, this.MAX_ZOOM];
+    },
+
+    // A vehicle with a `view` takes the camera to its cruising zoom; getting
+    // out of one returns to the zoom you were walking at. Swapping between two
+    // without one (feet and the bike) leaves the zoom alone.
+    mountChanged(prevId, nextId) {
+        const prev = prevId && ITEMS[prevId], next = nextId && ITEMS[nextId];
+        if (!(prev && prev.view)) this.groundZoom = camera.zoomTarget;
+        const [lo, hi] = this.zoomRange();
+        camera.zoomTarget = clamp(next && next.view ? next.view.cruise : this.groundZoom, lo, hi);
     },
 
     // Ask the browser where the player really is, and go there. `auto` is the
@@ -120,12 +155,19 @@ const game = {
     },
 
     update(dt, t) {
+        const mountId = inventory.equipped.mount || null;
+        if (mountId !== this.mountSeen) {
+            this.mountChanged(this.mountSeen, mountId);
+            this.mountSeen = mountId;
+        }
         if (input.zoomSteps) {
-            camera.zoomTarget = clamp(camera.zoomTarget + input.zoomSteps, this.MIN_ZOOM, this.MAX_ZOOM);
+            const [lo, hi] = this.zoomRange();
+            camera.zoomTarget = clamp(camera.zoomTarget + input.zoomSteps, lo, hi);
             input.zoomSteps = 0;
             this.dirty = true;
         }
-        camera.zoom += (camera.zoomTarget - camera.zoom) * Math.min(1, dt * this.ZOOM_RATE);
+        const dz = (camera.zoomTarget - camera.zoom) * Math.min(1, dt * this.ZOOM_RATE);
+        camera.zoom += clamp(dz, -this.ZOOM_MAX_SPEED * dt, this.ZOOM_MAX_SPEED * dt);
         if (Math.abs(camera.zoomTarget - camera.zoom) < 1e-3) camera.zoom = camera.zoomTarget;
 
         player.update(dt);
@@ -182,7 +224,8 @@ const game = {
             zoom: camera.zoomTarget,
             walked: Math.round(player.walked),
             inv: inventory.save(),
-            invOpen: hud.invOpen
+            invOpen: hud.invOpen,
+            groundZoom: this.groundZoom
         };
         try { localStorage.setItem(this.SAVE_KEY, JSON.stringify(s)); } catch (e) { /* private mode */ }
         try { history.replaceState(null, '', '#' + s.zoom + '/' + s.lat.toFixed(5) + '/' + s.lon.toFixed(5)); } catch (e) { /* sandboxed */ }

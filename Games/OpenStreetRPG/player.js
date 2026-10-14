@@ -34,6 +34,9 @@ const player = {
     stride: 0,              // 0 standing .. 1 mid-walk, eased so legs settle
     crank: 0,               // pedal angle, radians
     wheel: 0,               // wheel angle, radians
+    thrust: 0,              // speed as a fraction of the mount's cruising speed (>1 when boosting)
+    alt: 0,                 // flying height in sprite units, eased toward the mount's `alt`
+    clock: 0,               // seconds; drives rotors, flames and hovering
     walked: 0,              // metres on the ground, however they were covered
 
     lat() { return geo.toLat(this.y); },
@@ -67,11 +70,16 @@ const player = {
         if (pressing) this.face(a.x, a.y);
         this.moving = speed > 4;
         this.running = !this.mount && pressing && input.running();
+        this.clock += dt;
+        this.thrust = speed / (this.WALK * m.speed);
+        // Take-off and landing between two flying heights is eased; getting
+        // out of an aircraft is not, since the walker is drawn on the ground.
+        this.alt += (((this.mount && this.mount.alt) || 0) - this.alt) * Math.min(1, dt * 2.5);
 
         if (this.mount) {
             // Wheels turn with the road, pedals only while pedalling, both
             // capped so a sprint does not strobe the spokes.
-            const r = Math.min(speed / (this.WALK * m.speed), 1.6);
+            const r = Math.min(this.thrust, 1.6);
             this.wheel += dt * 14 * r;
             if (pressing) this.crank += dt * 7 * r;
             this.stride = 0;

@@ -3,32 +3,81 @@
 // `SLOTS` and `inventory`.
 //
 // An item is data. What it DOES is read off it by whichever system cares:
-// player.js reads `move` from whatever is in the mount slot, avatar.js draws
-// a rider when that slot is filled, and the HUD lists everything. A new item
-// is a new entry here plus, if it changes how the player looks, a pose there.
+// player.js reads `move` and `alt` from whatever is in the mount slot,
+// main.js reads `view` to frame the camera, vehicles.js draws it by id, and
+// the HUD lists it. A new vehicle is an entry here plus a drawing there.
+//
+//   move   multipliers on walking speed (player.WALK): `speed`, and `boost`
+//          while Shift is held; then the rates (1/s) at which velocity closes
+//          on its target while a key is held (`accel`) and after (`coast`).
+//          Walking's own profile is player.FOOT.
+//   view   { cruise, min, max } zoom levels. A fast vehicle has to be seen from
+//          further out, or it crosses the screen in a blink and asks the tile
+//          servers for a screenful of tiles every frame. Absent: the walking
+//          range, and the zoom is left where it was.
+//   alt    flying height in sprite units (0 or absent: on the ground)
 
 const SLOTS = {
-    mount: 'Mount'
+    mount: 'Vehicle'
 };
 
 const ITEMS = {
     bicycle: {
         name: 'Bicycle',
         slot: 'mount',
-        icon: 'bicycle',
         blurb: 'A sturdy town bike. Takes a moment to get going, and freewheels when you stop pedalling.',
-        // Multipliers on walking speed (player.WALK), and the rates (1/s) at
-        // which velocity closes on its target while pedalling and while
-        // freewheeling. Walking's own profile is player.FOOT.
         move: { speed: 3.2, boost: 1.5, accel: 4, coast: 2.2 },
         equipText: 'You hop on the bicycle.',
         unequipText: 'You hop off the bicycle.'
+    },
+    car: {
+        name: 'Car',
+        slot: 'mount',
+        blurb: 'A zippy little convertible. Quick on the straights and slow to stop, so brake early. The view pulls back a little.',
+        move: { speed: 8, boost: 1.75, accel: 2.2, coast: 1.4 },
+        view: { cruise: 17, min: 15, max: 18 },
+        equipText: 'You start the car.',
+        unequipText: 'You park the car and climb out.'
+    },
+    helicopter: {
+        name: 'Helicopter',
+        slot: 'mount',
+        blurb: 'Lifts straight up and drifts wherever you point it. High enough to take in a whole district.',
+        move: { speed: 30, boost: 1.5, accel: 1.6, coast: 0.9 },
+        view: { cruise: 15, min: 12, max: 16 },
+        alt: 28,
+        equipText: 'Rotors spinning up. You lift off.',
+        unequipText: 'You touch down and climb out.'
+    },
+    jet: {
+        name: 'Jet',
+        slot: 'mount',
+        blurb: 'Very fast, very high, and very hard to stop. Cross a country in a few minutes. Shift lights the afterburner.',
+        move: { speed: 120, boost: 1.6, accel: 1.0, coast: 0.6 },
+        view: { cruise: 12, min: 9, max: 13 },
+        alt: 44,
+        equipText: 'Afterburners lit. You climb to cruising altitude.',
+        unequipText: 'You land the jet and climb out.'
+    },
+    // The secret one, granted by ?ufo (main.js). Three times the jet on both
+    // speed and boost, so it is 3x as fast whether or not Shift is held. It
+    // also stops on a dime, which nothing from Earth does.
+    ufo: {
+        name: 'UFO',
+        slot: 'mount',
+        blurb: 'Not of this Earth. Three times as fast as the jet, and it stops on a dime. Hover still to switch on the beam.',
+        move: { speed: 360, boost: 1.6, accel: 6, coast: 6 },
+        view: { cruise: 11, min: 6, max: 11 },
+        alt: 34,
+        equipText: 'The hatch hisses shut. The craft hums to life.',
+        unequipText: 'The beam lowers you gently back to the ground.'
     }
 };
+for (const id in ITEMS) ITEMS[id].id = id;
 
 const inventory = {
 
-    STARTING: ['bicycle'],
+    STARTING: ['bicycle', 'car', 'helicopter', 'jet'],
 
     items: [],              // ids the player owns, in display order
     equipped: {},           // slot -> item id
@@ -48,6 +97,14 @@ const inventory = {
     inSlot(slot) {
         const id = this.equipped[slot];
         return id ? ITEMS[id] : null;
+    },
+
+    // Add an item if it is not already owned. Returns whether it was new.
+    grant(id) {
+        if (!ITEMS[id] || this.items.includes(id)) return false;
+        this.items.push(id);
+        this.version++;
+        return true;
     },
 
     // Equip, or take off if already worn; equipping replaces whatever held the

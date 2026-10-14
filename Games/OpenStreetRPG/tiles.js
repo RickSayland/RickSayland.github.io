@@ -10,7 +10,14 @@
 // centre first and at most MAX_INFLIGHT at a time. Mid-zoom frames DRAW at a
 // fractional scale but fetch nothing extra: a missing tile is filled from an
 // ancestor that is already cached (blurry for a moment, never blank) or from
-// its children when zooming out.
+// its descendants when zooming out.
+//
+// The one exception is a jump of more than a level — climbing into a jet goes
+// from 18 to 12. Drawing level 12 throughout would stretch one tile across the
+// screen sixty-four times over for most of the climb, so while the display is
+// more than a level from its target, the level nearest the display zoom is
+// drawn and requested instead (screen only, no margin). The climb passes
+// through each level in turn and the map you were on shrinks away under you.
 
 const tiles = {
 
@@ -67,13 +74,23 @@ const tiles = {
         );
     },
 
-    // Queue what the screen will show at the target zoom, centre outwards.
+    // The level drawn and fetched: the target, unless the display is still
+    // more than a level away from it (see the header).
+    level() {
+        return Math.abs(camera.zoom - camera.zoomTarget) > 1 ? Math.round(camera.zoom) : camera.zoomTarget;
+    },
+
+    // Queue what the screen will show, centre outwards: the final view at the
+    // target zoom, or, mid-climb, the screen as it is right now.
     request() {
         this.frame++;
-        const z = camera.zoomTarget, n = 1 << z;
+        const z = this.level(), n = 1 << z;
+        const settled = z === camera.zoomTarget;
+        const size = settled ? geo.TILE : geo.TILE * Math.pow(2, camera.zoom - z);
+        const margin = settled ? this.MARGIN : 0;
         const cx = camera.x * n, cy = camera.y * n;
-        const hw = (view.w / 2 + this.MARGIN) / geo.TILE;
-        const hh = (view.h / 2 + this.MARGIN) / geo.TILE;
+        const hw = (view.w / 2 + margin) / size;
+        const hh = (view.h / 2 + margin) / size;
         const want = [];
         for (let ty = Math.floor(cy - hh); ty <= Math.floor(cy + hh); ty++) {
             if (ty < 0 || ty >= n) continue;
@@ -102,7 +119,7 @@ const tiles = {
     draw() {
         const dpr = view.dpr;
         const W = canvas.width, H = canvas.height;
-        const z = camera.zoomTarget, n = 1 << z;
+        const z = this.level(), n = 1 << z;
         const size = geo.TILE * Math.pow(2, camera.zoom - z) * dpr;
         const cx = camera.x * n, cy = camera.y * n;
         const tx0 = Math.floor(cx - W / 2 / size), tx1 = Math.floor(cx + W / 2 / size);
@@ -145,15 +162,20 @@ const tiles = {
             ctx.fillRect(dx + 1, dy + 1, dw - 2, dh - 2);
         }
 
-        // Children on top, when zooming out from a level that is still cached.
-        if (z >= this.MAX_Z) return;
-        const mx = dx + Math.round(dw / 2), my = dy + Math.round(dh / 2);
-        for (let i = 0; i < 4; i++) {
-            const c = this.ready(z + 1, 2 * x + (i & 1), 2 * y + (i >> 1));
-            if (!c) continue;
-            const cx0 = i & 1 ? mx : dx, cy0 = i >> 1 ? my : dy;
-            const cx1 = i & 1 ? dx + dw : mx, cy1 = i >> 1 ? dy + dh : my;
-            ctx.drawImage(c, cx0, cy0, cx1 - cx0, cy1 - cy0);
+        // Descendants on top, when zooming out from levels still cached:
+        // grandchildren first, then children, two levels being as far as a
+        // climb that steps a level at a time can have left behind.
+        for (let k = Math.min(2, this.MAX_Z - z); k >= 1; k--) {
+            const m = 1 << k;
+            for (let j = 0; j < m; j++) {
+                const y0 = dy + Math.round(dh * j / m), y1 = dy + Math.round(dh * (j + 1) / m);
+                for (let i = 0; i < m; i++) {
+                    const c = this.ready(z + k, x * m + i, y * m + j);
+                    if (!c) continue;
+                    const x0 = dx + Math.round(dw * i / m), x1 = dx + Math.round(dw * (i + 1) / m);
+                    ctx.drawImage(c, x0, y0, x1 - x0, y1 - y0);
+                }
+            }
         }
     }
 };

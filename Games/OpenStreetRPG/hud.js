@@ -12,12 +12,26 @@ const hud = {
     SEARCH_GAP_MS: 1100,
     HINT_AFTER_M: 60,       // the controls hint fades once you have walked this far
 
-    // Line icons for the inventory, keyed by an item's `icon`. Drawn in
-    // currentColor so a row can recolour its icon from CSS.
+    // Line icons for the inventory, keyed by item id. Drawn in currentColor so
+    // a row can recolour its icon from CSS.
     ICONS: {
-        bicycle: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">' +
-            '<circle cx="5.5" cy="15.5" r="3.8"/><circle cx="18.5" cy="15.5" r="3.8"/>' +
-            '<path d="M5.5 15.5 L11 15.5 L8.5 9 Z M8.5 9 H16 L11 15.5 M16 9 L18.5 15.5 M16 9 L16.6 6.5 H19 M7 7.2 H10.4 M8.5 9 L8.8 7.2"/></svg>'
+        bicycle: '<circle cx="5.5" cy="15.5" r="3.8"/><circle cx="18.5" cy="15.5" r="3.8"/>' +
+            '<path d="M5.5 15.5 L11 15.5 L8.5 9 Z M8.5 9 H16 L11 15.5 M16 9 L18.5 15.5 M16 9 L16.6 6.5 H19 M7 7.2 H10.4 M8.5 9 L8.8 7.2"/>',
+        car: '<path d="M2.5 15.5 V12.8 C2.5 12 3 11.4 3.8 11.3 L6.5 11 L9 7.8 H14.2 L17.2 11 L20.5 11.6 C21.2 11.8 21.5 12.3 21.5 13 V15.5"/>' +
+            '<circle cx="7" cy="16" r="2.3"/><circle cx="17" cy="16" r="2.3"/><path d="M9.3 16 H14.7 M2.5 15.5 H4.7 M19.3 15.5 H21.5 M6.5 11 H17.2"/>',
+        helicopter: '<path d="M4 5 H20 M12 5 V7.5"/>' +
+            '<path d="M8.5 12.5 C8.5 9.5 10.5 7.5 13.5 7.5 C17 7.5 19 10 19 12.5 C19 15 17 16.5 14 16.5 H11 C9.5 16.5 8.5 15 8.5 12.5 Z"/>' +
+            '<path d="M8.5 11.5 L3.5 10 M3.5 7.5 V12.5 M10.5 19.5 H19 M12 16.5 V19.5 M17 16.5 V19.5 M14 7.8 V12 H18.8"/>',
+        jet: '<path d="M3 12.5 H17 C19.5 12.5 21.5 13.2 22 14 C21.5 14.8 19.5 15.5 17 15.5 H4.5 Z"/>' +
+            '<path d="M3 12.5 L2.5 8 H4.8 L7.5 12.5 M9.5 15.5 L7 20 H9.5 L14 15.5 M14.5 12.5 C15 11 17.5 11 18.5 12.6"/>',
+        ufo: '<ellipse cx="12" cy="13.5" rx="10" ry="3.5"/><path d="M7.2 11.6 C7.2 6.5 16.8 6.5 16.8 11.6"/>' +
+            '<path d="M8.5 19.5 L9.8 17 M15.5 19.5 L14.2 17 M12 20.5 V17.2"/>' +
+            '<g fill="currentColor" stroke="none"><circle cx="6.5" cy="13.5" r="0.8"/><circle cx="12" cy="14.7" r="0.8"/><circle cx="17.5" cy="13.5" r="0.8"/></g>'
+    },
+
+    icon(id) {
+        return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" ' +
+            'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (this.ICONS[id] || '') + '</svg>';
     },
 
     el: {},
@@ -27,6 +41,7 @@ const hud = {
     tileWarned: false,
     invOpen: false,
     invVersion: -1,
+    expanded: null,         // the item whose details are showing (an accordion inside the accordion)
 
     $(id) { return this.el[id] || (this.el[id] = document.getElementById(id)); },
 
@@ -48,10 +63,11 @@ const hud = {
             this.toggleInventory();
         });
         this.$('invList').addEventListener('click', e => {
-            const btn = e.target.closest('button[data-item]');
+            const btn = e.target.closest('button[data-item], button[data-expand]');
             if (!btn) return;
             btn.blur();
-            this.equip(btn.dataset.item);
+            if (btn.dataset.item) this.equip(btn.dataset.item);
+            else this.expand(btn.dataset.expand);
         });
     },
 
@@ -74,55 +90,63 @@ const hud = {
         this.toast(inventory.toggle(id) ? it.equipText : it.unequipText, 2500);
     },
 
+    // Open one item's details and close the others; clicking the open one
+    // closes it. Done with classes on the rows that exist, not a rebuild, so
+    // the rows can animate.
+    expand(id) {
+        this.expanded = this.expanded === id ? null : id;
+        for (const li of this.$('invList').children) {
+            const open = li.dataset.id === this.expanded;
+            li.classList.toggle('open', open);
+            li.querySelector('.item-expand').setAttribute('aria-expanded', String(open));
+        }
+    },
+
     renderInventory() {
         const list = this.$('invList');
         list.textContent = '';
         inventory.items.forEach((id, i) => {
-            const it = ITEMS[id], on = inventory.isEquipped(id);
-            const li = document.createElement('li');
-            li.className = 'item' + (on ? ' equipped' : '');
+            const it = ITEMS[id], on = inventory.isEquipped(id), open = this.expanded === id;
+            const el = (tag, cls, text) => {
+                const e = document.createElement(tag);
+                if (cls) e.className = cls;
+                if (text != null) e.textContent = text;
+                return e;
+            };
 
-            const icon = document.createElement('div');
-            icon.className = 'item-icon';
-            icon.innerHTML = this.ICONS[it.icon] || '';
+            const li = el('li', 'item' + (on ? ' equipped' : '') + (open ? ' open' : ''));
+            li.dataset.id = id;
 
-            const main = document.createElement('div');
-            main.className = 'item-main';
-            const name = document.createElement('div');
-            name.className = 'item-name';
-            name.textContent = it.name;
-            const tag = document.createElement('span');
-            tag.className = 'item-tag';
-            tag.textContent = on ? 'Equipped' : SLOTS[it.slot];
-            name.appendChild(tag);
-            const blurb = document.createElement('p');
-            blurb.className = 'item-blurb';
-            blurb.textContent = it.blurb;
+            const head = el('button', 'item-expand');
+            head.type = 'button';
+            head.dataset.expand = id;
+            head.setAttribute('aria-expanded', String(open));
+            const icon = el('span', 'item-icon');
+            icon.innerHTML = this.icon(id);
+            const name = el('span', 'item-name', it.name);
+            name.appendChild(el('span', 'item-tag', on ? 'Equipped' : SLOTS[it.slot]));
+            head.append(icon, name);
 
-            const foot = document.createElement('div');
-            foot.className = 'item-foot';
-            const stats = document.createElement('span');
-            stats.className = 'item-stats';
-            if (it.move) {
-                for (const line of ['Speed ×' + it.move.speed, 'Shift ×' + it.move.boost]) {
-                    const l = document.createElement('span');
-                    l.textContent = line;
-                    stats.appendChild(l);
-                }
-            }
-            const btn = document.createElement('button');
+            const btn = el('button', 'item-btn', on ? 'Unequip' : 'Equip');
             btn.type = 'button';
-            btn.className = 'item-btn';
             btn.dataset.item = id;
-            btn.textContent = on ? 'Unequip' : 'Equip';
-            if (i < 9) {
-                const k = document.createElement('kbd');
-                k.textContent = i + 1;
-                btn.appendChild(k);
+            if (i < 9) btn.appendChild(el('kbd', null, i + 1));
+
+            const row = el('div', 'item-row');
+            row.append(head, btn);
+
+            const more = el('div', 'item-more');
+            const clip = el('div', 'item-clip');
+            clip.appendChild(el('p', 'item-blurb', it.blurb));
+            const stats = el('div', 'item-stats');
+            if (it.move) {
+                stats.append(el('span', null, 'Speed ×' + it.move.speed), el('span', null, 'Shift ×' + it.move.boost));
             }
-            foot.append(stats, btn);
-            main.append(name, blurb, foot);
-            li.append(icon, main);
+            if (it.alt) stats.appendChild(el('span', null, 'Flies'));
+            clip.appendChild(stats);
+            more.appendChild(clip);
+
+            li.append(row, more);
             list.appendChild(li);
         });
         this.$('invCount').textContent = inventory.items.length;
