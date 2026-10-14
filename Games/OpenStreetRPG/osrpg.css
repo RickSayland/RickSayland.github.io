@@ -1,0 +1,201 @@
+/* ============ OPENSTREETRPG ============ */
+
+:root {
+    --panel: rgba(28, 21, 40, 0.86);
+    --panel-edge: rgba(240, 201, 74, 0.35);
+    --ink: #f4ecd8;
+    --ink-dim: #c9bfa8;
+    --gold: #f0c94a;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+    margin: 0;
+    height: 100%;
+    overflow: hidden;
+    background: #e8e3d9;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    color: var(--ink);
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+#world {
+    position: fixed;
+    inset: 0;
+    display: block;
+    touch-action: none;
+}
+
+/* The overlay itself lets clicks through to the canvas; only its controls catch them. */
+.hud {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+}
+
+.hud-top {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    right: 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+}
+
+.badge, .search, .readout, .hint, .toast {
+    background: var(--panel);
+    border: 1px solid var(--panel-edge);
+    border-radius: 10px;
+    box-shadow: 0 4px 14px rgba(20, 12, 30, 0.35);
+}
+
+.badge {
+    pointer-events: auto;
+    padding: 8px 12px;
+    font-size: 15px;
+    letter-spacing: 0.02em;
+    color: var(--gold);
+    text-decoration: none;
+    white-space: nowrap;
+}
+.badge b { color: var(--ink); font-weight: 700; }
+.badge span { color: var(--ink-dim); font-size: 11px; margin-left: 4px; }
+
+.search {
+    pointer-events: auto;
+    display: flex;
+    padding: 4px;
+    width: min(340px, 60vw);
+}
+.search input {
+    flex: 1;
+    min-width: 0;
+    background: transparent;
+    border: 0;
+    outline: 0;
+    color: var(--ink);
+    font: inherit;
+    font-size: 14px;
+    padding: 6px 8px;
+    -webkit-user-select: text;
+    user-select: text;
+}
+.search input::placeholder { color: var(--ink-dim); opacity: 0.7; }
+.search button {
+    border: 0;
+    border-radius: 7px;
+    background: var(--gold);
+    color: #2a1f12;
+    font: inherit;
+    font-weight: 700;
+    font-size: 13px;
+    padding: 0 14px;
+    cursor: pointer;
+}
+.search button:disabled { opacity: 0.5; cursor: progress; }
+
+.search .locate {
+    display: grid;
+    place-items: center;
+    padding: 0 7px;
+    background: transparent;
+    color: var(--gold);
+    border-right: 1px solid rgba(240, 201, 74, 0.25);
+    border-radius: 7px 0 0 7px;
+}
+.search .locate:hover { background: rgba(240, 201, 74, 0.12); }
+.search .locate.busy svg { animation: locate-pulse 0.9s ease-in-out infinite; }
+@keyframes locate-pulse { 50% { opacity: 0.3; transform: scale(0.8); } }
+.search:focus-within { border-color: var(--gold); }
+
+.toast {
+    position: absolute;
+    top: 64px;
+    left: 50%;
+    transform: translate(-50%, -8px);
+    max-width: min(560px, calc(100vw - 32px));
+    padding: 8px 14px;
+    font-size: 14px;
+    text-align: center;
+    opacity: 0;
+    transition: opacity 0.25s, transform 0.25s;
+}
+.toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+.hint {
+    position: absolute;
+    bottom: 48px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 6px 16px;
+    width: max-content;
+    max-width: calc(100vw - 32px);
+    padding: 8px 14px;
+    font-size: 13px;
+    color: var(--ink-dim);
+    transition: opacity 1.2s;
+}
+.hint.gone { opacity: 0; }
+.hint kbd {
+    display: inline-block;
+    min-width: 20px;
+    margin-right: 2px;
+    padding: 1px 5px;
+    border: 1px solid rgba(244, 236, 216, 0.35);
+    border-bottom-width: 2px;
+    border-radius: 4px;
+    font-family: inherit;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1.4;
+    color: var(--ink);
+    text-align: center;
+}
+
+.readout {
+    position: absolute;
+    left: 12px;
+    bottom: 12px;
+    padding: 5px 10px;
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    white-space: pre;
+    color: var(--ink-dim);
+}
+
+/* Styled like the attribution box every OSM map carries, so it reads as one. */
+.attrib {
+    pointer-events: auto;
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    padding: 2px 6px;
+    font-size: 11px;
+    color: #333;
+    background: rgba(255, 255, 255, 0.75);
+    border-top-left-radius: 4px;
+}
+.attrib a { color: #0a6fa8; text-decoration: none; }
+.attrib a:hover { text-decoration: underline; }
+
+.nojs {
+    position: fixed;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    margin: 0;
+    color: #2a1f12;
+}
+
+@media (max-width: 560px) {
+    .readout { bottom: 26px; white-space: normal; max-width: calc(100vw - 24px); }
+    .hint { bottom: 72px; }
+    .badge span { display: none; }
+}

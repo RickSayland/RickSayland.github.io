@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>OpenStreetRPG</title>
+    <link rel="icon" type="image/svg+xml" href="content/favicon.svg">
+    <link rel="stylesheet" href="osrpg.css?v=0.1.1">
+</head>
+<body>
+    <canvas id="world"></canvas>
+
+    <div class="hud">
+        <div class="hud-top">
+            <a class="badge" href="/" title="Back to the library"><b>OpenStreet</b>RPG <span id="version"></span></a>
+            <form class="search" id="search" autocomplete="off">
+                <button type="button" class="locate" id="locateBtn" title="Go to my real location" aria-label="Go to my real location">
+                    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                        <circle cx="12" cy="12" r="6.5"/>
+                        <circle cx="12" cy="12" r="2" fill="currentColor" stroke="none"/>
+                        <path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3"/>
+                    </svg>
+                </button>
+                <input id="searchInput" type="search" placeholder="Travel to a place, or lat, lon" spellcheck="false" aria-label="Travel to">
+                <button type="submit" id="searchBtn">Go</button>
+            </form>
+        </div>
+
+        <div class="toast" id="toast" role="status"></div>
+
+        <div class="hint" id="hint">
+            <span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> or arrows to walk</span>
+            <span><kbd>Shift</kbd> run</span>
+            <span><kbd>+</kbd><kbd>−</kbd> or wheel to zoom</span>
+            <span><kbd>/</kbd> travel</span>
+        </div>
+
+        <div class="readout" id="readout"></div>
+
+        <!-- Required by the OSM tile usage policy. Do not remove. -->
+        <div class="attrib">© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors</div>
+    </div>
+
+    <noscript><p class="nojs">OpenStreetRPG needs JavaScript.</p></noscript>
+
+    <!-- Load order IS the dependency order. Only main.js boots. -->
+    <script src="core.js?v=0.1.1"></script>
+    <script src="geo.js?v=0.1.1"></script>
+    <script src="tiles.js?v=0.1.1"></script>
+    <script src="input.js?v=0.1.1"></script>
+    <script src="player.js?v=0.1.1"></script>
+    <script src="hud.js?v=0.1.1"></script>
+    <script src="main.js?v=0.1.1"></script>
+</body>
+</html>
