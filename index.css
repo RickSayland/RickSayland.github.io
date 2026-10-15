@@ -29,6 +29,12 @@ body {
     letter-spacing: -0.02em;
 }
 
+.coffee-slot {
+    margin-top: 16px;
+    display: flex;
+    justify-content: center;
+}
+
 .section {
     margin-bottom: 48px;
 }
